@@ -29,8 +29,6 @@ jobs:
       - name: Run a one-line script
         run: echo Hello, SLAC!
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      - name: Super-Linter
+        uses: super-linter/super-linter@v6.4.1
+            
