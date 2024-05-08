@@ -32,5 +32,5 @@ jobs:
       - name: Run my script
         run: |
           chmod +x /home/docker/test/test.sh
-          /home/docker/test/test.sh
+          ./home/docker/test/test.sh
             
