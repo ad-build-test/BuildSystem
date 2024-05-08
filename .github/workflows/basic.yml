@@ -31,6 +31,6 @@ jobs:
 
       - name: Run my script
         run: |
-          chmod +x ${{ runner.workspace }}/home/docker/test/test.sh
-          ${{ runner.workspace }}/home/docker/test/test.sh
+          chmod +x /home/docker/test/test.sh
+          /home/docker/test/test.sh
             
