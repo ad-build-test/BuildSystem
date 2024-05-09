@@ -31,8 +31,6 @@ jobs:
 
       - name: Parse yaml, talk to server
         run: |
-          echo ${{ github.workspace }}
           echo $GITHUB_WORKSPACE
-          python3 parse_yaml.py $GITHUB_WORKSPACE/build.yaml
-          python3 parse_yaml.py ${{ github.workspace }}/build.yaml
+          python3 /parse_yaml.py $GITHUB_WORKSPACE/build.yaml
             
