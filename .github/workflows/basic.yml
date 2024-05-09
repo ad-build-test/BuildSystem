@@ -29,11 +29,6 @@ jobs:
       - name: Run a one-line script
         run: echo Hello, SLAC!
 
-      - name: Run my script
-        run: |
-          chmod +x /home/docker/test/test.sh
-          ./home/docker/test/test.sh
-
       - name: Parse yaml, talk to server
         run: |
           echo ${{ github.workspace }}
