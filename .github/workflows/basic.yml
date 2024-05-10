@@ -25,9 +25,22 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, SLAC!
+      # See what environment variables are there
+      - name: check environment variables
+        run: |
+          echo $GITHUB_ACTION_REPOSITORY
+          echo $GITHUB_BASE_REF
+          echo $GITHUB_EVENT_NAME
+          echo $GITHUB_HEAD_REF
+          echo $GITHUB_JOB
+          echo $GITHUB_REF
+          echo $GITHUB_REF_NAME
+          echo $GITHUB_REPOSITORY
+          echo $GITHUB_REPOSITORY_OWNER
+          echo $GITHUB_WORKFLOW
+          echo $RUNNER_ARCH
+          echo $RUNNER_NAME
+        
 
       - name: Parse yaml, talk to server
         run: |
