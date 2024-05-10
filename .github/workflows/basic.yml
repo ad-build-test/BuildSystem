@@ -42,11 +42,10 @@ jobs:
           echo $RUNNER_NAME
 
       - name: Extract repository name
-        id: repo
-        run: echo "::set-output name=repo_name::${GITHUB_REPOSITORY#*/}"
+        run: echo "reponame=$(basename $GITHUB_REPOSITORY | cut -d'/' -f2-)" >> $GITHUB_ENV
 
       - name: Talk to component database
         run: |
           echo $GITHUB_WORKSPACE
-          python3 /grab_component.py ${{ steps.repo.outputs.reponame }} $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
+          python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
             
