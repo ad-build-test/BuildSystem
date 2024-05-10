@@ -48,5 +48,5 @@ jobs:
         run: |
           echo $GITHUB_WORKSPACE
           echo $reponame
-          python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
+          # python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
             
