@@ -24,8 +24,9 @@ RUN apt-get install -y uidmap
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     curl jq build-essential libssl-dev libffi-dev python3 python3-venv python3-dev python3-pip
 
-# install pyyaml
-RUN pip install pyyaml
+# install pyyaml, requests
+RUN pip install pyyaml \
+    && pip install requests
 
 # cd into the user directory, download and unzip the github actions runner
 RUN cd /home/docker && mkdir actions-runner && cd actions-runner \
