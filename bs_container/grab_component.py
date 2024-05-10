@@ -1,20 +1,6 @@
 import requests, yaml, sys
 
-def parse_yaml() -> dict:
-    try:
-        yaml_filepath = sys.argv[1]
-    except:
-        raise Exception("yaml filepath/file.yaml not specified")
-
-    # Load YAML data from file
-    with open(yaml_filepath, 'r') as file:
-        yaml_data = yaml.safe_load(file)
-
-    # Print the parsed YAML data
-    print("Parsed YAML data:")
-    print(yaml_data)
-    return yaml_data
-
+# Run: python3 parse_yaml.py repo_name organization_name branch_name
 
 server_url='https://accel-webapp-dev.slac.stanford.edu/api/cbs/v1/'
 
@@ -53,7 +39,7 @@ def find_component_by_id(component_id: str):
     print(component_payload_receive.text)
 
 
-# 2) Start up new container with the image you retrieved from component db
+# 2) TODO: Start up new container with the image you retrieved from component db
 # kubectl
     
 # Find the key corresponding to a specific value
@@ -64,8 +50,10 @@ def find_key(dictionary, value):
     return None
 
 def main():
-    yaml_data = parse_yaml()
-    component_id = get_component_id(yaml_data['name'])
+    repo_name = sys.argv[1]
+    organization = sys.argv[2]
+    branch = sys.argv[3]
+    component_id = get_component_id(repo_name)
     find_component_by_id(component_id)
 
 if __name__ == "__main__":

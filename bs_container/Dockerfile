@@ -39,8 +39,8 @@ RUN chown -R docker ~docker && /home/docker/actions-runner/bin/installdependenci
 # copy over the start.sh script
 COPY start.sh start.sh
 
-# copy over the parse_yaml.py script
-COPY parse_yaml.py parse_yaml.py
+# copy over the grab_component.py script
+COPY grab_component.py grab_component.py
 
 # make the script executable
 RUN chmod +x start.sh

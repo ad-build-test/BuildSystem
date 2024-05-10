@@ -40,10 +40,13 @@ jobs:
           echo $GITHUB_WORKFLOW
           echo $RUNNER_ARCH
           echo $RUNNER_NAME
-        
 
-      - name: Parse yaml, talk to server
+      - name: Extract repository name
+        id: repo
+        run: echo "::set-output name=repo_name::${GITHUB_REPOSITORY#*/}"
+
+      - name: Talk to component database
         run: |
           echo $GITHUB_WORKSPACE
-          python3 /parse_yaml.py $GITHUB_WORKSPACE/build.yaml
+          python3 /grab_component.py ${{ steps.repo.outputs.reponame }} $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
             
