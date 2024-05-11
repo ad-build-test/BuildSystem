@@ -46,10 +46,10 @@ jobs:
 
       - name: Ensure environment variables are set before talking to database
         run: |
-          echo $GITHUB_WORKSPACE
-          echo $reponame
-          echo $GITHUB_REPOSITORY_OWNER
-          echo $GITHUB_REF_NAME
+          export GITHUB_WORKSPACE=$GITHUB_WORKSPACE
+          export reponame=$reponame
+          export GITHUB_REPOSITORY_OWNER= $GITHUB_REPOSITORY_OWNER
+          export GITHUB_REF_NAME=$GITHUB_REF_NAME
 
       - name: Talk to component database
         run: |
