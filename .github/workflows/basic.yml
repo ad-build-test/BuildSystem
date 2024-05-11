@@ -46,12 +46,11 @@ jobs:
 
       - name: Ensure environment variables are set before talking to database
         run: |
-          export GITHUB_WORKSPACE=$GITHUB_WORKSPACE
-          export reponame=$reponame
-          export GITHUB_REPOSITORY_OWNER= $GITHUB_REPOSITORY_OWNER
-          export GITHUB_REF_NAME=$GITHUB_REF_NAME
+          export reponame1=$reponame
+          export GITHUB_REPOSITORY_OWNER1=$GITHUB_REPOSITORY_OWNER
+          export GITHUB_REF_NAME1=$GITHUB_REF_NAME
 
       - name: Talk to component database
         run: |
-          python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
+          python3 /grab_component.py $reponame1 $GITHUB_REPOSITORY_OWNER1 $GITHUB_REF_NAME1
             
