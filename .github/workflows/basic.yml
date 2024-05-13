@@ -44,9 +44,13 @@ jobs:
       - name: Extract repository name
         run: echo "reponame=$(basename $GITHUB_REPOSITORY | cut -d'/' -f2-)" >> $GITHUB_ENV
 
+      - name: Ensure environment variables are set before talking to database
+        run: |
+          echo "reponame=$reponame" >> /home/docker/actions-runner/.env
+          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER" >> /home/docker/actions-runner/.env
+          echo "GITHUB_REF_NAME=$GITHUB_REF_NAME" >> /home/docker/actions-runner/.env
+
       - name: Talk to component database
         run: |
-          echo $GITHUB_WORKSPACE
-          echo $reponame
           python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
             
