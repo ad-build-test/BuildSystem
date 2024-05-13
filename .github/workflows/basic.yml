@@ -47,7 +47,7 @@ jobs:
       - name: Ensure environment variables are set before talking to database
         run: |
           > /home/docker/build.yaml
-          printf "name: $reponame\norganization: $GITHUB_REPOSITORY_OWNER\nbranch: $GITHUB_REF_NAME" >> /home/docker/build.yaml
+          printf "reponame: $reponame\norganization: $GITHUB_REPOSITORY_OWNER\nbranch: $GITHUB_REF_NAME" >> /home/docker/build.yaml
   
       - name: Talk to component database
         run: |
