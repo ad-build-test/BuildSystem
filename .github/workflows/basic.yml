@@ -46,12 +46,10 @@ jobs:
 
       - name: Ensure environment variables are set before talking to database
         run: |
-          echo "reponame=$reponame" >> /home/docker/actions-runner/.env
-          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER" >> /home/docker/actions-runner/.env
-          echo "GITHUB_REF_NAME=$GITHUB_REF_NAME" >> /home/docker/actions-runner/.env
-          source /home/docker/set_environment.sh $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
-
+          > /home/docker/build.yaml
+          printf "name: $reponame\organization: $GITHUB_REPOSITORY_OWNER\nbranch: $GITHUB_REF_NAME" >> /home/docker/build.yaml
+  
       - name: Talk to component database
         run: |
-          python3 /grab_component.py $reponame $GITHUB_REPOSITORY_OWNER $GITHUB_REF_NAME
+          python3 /grab_component.py /home/docker/build.yaml
             
