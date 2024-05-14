@@ -1,0 +1,39 @@
+name: Build System
+
+description: |
+  Action to start off build system
+
+inputs:
+  GITHUB_REPOSITORY:
+    description: 'name of repo to build'
+    required: true
+    default: 'N/A'
+  GITHUB_REPOSITORY_OWNER:
+    description: 'name of repo organization'
+    required: true
+    default: 'N/A'
+  GITHUB_REF_NAME:
+    description: 'name of repo branch'
+    required: true
+    default: 'N/A'
+
+runs:
+  using: "composite"
+
+  steps:
+  - name: Build.yaml
+  # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+  - uses: actions/checkout@v3
+  
+  - name: Extract repository name
+    run: echo "reponame=$(basename ${{ inputs.GITHUB_REPOSITORY }} | cut -d'/' -f2-)" >> $GITHUB_ENV
+  
+  - name: Ensure environment variables are set before talking to database
+    run: |
+      > /home/docker/build.yaml
+      printf "reponame: $reponame\norganization: ${{ inputs.GITHUB_REPOSITORY_OWNER }}\nbranch: ${{ inputs.GITHUB_REF_NAME }}" >> /home/docker/build.yaml
+  
+  - name: Talk to component database
+    run: |
+      python3 /grab_component.py /home/docker/build.yaml
+        
