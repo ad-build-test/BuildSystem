@@ -1,0 +1,93 @@
+/* new schema for component db v2*/
+ 
+// Note - Not all fields are populated depending on the api endpoint
+component_schema
+{
+    "id": "",                   // Primary Key of json object
+    "name": "",                 // Name of component (corresponds to name of repository)
+    "organization": "",         // Name of organization
+    "description": "",          // Description of component
+    "version": "",              // Version of component schema (NOT the repo version)
+    "environment": "",          // Build/Runtime environment - ex: ['rhel7', 'rhel8', 'matlab'] which may or may not contain components
+    "url": "",                  // URL/filepath to the component object
+    "approvalRule": "",         // Determines what kind of approval was done - ex: ['all', 'none'] determined by approval rule
+    "approvalGroup": [          // Names of experts on the component (possibly group names in addition to individuals)
+      "",
+      "",
+    ],
+    "testingCriteria": "",      // Determines acceptance criteria for testing - ex: ['all', '90%']     
+    "dependsOnComponents": [    // Component dependencies
+      {"name": "", "tagname": ""},
+      {"name": "", "tagname": ""}
+    ],
+    "buildInstructions": ""     // Determines how to build component - ex: ['make', 'build_component.sh']
+                                // May be a simple make, or refer to a script within the component repo
+}
+// Q: can a component have 2 or more environments (os)?
+// note - maybe the environment moves to an additional dependsOnComponents entry - maybe the first entry?
+ 
+/* Example */
+{
+  "id": "663e591ce77eef11eb66a54f",
+  "name": "mps_central_node",
+  "organization": "slaclab",
+  "description": "central node for machine protection system",
+  "version": "1",
+  "environment": "rhel7.9",
+  "url": "s3df/slaclab/mps_central_node",
+  "approvalRule": "all",
+  "approvalGroup": [       
+      "Jerry Katzung",
+      "Patrick Nisperos",
+    ],
+   "dependsOnComponents": [
+    {"name": "slaclab/epics", "tagname": "epics-72"}, 
+    {"name": "slaclab/adcore", "tagname": "adcore-45"}
+   ],
+   "buildInstructions": "make"
+}
+ 
+
+// Note - useful when we want to report to developers where certain branches are
+// note - expected to be dynamic
+branches_in_development_schema
+{
+    "id": "",                   // id of entry
+    "name": "",                 // name of repo
+    "organization": "",         // name of organization
+    "branchName": "",           // name of branch
+    "approvalStatus": "",       // Status of approval - ex: ['approved', 'rejected', 'in progress']
+    "testingStatus": "",        // Status of testing - ex: ['pass', 'fail', 'in progress']
+    "overallStatus": ""         // Status at the final state - ex: ['merged', 'rejected', 'deleted']
+}
+// Q: does testLocation information get tracked in here?
+ 
+ 
+deployment_schema
+{
+    "id": "",                   // id of entry
+    "name": "",                 // name of repo
+    "organization": "",         // name of organization
+    "tagName": "",              // name of tag
+    "hostId": "",                   // Host hardware id from hardware_host_schema
+    "deploymentStatus": ""          // Status at the final state - ex: ['provisional', 'active']
+}
+// Q: Do we add host name as well for convenience? Or does the gui we use to view database query for us?
+// Q: how do we cleanly revert if multiple components are upgraded (like ioc and epics)?  // Note - when in provisional state, during pamm ansible will look at the name/org/tag to install the packages
+// Use case: developer updates the deploymentStatus if deployed app is good, or not good
+    // if good: then ansible leaves it alone
+    // if bad: then engineer reverts tagname to previous tag and marks active, then ansible reverts to previous tags and installs previous package
+ 
+ 
+hardware_host_schema
+{
+    "id": "",                   // id of entry
+    "name": "",                 // name of hardware
+    "location": "",             // location of hardware
+    "owner": "",                // owner or POC
+    "status": "",               // Status - ex: ['inactive', 'active']
+    "specialHardware": [        // Any special hardware besides host machine - ex: ['camera', 'optical interface', TBD]
+        "",
+        ""
+    ]
+}

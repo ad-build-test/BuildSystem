@@ -1,3 +1,3 @@
-name: build_system
+reponame: build_system
+organization: ad-build-test
 branch: main
-environment: default

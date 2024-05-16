@@ -16,6 +16,10 @@ inputs:
     description: 'name of repo branch'
     required: true
     default: 'N/A'
+  RUNNER_NAME:
+    description: 'name of github self-hosted runner'
+    required: true
+    default: 'N/A'
 
 runs:
   using: "composite"
@@ -31,9 +35,9 @@ runs:
   - name: Ensure environment variables are set before talking to database
     run: |
       > /home/docker/build.yaml
-      printf "reponame: $reponame\norganization: ${{ inputs.GITHUB_REPOSITORY_OWNER }}\nbranch: ${{ inputs.GITHUB_REF_NAME }}" >> /home/docker/build.yaml
+      printf "reponame: $reponame\norganization: ${{ inputs.GITHUB_REPOSITORY_OWNER }}\nbranch: ${{ inputs.GITHUB_REF_NAME }}\nrunner: ${{ inputs.RUNNER_NAME }}" >> /home/docker/build.yaml
   
-  - name: Talk to component database
+  - name: Talk to component database, start build container
     run: |
-      python3 /grab_component.py /home/docker/build.yaml
+      python3 /start_build.py /home/docker/build.yaml
         
