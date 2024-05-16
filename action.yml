@@ -25,19 +25,21 @@ runs:
   using: "composite"
 
   steps:
-  - name: Build.yaml
   # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
   - uses: actions/checkout@v3
   
   - name: Extract repository name
     run: echo "reponame=$(basename ${{ inputs.GITHUB_REPOSITORY }} | cut -d'/' -f2-)" >> $GITHUB_ENV
+    shell: bash
   
   - name: Ensure environment variables are set before talking to database
     run: |
       > /home/docker/build.yaml
       printf "reponame: $reponame\norganization: ${{ inputs.GITHUB_REPOSITORY_OWNER }}\nbranch: ${{ inputs.GITHUB_REF_NAME }}\nrunner: ${{ inputs.RUNNER_NAME }}" >> /home/docker/build.yaml
+    shell: bash
   
   - name: Talk to component database, start build container
     run: |
       python3 /start_build.py /home/docker/build.yaml
+    shell: bash
         
