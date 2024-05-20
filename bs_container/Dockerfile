@@ -39,14 +39,11 @@ RUN chown -R docker ~docker && /home/docker/actions-runner/bin/installdependenci
 # copy over the start.sh script
 COPY start.sh start.sh
 
-# copy over the build.sh script
-COPY build.sh build.sh
-
 # copy over the start_build.py script
 COPY start_build.py start_build.py
 
 # make the scripts executable
-RUN chmod +x start.sh && chmod +x build.sh
+RUN chmod +x start.sh
 
 # since the config and run script for actions are not allowed to be run by root,
 # set the user to "docker" so all subsequent commands are run as the docker user

@@ -28,9 +28,6 @@ def get_component_id(component_name: str, component_branch: str="", component_en
     component_list = requests.get(server_url + 'component')
     component_dict = component_list.json()
     payload = component_dict['payload']
-    print("payload:") # TEMP
-    print(payload)  # TEMP
-    print(payload[1]) # TEMP
 
     # Convert the list of dictionaries into a dictionary
     payload_dictionary = {}
@@ -51,6 +48,9 @@ def get_component_id(component_name: str, component_branch: str="", component_en
 def find_component_by_id(component_id: str) -> dict:
 
     # Find component by id
+    if (component_id == None): 
+        raise Exception("ERROR: Component was not found in component database!")
+    
     requested_component = requests.get(server_url + 'component/' + component_id)
 
     # For now get print out the payload of component request
@@ -100,15 +100,22 @@ def start_build_container(repo_name: str, runner_name: str, image_url: str, buil
     # 6) If made it here, then success
     print("Build successfully started, please see container: " + unique_container_name)
 
+def test():
+    # TEMP for prototyping ================================
+    try:
+        if (sys.argv[2] == "test"): # check if testing (if so then ignore component db)
+            print("testing only the startup of development container, does not talk to database")
+            image_url = "pnispero/rhel8-env:latest"
+            start_build_container('simple-ioc', 'gh-runner1', image_url, "make")
+            return True
+    except:
+        pass
+    # =========================================================
 
 def main():
+    if (test()): exit()
+
     yaml_data = parse_yaml()
-    # TEMP for prototyping ================================
-    if (sys.argv[2] == "test"): # check if testing (if so then ignore component db)
-        image_url = "pnispero/rhel8-env:latest"
-        start_build_container('simple-ioc', 'gh-runner1', image_url, "make")
-        return
-    # =========================================================
 
     component_id = get_component_id(yaml_data['reponame'])
     component_payload = find_component_by_id(component_id)
