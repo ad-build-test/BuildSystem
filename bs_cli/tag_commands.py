@@ -1,9 +1,39 @@
 import click
 import subprocess
 
+import readline
+
+class SimpleCompleter(object):
+    
+    def __init__(self, options):
+        self.options = sorted(options)
+        return
+
+    def complete(self, text, state):
+        response = None
+        if state == 0:
+            # This is the first time for this text, so build a match list.
+            if text:
+                self.matches = [s 
+                                for s in self.options
+                                if s and s.startswith(text)]
+            else:
+                self.matches = self.options[:]
+        
+        # Return the state'th item from the match list,
+        # if we have that many.
+        try:
+            response = self.matches[state]
+        except IndexError:
+            response = None
+        return response
+
+
 @click.group()
 def tag():
     """Tag [ create | edit | delete ]"""
+    # Use the tab key for completion
+    readline.parse_and_bind('tab: complete')
     pass
 
 @tag.command()
@@ -23,32 +53,32 @@ def create(): # TODO
     # the need for authorizing each time
 @tag.command()
 def edit(): # TODO
-    """edit an existing tag"""
+    """Edit an existing tag"""
     click.echo('edit tag')
     subprocess.run(['gh', 'release', 'edit'])
 
 @tag.command()
 def delete(): 
+    
     # BLOCKED: CATER does not have an API, but will have it once the NEW CATER 
     # Claudio is working on is finished
     # TODO: 
     # 1) get link to CATER, or see if CATER has API
     # 2) Then use that to generate the issue.
     # 3) May use gh api instead of gh issue so we can avoid prompting user each field
-    """tag a new issue"""
-    click.echo('delete tag')
-    cater_id = click.prompt('What is the cater ID?')
-    type = click.prompt('Which system do you want your issue in? [Github | Jira]').lower()
-    print(type)
-    if (type == 'github'):
-        subprocess.run(['gh', 'issue', 'tag'])
-        pass
-    elif (type == 'jira'):
-        pass
-    else:
-        click.echo('Invalid system choice')
+    """Delete an existing tag"""
 
-"""
+    click.echo('delete tag')
+    out = subprocess.check_output(['gh', 'release', 'list', '--json', 'tagName', '--jq', '.[].tagName'])
+    out = out.decode("utf-8")
+    out_list = out.split()
+    print(out_list)
+        # Register our completer function
+    readline.set_completer(SimpleCompleter(out_list).complete)
+    tag_name = click.prompt('What is the tag name? (<tab> for list)')
+    subprocess.run(['gh', 'release', 'delete', tag_name])
+
+""" gh pr list --json author --jq '.[].author.login'
 tag gh commands
 release
 create
