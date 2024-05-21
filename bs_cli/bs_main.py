@@ -36,6 +36,7 @@ import subprocess
 import create_commands as create_group
 import run_commands as run_group
 import checkout_commands as checkout_group
+import tag_commands as tag_group
 # bs - build system
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     entry_point.add_command(create_group.create)
     entry_point.add_command(run_group.run)
     entry_point.add_command(checkout_group.checkout)
+    entry_point.add_command(tag_group.tag)
     entry_point(prog_name='bs')
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",
@@ -63,7 +65,8 @@ if __name__ == '__main__':
     # 2. ln -s bs_main.py bs
     # 3. sudo su
     # TODO: Copy folder instead, and check if 'run' command works in another repo
-    # 4. cp bs_main.py /usr/bin/bs_main.py
-    # 5. cp bs /usr/bin/bs
+    # 4. cp -r bs_cli/ /usr/bin/
+    # 5. ln -s bs_cli/bs_main.py bs
+    # 6. mv bs /usr/bin/bs
     # done now you can call bs from anywhere
     

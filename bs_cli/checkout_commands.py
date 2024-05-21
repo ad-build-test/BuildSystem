@@ -1,5 +1,6 @@
 import click
 import subprocess
+import requests
 
 @click.group()
 def checkout():
@@ -15,6 +16,14 @@ def component(): # TODO
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
     click.echo('Checkout new repo from template')
+    # TODO:
+    # 1) Maybe we can just use existing 'eco' function
+    # OR
+    # 1) Grab the list of components
+    # 2) Make them all lower-case
+    # 3) Then prompt the user for component name
+        # 3.1) Should be tab autocomplete
+    cater_id = click.prompt('What is the cater ID?')
     # 1) Prompt user for args above
     # 2) checkout the curl request using those args
     # OR 
