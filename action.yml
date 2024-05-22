@@ -33,9 +33,7 @@ runs:
   - uses: actions/checkout@v3
 
   - name: move repo to ad-build space
-    run: |
-        cp -r ${{inputs.GITHUB_WORKSPACE }}/ /mnt/eed/ad-build
-        rm -r ${{inputs.GITHUB_WORKSPACE }}/
+    run: cp -r ${{inputs.GITHUB_WORKSPACE }}/ /mnt/eed/ad-build
     shell: bash
   
   - name: Extract repository name
@@ -52,4 +50,10 @@ runs:
     run: |
       python3 /start_build.py /home/docker/build.yaml test
     shell: bash
+    
+  - name: clean up
+    run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
+    shell: bash
+
+    
         
