@@ -50,7 +50,7 @@ spec:
             memory: 8Gi
             cpu: 4000m
 
-# I believe you only run this initContainer once to allow non-root users to write in it
+# I believe you only run this initContainer once to allow non-root users in '1006:cd' to write in it
       # initContainers:
       #   - name: init-permissions
       #     image: busybox:1.28
