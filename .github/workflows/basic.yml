@@ -22,8 +22,8 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      # # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # - uses: actions/checkout@v3
 
       # See what environment variables are there
       - name: check environment variables
@@ -41,15 +41,15 @@ jobs:
           echo $RUNNER_ARCH
           echo $RUNNER_NAME
 
-      - name: Extract repository name
-        run: echo "reponame=$(basename $GITHUB_REPOSITORY | cut -d'/' -f2-)" >> $GITHUB_ENV
+      # - name: Extract repository name
+      #   run: echo "reponame=$(basename $GITHUB_REPOSITORY | cut -d'/' -f2-)" >> $GITHUB_ENV
 
-      - name: Ensure environment variables are set before talking to database
-        run: |
-          > /home/docker/build.yaml
-          printf "reponame: $reponame\norganization: $GITHUB_REPOSITORY_OWNER\nbranch: $GITHUB_REF_NAME" >> /home/docker/build.yaml
+      # - name: Ensure environment variables are set before talking to database
+      #   run: |
+      #     > /home/docker/build.yaml
+      #     printf "reponame: $reponame\norganization: $GITHUB_REPOSITORY_OWNER\nbranch: $GITHUB_REF_NAME" >> /home/docker/build.yaml
   
-      - name: Talk to component database
-        run: |
-          python3 /grab_component.py /home/docker/build.yaml
+      # - name: Talk to component database
+      #   run: |
+      #     python3 /grab_component.py /home/docker/build.yaml
             
