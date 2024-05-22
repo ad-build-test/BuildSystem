@@ -30,6 +30,7 @@ runs:
 
   steps:
   # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+  # Can't specify hard filepath, see https://github.com/actions/checkout/issues/197
   - uses: actions/checkout@v3
 
   - name: move repo to ad-build space
