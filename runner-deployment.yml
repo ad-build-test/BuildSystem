@@ -1,0 +1,69 @@
+# Deployment for self-hosted runners
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s3df-dev-container-ad-group
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gh-runner
+spec:
+  selector:
+    matchLabels:
+      app: gh-runner
+  template:
+    metadata:
+      labels:
+        app: gh-runner
+      annotations:
+        app: gh-runner
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1006
+        fsGroup: 1006
+      containers:
+      - name: gh-runner
+        image: pnispero/gh-runner-image:latest
+        imagePullPolicy: Always
+        env:
+        - name: ORGANIZATION
+          value: ad-build-test
+        - name: ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: runner-access-token
+              key: runner-access-token
+        volumeMounts:
+        - name: s3df-dev-container-ad-group
+          mountPath: /mnt
+        resources:
+          limits:
+            memory: 8Gi
+            cpu: 4000m
+
+# I believe you only run this initContainer once to allow non-root users to write in it
+      # initContainers:
+      #   - name: init-permissions
+      #     image: busybox:1.28
+      #     securityContext:
+      #       runAsUser: 0
+      #     command:
+      #     - chown
+      #     - 1000:1006
+      #     - /mnt/eed/ad-build/
+      #     volumeMounts:
+      #     - name: s3df-dev-container-ad-group
+      #       mountPath: /mnt
+      volumes:
+      - name: s3df-dev-container-ad-group
+        persistentVolumeClaim:
+          claimName: s3df-dev-container-ad-group

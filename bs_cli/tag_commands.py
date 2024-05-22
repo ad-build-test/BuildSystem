@@ -1,40 +1,15 @@
 import click
 import subprocess
-
 import readline
-
-class SimpleCompleter(object):
-    
-    def __init__(self, options):
-        self.options = sorted(options)
-        return
-
-    def complete(self, text, state):
-        response = None
-        if state == 0:
-            # This is the first time for this text, so build a match list.
-            if text:
-                self.matches = [s 
-                                for s in self.options
-                                if s and s.startswith(text)]
-            else:
-                self.matches = self.options[:]
-        
-        # Return the state'th item from the match list,
-        # if we have that many.
-        try:
-            response = self.matches[state]
-        except IndexError:
-            response = None
-        return response
-
+from auto_complete import AutoComplete
 
 @click.group()
 def tag():
     """Tag [ create | edit | delete ]"""
-    # Use the tab key for completion
-    readline.parse_and_bind('tab: complete')
-    pass
+    # Register our completer function for tags
+    tag_bytes = subprocess.check_output(['gh', 'release', 'list', '--json', 'tagName', '--jq', '.[].tagName'])
+    tag_list = tag_bytes.decode("utf-8").split()
+    readline.set_completer(AutoComplete(tag_list).complete)
 
 @tag.command()
 # @click.option("--count", type=int, required=False, default=1, help="Number of greetings.")
@@ -52,30 +27,23 @@ def create(): # TODO
     # This is optimal so authroize once, then we can use gh commands or gh api commands without
     # the need for authorizing each time
 @tag.command()
-def edit(): # TODO
+def edit():
     """Edit an existing tag"""
     click.echo('edit tag')
-    subprocess.run(['gh', 'release', 'edit'])
+    tag_name = input('What is the tag name? (<tab> for list): ')
+    subprocess.run(['gh', 'release', 'edit', tag_name])
+    # TODO: Figure out which flags for tag editing we want:
+        # List of flags 
+        # 1) tag name
+        # 2) tag title
+        # 3) ...
 
 @tag.command()
 def delete(): 
-    
-    # BLOCKED: CATER does not have an API, but will have it once the NEW CATER 
-    # Claudio is working on is finished
-    # TODO: 
-    # 1) get link to CATER, or see if CATER has API
-    # 2) Then use that to generate the issue.
-    # 3) May use gh api instead of gh issue so we can avoid prompting user each field
     """Delete an existing tag"""
 
     click.echo('delete tag')
-    out = subprocess.check_output(['gh', 'release', 'list', '--json', 'tagName', '--jq', '.[].tagName'])
-    out = out.decode("utf-8")
-    out_list = out.split()
-    print(out_list)
-        # Register our completer function
-    readline.set_completer(SimpleCompleter(out_list).complete)
-    tag_name = click.prompt('What is the tag name? (<tab> for list)')
+    tag_name = input('What is the tag name? (<tab> for list): ')
     subprocess.run(['gh', 'release', 'delete', tag_name])
 
 """ gh pr list --json author --jq '.[].author.login'

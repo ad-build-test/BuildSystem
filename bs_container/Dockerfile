@@ -45,6 +45,9 @@ COPY start_build.py start_build.py
 # make the scripts executable
 RUN chmod +x start.sh
 
+# Create 'cd' user group
+RUN groupadd --gid 1006 cd
+
 # since the config and run script for actions are not allowed to be run by root,
 # set the user to "docker" so all subsequent commands are run as the docker user
 USER docker

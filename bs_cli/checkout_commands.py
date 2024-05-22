@@ -1,10 +1,23 @@
 import click
 import subprocess
 import requests
+import readline
+from auto_complete import AutoComplete
 
 @click.group()
 def checkout():
     """checkout an existing [ component ]"""
+
+    # TODO: Send a GET request to component db to get list of components
+    server_url='https://accel-webapp-dev.slac.stanford.edu/api/cbs/v1/'
+    component_list = requests.get(server_url + 'component')
+    component_dict = component_list.json()
+    payload = component_dict['payload']
+    component_list = []
+    for component in payload:
+        component_list.append(component['name'])
+    print(component_list)
+    readline.set_completer(AutoComplete(component_list).complete)
     pass
 
 @checkout.command()
@@ -23,10 +36,7 @@ def component(): # TODO
     # 2) Make them all lower-case
     # 3) Then prompt the user for component name
         # 3.1) Should be tab autocomplete
-    cater_id = click.prompt('What is the cater ID?')
-    # 1) Prompt user for args above
-    # 2) checkout the curl request using those args
-    # OR 
-    # 1) just call the gh cli command, if you do this route, then gh cli must be authorized
-    # This is optimal so authroize once, then we can use gh commands or gh api commands without
-    # the need for authorizing each time
+    # 4) like 'eco' we should generate the configuration RELEASE_SITE file
+    component_name = input('What is the component name? (<tab> for list)')
+    # Send a request to get the url to the repo
+    # then do a git clone if we are doing url, or otherwise copy from filepath

@@ -33,13 +33,18 @@ https://click.palletsprojects.com/en/8.1.x/
 
 import click
 import subprocess
+import readline
+
 import create_commands as create_group
 import run_commands as run_group
 import checkout_commands as checkout_group
 import tag_commands as tag_group
+
 # bs - build system
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-
+EPILOG = """EXAMPLES\n
+            bs checkout component
+        """
 @click.group(context_settings=CONTEXT_SETTINGS)
 def entry_point():
     """ Build System CLI\n
@@ -57,6 +62,8 @@ if __name__ == '__main__':
     entry_point.add_command(run_group.run)
     entry_point.add_command(checkout_group.checkout)
     entry_point.add_command(tag_group.tag)
+    # Use the tab key for completion
+    readline.parse_and_bind('tab: complete')
     entry_point(prog_name='bs')
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",

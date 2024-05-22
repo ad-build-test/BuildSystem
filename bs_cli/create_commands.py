@@ -17,7 +17,7 @@ def repo(): # TODO
     click.echo('Create new repo from template')
     subprocess.run(['gh', 'repo', 'create'])
     # 1) Prompt user for args above
-    # 2) Create the curl request using those args
+    # 2) Create the gh api request using those args
     # OR 
     # 1) just call the gh cli command, if you do this route, then gh cli must be authorized
     # This is optimal so authroize once, then we can use gh commands or gh api commands without
