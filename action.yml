@@ -33,7 +33,9 @@ runs:
   - uses: actions/checkout@v3
 
   - name: move repo to ad-build space
-    run: mv ${{inputs.GITHUB_WORKSPACE }}/ /mnt/eed/ad-build
+    run: |
+        cp -r ${{inputs.GITHUB_WORKSPACE }}/ /mnt/eed/ad-build
+        rm -r ${{inputs.GITHUB_WORKSPACE }}/
     shell: bash
   
   - name: Extract repository name
