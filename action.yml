@@ -57,6 +57,7 @@ runs:
       rm -rf ./* || true
       rm -rf ./.??* || true
       ls -la ./
+    she:: bash
     
   # - name: clean up
   #   run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
