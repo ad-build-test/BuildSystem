@@ -50,6 +50,13 @@ runs:
     run: |
       python3 /start_build.py /home/docker/build.yaml test
     shell: bash
+
+  - name: Cleanup build folder
+    run: |
+      ls -la ./
+      rm -rf ./* || true
+      rm -rf ./.??* || true
+      ls -la ./
     
   # - name: clean up
   #   run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
