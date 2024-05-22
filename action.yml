@@ -51,9 +51,9 @@ runs:
       python3 /start_build.py /home/docker/build.yaml test
     shell: bash
     
-  - name: clean up
-    run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
-    shell: bash
+  # - name: clean up
+  #   run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
+  #   shell: bash
 
     
         
