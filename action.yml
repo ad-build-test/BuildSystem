@@ -16,6 +16,10 @@ inputs:
     description: 'name of repo branch'
     required: true
     default: 'N/A'
+  GITHUB_WORKSPACE:
+    description: 'filepath to github workspace'
+    required: true
+    default: 'N/A'
   RUNNER_NAME:
     description: 'name of github self-hosted runner'
     required: true
@@ -29,7 +33,7 @@ runs:
   - uses: actions/checkout@v3
 
   - name: move repo to ad-build space
-    run: mv ${{ GITHUB_WORKSPACE }}/${{ inputs.GITHUB_REPOSITOR }} /mnt/eed/ad-build
+    run: mv ${{inputs.GITHUB_WORKSPACE }}/${{ inputs.GITHUB_REPOSITOR }} /mnt/eed/ad-build
     shell: bash
   
   - name: Extract repository name
