@@ -31,13 +31,13 @@ runs:
   steps:
   # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
   - uses: actions/checkout@v3
-
-  - name: move repo to ad-build space
-    run: mv ${{inputs.GITHUB_WORKSPACE }}/${{ inputs.GITHUB_REPOSITORY }} /mnt/eed/ad-build
-    shell: bash
   
   - name: Extract repository name
     run: echo "reponame=$(basename ${{ inputs.GITHUB_REPOSITORY }} | cut -d'/' -f2-)" >> $GITHUB_ENV
+    shell: bash
+
+  - name: move repo to ad-build space
+    run: mv ${{inputs.GITHUB_WORKSPACE }}/$reponame /mnt/eed/ad-build
     shell: bash
   
   - name: Ensure environment variables are set before talking to database
