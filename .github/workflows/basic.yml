@@ -38,6 +38,7 @@ jobs:
           echo $GITHUB_REPOSITORY
           echo $GITHUB_REPOSITORY_OWNER
           echo $GITHUB_WORKFLOW
+          echo $GITHUB_TRIGGERING_ACTOR
           echo $RUNNER_ARCH
           echo $RUNNER_NAME
 
