@@ -20,6 +20,10 @@ inputs:
     description: 'filepath to github workspace'
     required: true
     default: 'N/A'
+  GITHUB_TRIGGERING_ACTOR:
+    description: 'github username that triggered workflow'
+    required: true
+    default: 'N/A'
   RUNNER_NAME:
     description: 'name of github self-hosted runner'
     required: true
@@ -59,10 +63,6 @@ runs:
       rm -rf ./.??* || true
       ls -la ./
     shell: bash
-    
-  # - name: clean up
-  #   run: rm -r ${{inputs.GITHUB_WORKSPACE }}/
-  #   shell: bash
 
     
         
