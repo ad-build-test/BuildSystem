@@ -1,31 +1,67 @@
 import click
-import subprocess
+import requests
+from auto_complete import AutoComplete
+from cli_configuration import cli_configuration
+from component import Component
 
 @click.group()
-def create():
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=False, help="Branch Name")
+@click.pass_context
+def create(ctx, component, branch):
     """Create a new [ repo | branch | issue ]"""
+    ctx.obj = Component(component, branch)
     pass
 
+# TODO: this will be a common function shared amongst 
+def check_working_dir():
+    pass
+
+
 @create.command()
-# @click.option("--count", type=int, required=False, default=1, help="Number of greetings.")
-# @click.option("--name", required=False, prompt="Your name", help="The person to greet.")
-def repo(): # TODO
+@click.pass_obj # Grab 'component' object from create group
+def repo(component): # TODO
+    # TODO: 
+    # 1) add option to add an existing repo to the component database
     """Create a new repo from a template repository"""
     # args: (May make most of these prompted to user)
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
-    click.echo('Create new repo from template')
-    subprocess.run(['gh', 'repo', 'create'])
-    # 1) Prompt user for args above
-    # 2) Create the gh api request using those args
-    # OR 
-    # 1) just call the gh cli command, if you do this route, then gh cli must be authorized
-    # This is optimal so authroize once, then we can use gh commands or gh api commands without
-    # the need for authorizing each time
+            
+    # Pass in component and branch
+    full_url = cli_configuration["server_url"] + 'component'
+    send_payload = {"component": component_name,
+                    "branch": branch_name,
+                    "linux_username": cli_configuration["linux_uname"],
+                    "github_username": cli_configuration["github_uname"] }
+    # payload_received = requests.post(full_url, send_payload)
+    # print(payload_received)
+
 @create.command()
-def branch(): # TODO
+@click.pass_obj
+def branch(component):
     """Create a new branch"""
-    click.echo('Create new branch')
+    full_url = cli_configuration["server_url"] + 'component'
+    send_payload = {"linux_username": cli_configuration["linux_uname"],
+                    "github_username": cli_configuration["github_uname"] }
+    
+    # 1) If component options passed in, then use those
+    if (component.name):
+        if (component.branch_name == None):
+            component.prompt_branch_name() 
+    # 2) Else set working directory as the component
+    else:
+         if (component.set_cur_dir_component() == False):
+            # 3) Else prompt user for component/branch
+            component.prompt_name()
+            component.prompt_branch_name()
+            
+    send_payload["component"]=component.name
+    send_payload["branch"]=component.branch_name
+    print(send_payload)
+    return # TODO: TEMP HERE
+    payload_received = requests.post(full_url, send_payload)
+    print(payload_received)
 
 @create.command()
 def issue(): 
@@ -40,10 +76,13 @@ def issue():
     cater_id = click.prompt('What is the cater ID?')
     type = click.prompt('Which system do you want your issue in? [Github | Jira]').lower()
     print(type)
-    if (type == 'github'):
-        subprocess.run(['gh', 'issue', 'create'])
-        pass
-    elif (type == 'jira'):
-        pass
-    else:
-        click.echo('Invalid system choice')
+    full_url = cli_configuration["server_url"] + 'component'
+    send_payload = {"component": component_name,
+                    "branch": branch_name,
+                    "issueTracker": type,
+                    "linux_username": cli_configuration["linux_uname"],
+                    "github_username": cli_configuration["github_uname"] }
+    payload_received = requests.post(full_url, send_payload)
+    print(payload_received)
+
+    

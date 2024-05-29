@@ -1,8 +1,15 @@
+import requests
+import readline
+from cli_configuration import cli_configuration
+
 # Tab auto-complete
 class AutoComplete(object):
     # https://pymotw.com/2/readline/
+            
     def __init__(self, options):
         self.options = sorted(options)
+        # self.default_payload = { "linux_username": cli_configuration["linux_uname"],
+        #                 "github_username": cli_configuration["github_uname"] }
         return
 
     def complete(self, text, state):
@@ -23,3 +30,18 @@ class AutoComplete(object):
         except IndexError:
             response = None
         return response
+    
+    def set_auto_complete_vals(type: str):
+        # Send a GET request to component db to get list of components
+        component_list = requests.get(cli_configuration["server_url"] + 'component')
+        component_dict = component_list.json()
+        payload = component_dict['payload']
+        component_list = []
+        if (type == "component"):
+            for component in payload:
+                component_list.append(component['name'])
+        elif (type == "branch"):
+            # TODO: Need to see how we can get the branch names from db
+            for component in payload:
+                component_list.append(component['name'])
+        readline.set_completer(AutoComplete(component_list).complete)

@@ -6,7 +6,8 @@ setup(
     py_modules=['bs_main'],
     install_requires=[
         'Click',
-        'requests'
+        'requests',
+        'gitpython'
     ],
     entry_points={
         'console_scripts': [
