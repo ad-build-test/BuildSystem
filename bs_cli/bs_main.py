@@ -41,6 +41,9 @@ import run_commands as run_group
 import checkout_commands as checkout_group
 import tag_commands as tag_group
 
+# TODO: When done, add exception handling to all possible break points
+# like [requests, environment vars, ]
+
 # bs - build system
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 EPILOG = """EXAMPLES\n

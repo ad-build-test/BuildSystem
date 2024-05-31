@@ -1,20 +1,32 @@
 import click
-import subprocess
+import requests
+from component import Component
+from payload import Payload
 
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-
-@click.group(context_settings=CONTEXT_SETTINGS)
-def run():
+@click.group()
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=False, help="Branch Name")
+@click.pass_context
+def run(ctx, component, branch):
     """Run a [ build | deployment | test ]"""
+    component_obj = Component(component, branch)
+    ctx.obj = Payload(component_obj)
     pass
 
 @run.command()
-def workflow():
-    """Command to trigger a workflow"""
-    click.echo('Run a workflow with the repo')
-    subprocess.run(['gh', 'workflow', 'run'])
-    # TODO:
-    # 1) I think we will make a build, deploy, and test workflow for
-    # each of the template repos.
-    # 2) Then we can skip calling gh workflow run, and instead
-    # use gh api to call the build.yaml or deploy.yaml or test.yaml
+@click.pass_obj # Grab 'component' object from run group
+def build(payload):
+    """Trigger a build"""
+    payload.set_component_fields()
+    print(payload.send_payload)
+    payload_received = requests.post(payload.url + 'build', payload.send_payload)
+    print(payload_received)
+
+@run.command()
+@click.pass_obj
+def test(payload):
+    """Trigger a test"""
+    payload.set_component_fields()
+    print(payload.send_payload)
+    payload_received = requests.post(payload.url + 'test', payload.send_payload)
+    print(payload_received)

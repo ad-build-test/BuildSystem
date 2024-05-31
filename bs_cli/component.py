@@ -31,8 +31,20 @@ class Component(object):
 
     def prompt_name(self):
         AutoComplete.set_auto_complete_vals("component")
-        self.name = input('What is the component name? (<tab> for list)')
+        self.name = input('What is the component name? (<tab>-complete) ')
 
     def prompt_branch_name(self):
         AutoComplete.set_auto_complete_vals("branch")
-        self.branch_name = input('What is the branch name? (<tab> for list)')
+        self.branch_name = input('What is the branch name? (<tab>-complete) ')
+
+    def set_component_fields(self):
+        # 1) If component options passed in, then use those
+        if (self.name):
+            if (self.branch_name == None):
+                self.prompt_branch_name() 
+        # 2) Else set working directory as the component
+        else:
+            if (self.set_cur_dir_component() == False):
+                # 3) Else prompt user for component/branch
+                self.prompt_name()
+                self.prompt_branch_name()
