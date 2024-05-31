@@ -11,6 +11,7 @@ def checkout():
 def component(): # TODO
     """Checkout an existing component/branch"""
     # TODO:
+    # 0) Do we need the branch if were using git to checkout existing branch?
     # 1) Maybe we can just use existing 'eco' function
     # OR
     # 1) Grab the list of components

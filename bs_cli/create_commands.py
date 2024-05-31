@@ -1,55 +1,67 @@
 import click
-import requests
-from cli_configuration import cli_configuration
+from request import Request
 from component import Component
+import logging
 
 @click.group()
-@click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
-@click.pass_context
-def create(ctx, component, branch):
+def create():
     """Create a new [ repo | branch | issue ]"""
-    ctx.obj = Component(component, branch)
     pass
 
 @create.command()
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-u", "--url", required=False, help="Add existing component to build system")
-@click.pass_obj # Grab 'component' object from create group
-def repo(component, url):
+def repo(component: str, branch: str, url: str):
     """Create a new repo"""
+    request = Request(Component(component))
     # args: (May make most of these prompted to user)
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
-# make a payload class to avoid this payload repeated code
-    full_url = cli_configuration["server_url"]
-    send_payload = {"linux_username": cli_configuration["linux_uname"],
-                    "github_username": cli_configuration["github_uname"] }
-    
-    component.set_component_fields()
+    # TODO: May make the requests.post a function in request class as well since its repeating
+    request.set_endpoint('repo')
+    request.set_component_fields()
+    if (url): request.add_to_payload("url", url)
+    payload_received = request.post_request()
 
-    send_payload["component"]=component.name
-    send_payload["branch"]=component.branch_name
-    if (url):
-        send_payload["url"]=url
-    print(send_payload)
-    payload_received = requests.post(full_url + 'repo', send_payload)
-    print(payload_received)
+    logging.info(request.headers)
+    logging.info(request.payload)
+    logging.info(payload_received)
+    
 
 @create.command()
-@click.pass_obj
-def branch(component):
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-f", "--fix", type=int, required=False, help="Add fix branch based off issue number")
+@click.option("-ft", "--feat", type=int, required=False, help="Add feature branch based off issue number")
+@click.option("-d", "--dev", required=False, help="Add development branch")
+@click.option("-b", "--branch", required=False, help="Specify which branch to branch from")
+def branch(component: str, fix: int, feat: int, dev: str, branch: str):
     """Create a new branch"""
-    full_url = cli_configuration["server_url"]
-    send_payload = {"linux_username": cli_configuration["linux_uname"],
-                    "github_username": cli_configuration["github_uname"] }
+    request = Request(Component(component))
+    # TODO: May make the branch ourselves in this case not through backend
+    # TODO: Force the user to enter the repository they want to create a branch in
+    #       This will make it simpler to use git commands directly
     
-    component.set_component_fields()
-            
-    send_payload["component"]=component.name
-    send_payload["branch"]=component.branch_name
-    print(send_payload)
-    payload_received = requests.post(full_url + 'component', send_payload)
-    print(payload_received)
+    dont do same logic as component where you look at what branch their sitting in
+    Just have option available or prompt user. 
+    We also want to create a branch off a branch (tip of branch),
+    tag (may want to add sanity check logic if there are newer tags
+          than the user wants to branch off from),
+    or committ.
+    
+    branch_name=''
+    request.component.prompt_branch_name('Branch name to branch from? (<tab>-complete) ')
+    # Commands to use
+    # git commit --allow-empty -m "initial commit"
+    # git push -u origin <branch_name>
+
+    request.set_endpoint('branch')
+    request.set_component_name()
+    payload_received = request.post_request()
+
+    logging.info(request.headers)
+    logging.info(request.payload)
+    logging.info(payload_received)
 
 @create.command()
 def issue(): 

@@ -2,9 +2,8 @@ import os
 import git
 from auto_complete import AutoComplete
 
-
 class Component(object):
-    def __init__(self, name=None, branch_name=None):
+    def __init__(self, name: str=None, branch_name: str=None):
         self.name = name
         self.branch_name = branch_name
 
@@ -29,22 +28,36 @@ class Component(object):
         self.branch_name = branch_name
         return True
 
-    def prompt_name(self):
+    def prompt_name(self, prompt: str=None):
         AutoComplete.set_auto_complete_vals("component")
+        if (not prompt):
+            prompt = 'What is the component name? (<tab>-complete) '
         self.name = input('What is the component name? (<tab>-complete) ')
 
-    def prompt_branch_name(self):
+    def prompt_branch_name(self, prompt: str=None):
         AutoComplete.set_auto_complete_vals("branch")
-        self.branch_name = input('What is the branch name? (<tab>-complete) ')
+        if (not prompt):
+            prompt = 'What is the branch name? (<tab>-complete) '
+        self.branch_name = input(prompt)
 
-    def set_component_fields(self):
-        # 1) If component options passed in, then use those
-        if (self.name):
-            if (self.branch_name == None):
-                self.prompt_branch_name() 
-        # 2) Else set working directory as the component
-        else:
-            if (self.set_cur_dir_component() == False):
-                # 3) Else prompt user for component/branch
-                self.prompt_name()
-                self.prompt_branch_name()
+    def set_component_field(self, field: str):
+        if (field == "name"):
+            # 1) If component option passed in, then use that
+            if (self.name):
+                return
+            # 2) Else set working directory as the component
+            else:
+                if (self.set_cur_dir_component() == False):
+                    # 3) Else prompt user for component
+                    self.prompt_name()
+        elif (field == "branch"):
+            # 1) If branch option passed in, then use thT
+            if (self.branch_name):
+                return
+            # 2) Else set working directory as the branch
+            else:
+                if (self.set_cur_dir_component() == False):
+                    # 3) Else prompt user for component
+                    self.prompt_branch_name()
+
+                

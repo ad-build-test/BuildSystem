@@ -34,6 +34,7 @@ https://click.palletsprojects.com/en/8.1.x/
 import click
 import os
 import readline
+import logging
 from cli_configuration import cli_configuration
 
 import create_commands as create_group
@@ -86,6 +87,9 @@ if __name__ == '__main__':
     entry_point.add_command(tag_group.tag)
     # Use the tab key for completion
     readline.parse_and_bind('tab: complete')
+    logging.basicConfig(
+        level=logging.INFO, # TODO: Change this to NOTSET when use in production
+        format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] | %(message)s")
     entry_point(prog_name='bs')
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",

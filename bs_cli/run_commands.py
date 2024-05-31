@@ -1,7 +1,8 @@
 import click
 import requests
 from component import Component
-from payload import Payload
+from request import Request
+# TODO: remove options from group to each command
 
 @click.group()
 @click.option("-c", "--component", required=False, help="Component Name")
