@@ -49,6 +49,13 @@ class Component(object):
         tag_names = [tag.name for tag in tags]
         return tag_names
 
+    def git_get_commits(self):
+        # TODO: we have to query the branch if we want to get the commits
+        return None # TEMP
+        commits = self.git_repo.commits
+        commit_names = [commit.name for commit in commits]
+        return commit_names
+
     def set_cur_dir_component(self):
         print("Checking current directory if a component...")
         # Safe to assume that if the current directory is a git repo 
