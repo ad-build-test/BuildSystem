@@ -1,4 +1,5 @@
 import click
+import git
 from request import Request
 from auto_complete import AutoComplete
 from component import Component
