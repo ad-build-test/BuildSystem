@@ -6,8 +6,10 @@ import requests
 class Request(object):
     def __init__(self, component: Component):
         self.url = cli_configuration["server_url"]
-        self.headers = {"linux_username": cli_configuration["linux_uname"],
-                            "github_username": cli_configuration["github_uname"] }
+        self.linux_uname = cli_configuration["linux_uname"]
+        self.github_uname = cli_configuration["github_uname"]
+        self.headers = {"linux_username": self.linux_uname,
+                            "github_username": self.github_uname }
         self.payload = {}
         self.component = component
 
@@ -18,15 +20,15 @@ class Request(object):
         self.payload[key] = value
 
     def set_component_fields(self):
-        self.set_component_name()
-        self.set_component_branch_name()
+        self.set_component_name(True)
+        self.set_component_branch_name(True)
 
-    def set_component_name(self):
-        self.component.set_component_field("name")
+    def set_component_name(self, logic: bool=False):
+        if (logic): self.component.set_component_field_logic("name")
         self.add_to_payload("component", self.component.name)
 
-    def set_component_branch_name(self):
-        self.component.set_component_field("branch")
+    def set_component_branch_name(self, logic: bool=False):
+        if (logic): self.component.set_component_field_logic("branch")
         self.add_to_payload("branch", self.component.branch_name)
 
     def post_request(self):
