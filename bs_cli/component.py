@@ -23,9 +23,10 @@ class Component(object):
             branch_point_value = 'tags/' + branch_point_value
         self.git_repo.git.checkout('-b', branch_name, branch_point_value)
 
-    def git_commit(self, author: str):
+    def git_commit(self, branch_name: str):
         # Commit empty
-        self.git_repo.git.commit("--allow-empty", '-m', 'initial commit')
+        commit_msg = 'initial commit for ' + branch_name
+        self.git_repo.git.commit("--allow-empty", '-m', commit_msg)
 
     def git_push(self, branch_name: str):
         # Commit and push to remote
@@ -47,13 +48,6 @@ class Component(object):
         tags = self.git_repo.tags
         tag_names = [tag.name for tag in tags]
         return tag_names
-
-    def git_get_commits(self):
-        # TODO: we have to query the branch if we want to get the commits
-        return None # TEMP
-        commits = self.git_repo.commits
-        commit_names = [commit.name for commit in commits]
-        return commit_names
 
     def set_cur_dir_component(self):
         print("Checking current directory if a component...")

@@ -1,4 +1,5 @@
 import click
+import git
 from request import Request
 from auto_complete import AutoComplete
 from component import Component
@@ -39,7 +40,7 @@ def repo(component: str, branch: str, url: str):
 @click.option("-d", "--dev", required=False, help="Add development branch")
 @click.option("-b", "--branch", required=False, help="Specify which branch to branch from")
 @click.option("-t", "--tag", required=False, help="Specify which tag to branch from")
-@click.option("-ct", "--commit", required=False, help="Specify which tag to branch from")
+@click.option("-ct", "--commit", required=False, help="Specify which commit to branch from")
 def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str, commit: str):
     """Create a new branch"""
     component_obj = Component(component)
@@ -53,7 +54,7 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
     # 2) See if branch, tag, committ option filled out, or prompt user
     branches = component_obj.git_get_branches()
     tags = component_obj.git_get_tags()
-    commits = component_obj.git_get_commits() # TODO: query branch for commit
+    commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
     if (branch): 
         if (branch in branches):
             branch_point_type = 'branch'
@@ -69,12 +70,14 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
             click.echo('fatal: invalid tag name!')
             return
     elif (commit): 
-        if (commit in commits):
-            branch_point_type = 'commit'
-            branch_point_value = commit
-        else:
-            click.echo('fatal: invalid commit name!')
-            return
+        branch_point_type = 'commit'
+        branch_point_value = commit
+        # if (commit in commits):
+        #     branch_point_type = 'commit'
+        #     branch_point_value = commit
+        # else:
+        #     click.echo('fatal: invalid commit name!')
+        #     return
     else:
         question = [inquirer.List(
                     "branch_point",
@@ -83,7 +86,6 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
         branch_point_type = inquirer.prompt(question)['branch_point']
         if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
         elif (branch_point_type == 'tag'): AutoComplete.set_auto_complete_vals('tag', tags)
-        elif (branch_point_type == 'commit'): AutoComplete.set_auto_complete_vals('commit', commits)
         
         branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
@@ -119,7 +121,7 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
 
     # 5) Create the branch using git and push
     component_obj.git_create_branch(branch_point_type, branch_point_value, full_branch_name)
-    component_obj.git_commit(request.github_uname)
+    component_obj.git_commit(request.github_uname, full_branch_name)
     if (component_obj.git_push(full_branch_name)):
         click.echo('Successfully created and checked out branch: ' + full_branch_name)
 
