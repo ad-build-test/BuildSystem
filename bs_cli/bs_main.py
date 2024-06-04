@@ -32,13 +32,18 @@ https://click.palletsprojects.com/en/8.1.x/
 # 5) We should add color - not priority
 
 import click
-import subprocess
+import os
 import readline
+import logging
+from cli_configuration import cli_configuration
 
 import create_commands as create_group
 import run_commands as run_group
 import checkout_commands as checkout_group
 import tag_commands as tag_group
+
+# TODO: When done, add exception handling to all possible break points
+# like [requests, environment vars, ]
 
 # bs - build system
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -48,14 +53,32 @@ EPILOG = """EXAMPLES\n
 @click.group(context_settings=CONTEXT_SETTINGS)
 def entry_point():
     """ Build System CLI\n
-        For first-time usage, please 'bs login'
+        For first-time usage, please 'bs configure'
     """
+    linux_uname = os.environ.get('USER')
+    github_uname = os.environ.get('AD_BUILD_GH_USER')
+    # Set cli_configuration with linux_uname and gh_uname
+    cli_configuration["linux_uname"] = linux_uname
+    cli_configuration["github_uname"] = github_uname
+
 @entry_point.command()
-def login():
-    """Login to authorize commands"""
-    # May not need this function, we can just refer to an environment var
-    click.echo('set token for authorizing github actions')
-    subprocess.run(['gh', 'auth', 'login'])
+def configure():
+    """Configure to authorize commands"""
+    linux_uname = os.environ.get('USER')
+    # get github name from environment as well, if not then prompt user
+    github_uname = os.environ.get('AD_BUILD_GH_USER')
+    if (github_uname): 
+        click.echo('CLI already configured.')
+    else:
+        github_uname = input('What is your github username? ')
+        # TODO: Either write to bashrc from here, or have them put it themselves
+        write_env = "\n\n# Build System CLI Configuration\
+                    \nexport AD_BUILD_GH_USER=" + github_uname
+        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
+            # 'a' stands for "append"  
+            outfile.write(write_env)
+        click.echo("** Successfully added to .bashrc **\n" + \
+                    "Please 'source ~" + linux_uname + "/.bashrc' or reload shell")
 
 if __name__ == '__main__':
     entry_point.add_command(create_group.create)
@@ -64,6 +87,9 @@ if __name__ == '__main__':
     entry_point.add_command(tag_group.tag)
     # Use the tab key for completion
     readline.parse_and_bind('tab: complete')
+    logging.basicConfig(
+        level=logging.INFO, # TODO: Change this to NOTSET when use in production
+        format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] | %(message)s")
     entry_point(prog_name='bs')
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",

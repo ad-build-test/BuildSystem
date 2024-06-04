@@ -1,6 +1,11 @@
+import requests
+import readline
+from cli_configuration import cli_configuration
+
 # Tab auto-complete
 class AutoComplete(object):
     # https://pymotw.com/2/readline/
+            
     def __init__(self, options):
         self.options = sorted(options)
         return
@@ -23,3 +28,17 @@ class AutoComplete(object):
         except IndexError:
             response = None
         return response
+    
+    def set_auto_complete_vals(type: str, auto_complete_vals: list=None):
+        if (type == 'branch'): # TODO: Determine how we get branches
+            # right now we get the branches from the repo
+            pass
+        elif (type == "component"):
+            # Send a GET request to component db to get list of components
+            component_list = requests.get(cli_configuration["server_url"] + 'component')
+            component_dict = component_list.json()
+            payload = component_dict['payload']
+            auto_complete_vals = []
+            for component in payload:
+                auto_complete_vals.append(component['name'])
+        readline.set_completer(AutoComplete(auto_complete_vals).complete)

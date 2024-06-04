@@ -1,35 +1,19 @@
 import click
-import subprocess
 import requests
-import readline
 from auto_complete import AutoComplete
+from request import Request
+from component import Component
 
 @click.group()
 def checkout():
-    """checkout an existing [ component ]"""
-
-    # TODO: Send a GET request to component db to get list of components
-    server_url='https://accel-webapp-dev.slac.stanford.edu/api/cbs/v1/'
-    component_list = requests.get(server_url + 'component')
-    component_dict = component_list.json()
-    payload = component_dict['payload']
-    component_list = []
-    for component in payload:
-        component_list.append(component['name'])
-    print(component_list)
-    readline.set_completer(AutoComplete(component_list).complete)
-    pass
+    """checkout an existing [ component/branch ]"""
 
 @checkout.command()
-# @click.option("--count", type=int, required=False, default=1, help="Number of greetings.")
-# @click.option("--name", required=False, prompt="Your name", help="The person to greet.")
-def component(): # TODO
-    """Checkout an existing component/repo"""
-    # args: (May make most of these prompted to user)
-    # organization, template repo name, new repo owner (should be automatic),
-    # name of repo, description, include_all_branches, private
-    click.echo('Checkout new repo from template')
+def component(): # TODO We may not need this so leave for now
+    """Checkout an existing component/branch"""
+
     # TODO:
+    # 0) Do we need the branch if were using git to checkout existing branch?
     # 1) Maybe we can just use existing 'eco' function
     # OR
     # 1) Grab the list of components
@@ -37,6 +21,28 @@ def component(): # TODO
     # 3) Then prompt the user for component name
         # 3.1) Should be tab autocomplete
     # 4) like 'eco' we should generate the configuration RELEASE_SITE file
+    
+    # 1) Prompt user for component/branch
+    branches = component_obj.git_get_branches()
+    # TODO: can clone first, then use cwd? Works if you think about it because you checkout 
+    # on a spot where you want it
+    AutoComplete.set_auto_complete_vals("component")
     component_name = input('What is the component name? (<tab> for list)')
+    AutoComplete.set_auto_complete_vals("branch")
+    branch_name = input('What is the branch name? (<tab> for list)')
+
+    request = Request(Component(component_name, branch_name))
     # Send a request to get the url to the repo
     # then do a git clone if we are doing url, or otherwise copy from filepath
+
+    # Pass in component and branch
+    full_url = cli_configuration["server_url"] + 'component'
+    send_payload = {"component": component_name,
+                    "branch": branch_name,
+                    "linux_username": cli_configuration["linux_uname"],
+                    "github_username": cli_configuration["github_uname"] }
+    payload_received = requests.post(full_url, send_payload)
+    print(payload_received)
+
+    # 3) Clone the repo/branch here
+    
