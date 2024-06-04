@@ -1,5 +1,4 @@
 import click
-import git
 from request import Request
 from auto_complete import AutoComplete
 from component import Component
@@ -110,7 +109,8 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
     full_branch_name = branch_type + '-' + branch_type_value
 
     # 4) Write to database
-    request.set_endpoint('branch')
+    endpoint = 'component/' + component_obj.name + '/branch'
+    request.set_endpoint(endpoint)
     request.set_component_name()
     request.add_to_payload("branch", full_branch_name)
     payload_received = request.post_request()

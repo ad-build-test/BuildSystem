@@ -1,0 +1,20 @@
+# Deployment for a build pod - this is a prototype
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-build
+spec:
+  containers:
+  - name: test-build
+    image: pnispero/rocky9-env:latest
+    # Just spin & wait forever
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "while true; do sleep 5; done;" ]
+    volumeMounts:
+    - name: build
+      mountPath: "/etc/build"
+      readOnly: true
+  volumes:
+  - name: build
+    configMap:
+      name: build-config
