@@ -21,7 +21,7 @@ class Component(object):
         # Tag is the only special case
         if (branch_point_type == 'tag'):
             branch_point_value = 'tags/' + branch_point_value
-        self.git_repo.git.checkout('-b', branch_name, branch_point_value)
+        self.git_repo.git.branch(branch_name, branch_point_value)
 
     def git_commit(self, branch_name: str):
         # Commit empty
@@ -36,7 +36,6 @@ class Component(object):
         except exc.GitError as error:
             print(error)
             print("Deleting branch...")
-            self.git_repo.git.checkout(self.branch_name)
             self.git_repo.git.branch('-D', branch_name)
 
     def git_get_branches(self):

@@ -54,7 +54,7 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
     # 2) See if branch, tag, committ option filled out, or prompt user
     branches = component_obj.git_get_branches()
     tags = component_obj.git_get_tags()
-    commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
+    # commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
     if (branch): 
         if (branch in branches):
             branch_point_type = 'branch'
@@ -121,9 +121,9 @@ def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str,
 
     # 5) Create the branch using git and push
     component_obj.git_create_branch(branch_point_type, branch_point_value, full_branch_name)
-    component_obj.git_commit(request.github_uname, full_branch_name)
+    component_obj.git_commit(full_branch_name)
     if (component_obj.git_push(full_branch_name)):
-        click.echo('Successfully created and checked out branch: ' + full_branch_name)
+        click.echo('Successfully created branch: ' + full_branch_name)
 
 
 
