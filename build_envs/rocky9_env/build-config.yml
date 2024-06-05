@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: build-config
+data:
+  start_build.py: |
+    import time
+    import json
+    import os
+    print('Hello World')
+    while True:
+        print('Print contents of build_config.json to avoid dying:')
+        print(os.getcwd())
+        with open('build_config.json') as f:
+            d = json.load(f)
+            print(d)
+        time.sleep(10)
+
+
+  build_config.json: | # TODO: This part should be dynamic
+    {
+      "ADBS_COMPONENT": "hello_world",
+      "ADBS_BRANCH": "fix-1234",
+      "ADBS_LINUX_USER": "katzung",
+      "ADBS_GH_USER": "katzung-slac",
+      "ADBS_BUILD_COMMAND": "make"
+    }

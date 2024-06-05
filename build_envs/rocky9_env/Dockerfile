@@ -10,8 +10,8 @@ RUN yum install -y glibc
 # install gcc and make
 RUN yum install -y gcc-c++ && yum install -y make
 
-# install vim
-RUN yum install -y vim
+# install vim and python3
+RUN yum install -y vim && yum install -y python3
 
 # COPY build.sh /home/user/build.sh
 

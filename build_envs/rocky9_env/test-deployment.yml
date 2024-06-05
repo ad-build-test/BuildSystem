@@ -7,9 +7,12 @@ spec:
   containers:
   - name: test-build
     image: pnispero/rocky9-env:latest
-    # Just spin & wait forever
-    command: [ "/bin/bash", "-c", "--" ]
-    args: [ "while true; do sleep 5; done;" ]
+    # start the build script
+    command: ["/bin/sh"]
+    args:
+      - -c
+      - >- # cd is PRoblematic because /etc/build isn't mounted yet, sleep maybe?
+          python3 /etc/build/start_build.py 
     volumeMounts:
     - name: build
       mountPath: "/etc/build"
@@ -18,3 +21,15 @@ spec:
   - name: build
     configMap:
       name: build-config
+      # An array of keys from the ConfigMap to create as files
+      items:
+      - key: "start_build.py"
+        path: "start_build.py"
+      - key: "build_config.json"
+        path: "build_config.json"
+# TODO
+#     # see if we can get the build system scripts MAPPEd not baked into the containers
+#     # good for maintenance
+
+# Get the script done, image ready, and this deployment ready which calls the image
+# and the build script
