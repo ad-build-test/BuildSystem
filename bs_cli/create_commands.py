@@ -33,16 +33,15 @@ def repo(component: str, branch: str, url: str):
     
 
 @create.command()
-@click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-f", "--fix", type=int, required=False, help="Add fix branch based off issue number")
 @click.option("-ft", "--feat", type=int, required=False, help="Add feature branch based off issue number")
 @click.option("-d", "--dev", required=False, help="Add development branch")
 @click.option("-b", "--branch", required=False, help="Specify which branch to branch from")
 @click.option("-t", "--tag", required=False, help="Specify which tag to branch from")
 @click.option("-ct", "--commit", required=False, help="Specify which commit to branch from")
-def branch(component: str, fix: int, feat: int, dev: str, branch: str, tag: str, commit: str):
+def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str):
     """Create a new branch"""
-    component_obj = Component(component)
+    component_obj = Component()
     request = Request(component_obj)
 
     # 1) First check that user is in repo
