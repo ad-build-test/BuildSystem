@@ -1,0 +1,7 @@
+{
+  "ADBS_COMPONENT": "hello_world",
+  "ADBS_BRANCH": "fix-1234",
+  "ADBS_LINUX_USER": "katzung",
+  "ADBS_GH_USER": "katzung-slac",
+  "ADBS_BUILD_COMMAND": "make"
+}

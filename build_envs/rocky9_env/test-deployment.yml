@@ -1,4 +1,10 @@
 # Deployment for a build pod - this is a prototype
+# see if we can get the build system scripts MAPPED not baked into the containers
+# good for maintenance
+
+# How to run:
+# 1) kubectl create -f build-config.yml
+# 2) kubectl apply -f test-deployment.yml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -7,14 +13,40 @@ spec:
   containers:
   - name: test-build
     image: pnispero/rocky9-env:latest
-    # Just spin & wait forever
-    command: [ "/bin/bash", "-c", "--" ]
-    args: [ "while true; do sleep 5; done;" ]
+    # start the build script
+    command: ["/bin/sh"]
+    args:
+      - -c
+      - >-
+          echo "$ cd /etc/build/" &&
+          cd /etc/build/ && 
+          echo "$ pwd && ls" &&
+          pwd && ls &&
+          echo "$ python3 start_build.py" &&
+          python3 start_build.py &&
+          echo "$ sleep 9999 to keep container alive for debug" &&
+          sleep 9999
     volumeMounts:
     - name: build
       mountPath: "/etc/build"
       readOnly: true
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 4000m
   volumes:
   - name: build
     configMap:
       name: build-config
+      # An array of keys from the ConfigMap to create as files
+      items:
+      - key: "start_build.py"
+        path: "start_build.py"
+      - key: "build_config.json"
+        path: "build_config.json"
+
+# TODO
+
+
+# Get the script done, image ready, and this deployment ready which calls the image
+# and the build script
