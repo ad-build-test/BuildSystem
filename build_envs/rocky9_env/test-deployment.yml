@@ -5,6 +5,8 @@
 # How to run:
 # 1) kubectl create -f build-config.yml
 # 2) kubectl apply -f test-deployment.yml
+# TODO: See how we can use kustomization or some string replacement
+# to replace image with the environment specified in component DB
 apiVersion: v1
 kind: Pod
 metadata:
