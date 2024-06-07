@@ -1,3 +1,4 @@
+# How to build: docker build --tag pnispero/rocky9-env:latest .
 # base image
 FROM rockylinux:9
 
@@ -13,7 +14,8 @@ RUN yum install -y gcc-c++ && yum install -y make
 # install vim and python3
 RUN yum install -y vim && yum install -y python3
 
-# COPY build.sh /home/user/build.sh
+# Add build scripts to /build
+Add build_scripts /build/
 
 # WORKDIR /home/user
 
