@@ -1,5 +1,8 @@
 # base image
 # note from redhat official website - the base image is free to use, but Red Hat technologies are supported through red hat subscription
+# How to build:
+# 1) Go to top of repo
+# 2) docker build --tag pnispero/rhel8-env:latest -f build_envs/rhel8_env/Dockerfile .
 FROM redhat/ubi8:8.6
 
 # update
@@ -11,13 +14,15 @@ RUN yum install -y glibc
 # install gcc and make
 RUN yum install -y gcc-c++ && yum install -y make
 
-COPY build.sh /home/user/build.sh
+# install vim and python3 and pip
+RUN yum install -y vim && yum install -y python3 && yum install -y pip
 
-WORKDIR /home/user
+# install pyyaml, requests
+RUN pip install pyyaml \
+    && pip install requests
 
-RUN chmod +x build.sh
+# install git
+RUN yum install -y git
 
-# RUN echo "Copy the repo to /home/user/"
-
-# No CMD command since this can be used for both build and development
-# ENTRYPOINT ["/bin/bash"]
+# Add build scripts to /build
+ADD build_scripts /build/

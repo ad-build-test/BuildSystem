@@ -1,5 +1,8 @@
 # How to build: docker build --tag pnispero/rocky9-env:latest .
 # base image
+# How to build:
+# 1) Go to top of repo
+# 2) docker build --tag pnispero/rocky9-env:latest -f build_envs/rocky9_env/Dockerfile .
 FROM rockylinux:9
 
 # update
@@ -11,17 +14,15 @@ RUN yum install -y glibc
 # install gcc and make
 RUN yum install -y gcc-c++ && yum install -y make
 
-# install vim and python3
-RUN yum install -y vim && yum install -y python3
+# install vim and python3 and pip
+RUN yum install -y vim && yum install -y python3 && yum install -y pip
+
+# install pyyaml, requests
+RUN pip install pyyaml \
+    && pip install requests
+
+# install git
+RUN yum install -y git
 
 # Add build scripts to /build
-Add build_scripts /build/
-
-# WORKDIR /home/user
-
-# RUN chmod +x build.sh
-
-# RUN echo "Copy the repo to /home/user/"
-
-# No CMD command since this can be used for both build and development
-# ENTRYPOINT ["/bin/bash"]
+ADD build_scripts /build/

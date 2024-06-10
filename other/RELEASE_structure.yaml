@@ -1,0 +1,41 @@
+# Format 1 ----------------------
+format: 1
+# Build YAML
+repo: test-ioc
+organization: ad-build-test
+
+# Build Script
+build: build.sh
+
+# Environments this app runs on
+environments:
+  - rocky9
+  - rhel7
+
+# dependencies this app needs built
+# component: tag name
+dependencies:
+  - epics-base: R7.0.8
+  - boost: boost-1.85.0
+
+# Format 2 ----------------------
+format: 2
+# Build YAML
+repo: test-ioc
+organization: ad-build-test
+
+# Build Script
+build: build.sh
+
+# Environments this app runs on
+# dependencies this app needs built
+# component: tag name
+environments:
+  rocky9:
+    dependencies:
+      - epics-base: R7.0.8
+      - boost: boost-1.85.0
+  rhel7:
+      dependencies:
+      - epics-base: R7.0.8
+      - boost: boost-1.85.0

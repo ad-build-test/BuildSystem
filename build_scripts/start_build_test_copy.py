@@ -45,7 +45,7 @@ def get_environment() -> dict:
 def parse_dependencies() -> dict:
     # 1) Enter build directory
     env = get_environment()
-    os.chdir(env['source_dir'] + '/configure')
+    # os.chdir(env['source_dir'])
 
     # 2) Parse yaml
     release_yaml = parse_yaml('RELEASE.yaml')
@@ -58,37 +58,14 @@ def parse_dependencies() -> dict:
 def install_dependencies(dependencies: dict):
     print("Installing dependencies")
     print(dependencies)
-# Plan:
-"""
-1) Look into the registry (its a cache basically) for the component if it exists
-    1.1) if exists, then just grab it
-    1.2) if not exist, then start_build.py is responsible for building it
-        1.2.1) Look into the config yaml, for the component dependency name, 
-                and an additional 'build' field on how to build the component. 
-        1.2.2) 
-2) Once you have the compiled component, do we put it in /lib of the repo?
-    Or put it in the container /usr/local
-"""
+    print(dependencies[0]['build'])
+
     # 3) For each dependency
-        # Do we have these prebuilt somewhere, and we can grab them from registry?
-        # If not exists, then we can send request to backend to build that dependency
-        # Currently, every dependency exists somewhere on afs prebuilt, and we reference
-            # those in the ioc-config file, specifying the filepath to the dependency,
-            # and the /{ARCH}/lib and /{ARCH}/include folders.
-            # this is shared libraries/dynamic linking. Another option is static linking
         # 3.1) Clone the repo
 
-        # 3.2) Usually its just a 'make', creates the /lib/*.so compiled shared object files
+        # 3.2) Usually its just a 'make'
 
-        # 3.3) But how do we package that? I think we just move all of it to /lib of the repo?
-
-def run_build():
-    # 4) Run the repo-defined build-script
-    pass
-
-def create_docker_file():
-    # 5) Create dockerfile with dependencies installed. then push to /output
-    pass
+        # 3.3) But how do we package that? I think all of it goes to a folder
 
 if __name__ == "__main__":
     # parse_build_config()
