@@ -48,16 +48,30 @@ def parse_dependencies() -> dict:
     os.chdir(env['source_dir'] + '/configure')
 
     # 2) Parse yaml
-    release_yaml = parse_yaml('RELEASE.yaml')
-    if (release_yaml['format'] == 2):
-        dependencies = release_yaml['environments'][env['os_env']]['dependencies']
+    config_yaml = parse_yaml('CONFIG.yaml')
+    if (config_yaml['format'] == 2):
+        dependencies = config_yaml['environments'][env['os_env']]['dependencies']
     else:
-        dependencies = release_yaml['dependencies']
+        dependencies = config_yaml['dependencies']
     return dependencies
+
+def get_component_from_registry(component: str, tag: str):
+    # TODO: Waiting on when registry is implemented
+    print(component, tag)
+    pass
 
 def install_dependencies(dependencies: dict):
     print("Installing dependencies")
     print(dependencies)
+    for dependency in dependencies:
+        for name,value in dependency.items():
+            if (name != 'build'):
+                component_from_registry = get_component_from_registry(name, value)
+            else:
+                buildInstructions = value
+        if (not component_from_registry):
+            print(buildInstructions)
+            # perform buildInstructions, and add to Dockerfile
 # Plan:
 """
 1) Look into the registry (its a cache basically) for the component if it exists
@@ -92,7 +106,7 @@ def create_docker_file():
 
 if __name__ == "__main__":
     # parse_build_config()
-    # release_yaml = parse_yaml('RELEASE.yaml')
+    # config_yaml = parse_yaml('RELEASE.yaml')
     dependencies = parse_dependencies()
     install_dependencies(dependencies)
 

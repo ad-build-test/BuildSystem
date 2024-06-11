@@ -1,5 +1,6 @@
-format: 1
 # Build YAML
+format: 1
+
 repo: test-ioc
 organization: ad-build-test
 
@@ -15,8 +16,8 @@ environments:
 # component: tag name
 dependencies:
   - epics-base: R7.0.8
-    build: ['git clone --recursive https://github.com/epics-base/epics-base.git', 
+    build: ['yum install -y perl', 
+    'git clone --recursive https://github.com/epics-base/epics-base.git', 
     'cd epics-build', 'make']
   - boost: boost-1.85.0
     build: make
-

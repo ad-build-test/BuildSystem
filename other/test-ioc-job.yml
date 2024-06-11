@@ -11,7 +11,7 @@ spec:
       storage: 5Gi
 ---
 apiVersion: apps/v1
-kind: job
+kind: Deployment
 metadata:
   name: ad-build-container
 spec:
@@ -65,13 +65,6 @@ spec:
       - name: s3df-dev-container-ad-group
         persistentVolumeClaim:
           claimName: s3df-dev-container-ad-group
-#TODO
-
-# Make a deployment.yaml for a pod which the rocky9 image
-#     with an volume mount to the current directory which will be the actual
-#     repo but at the proper location /mnt/build-scratch/ad-build/component-branch-podId/
-
-# OR JUST CLONE THE REPO YOURSELF AT THE LOCATION
 
 
 

@@ -48,17 +48,28 @@ def parse_dependencies() -> dict:
     # os.chdir(env['source_dir'])
 
     # 2) Parse yaml
-    release_yaml = parse_yaml('RELEASE.yaml')
-    if (release_yaml['format'] == 2):
-        dependencies = release_yaml['environments'][env['os_env']]['dependencies']
+    config_yaml = parse_yaml('CONFIG.yaml')
+    if (config_yaml['format'] == 2):
+        dependencies = config_yaml['environments'][env['os_env']]['dependencies']
     else:
-        dependencies = release_yaml['dependencies']
+        dependencies = config_yaml['dependencies']
     return dependencies
+
+def get_component_from_registry(component: str, tag: str):
+    # TODO: Waiting on when registry is implemented
+    print(component, tag)
+    pass
 
 def install_dependencies(dependencies: dict):
     print("Installing dependencies")
     print(dependencies)
-    print(dependencies[0]['build'])
+    for dependency in dependencies:
+        for name,value in dependency.items():
+            if (name != 'build'):
+                component = get_component_from_registry(name, value)
+            else:
+                buildInstructions = value
+        print(buildInstructions)
 
     # 3) For each dependency
         # 3.1) Clone the repo
@@ -69,7 +80,7 @@ def install_dependencies(dependencies: dict):
 
 if __name__ == "__main__":
     # parse_build_config()
-    # release_yaml = parse_yaml('RELEASE.yaml')
+    # config_yaml = parse_yaml('RELEASE.yaml')
     dependencies = parse_dependencies()
     install_dependencies(dependencies)
 
