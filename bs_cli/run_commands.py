@@ -20,13 +20,14 @@ def build(component: str, branch: str):
     request.set_component_fields()
 
     # 2) Write to database
-    endpoint = 'component/' + request.component.name + '/build'
+    endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
     request.set_endpoint(endpoint)
     payload_received = request.post_request()
 
     logging.info(request.headers)
     logging.info(request.payload)
     logging.info(payload_received)
+    logging.info(request.url)
 
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")

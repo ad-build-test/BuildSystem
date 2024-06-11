@@ -13,20 +13,20 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ad-build-container
+  name: ad-build-container-rhel8
 spec:
   selector:
     matchLabels:
-      app: ad-build-container
+      app: ad-build-container-rhel8
   template:
     metadata:
       labels:
-        app: ad-build-container
+        app: ad-build-container-rhel8
       annotations:
-        app: ad-build-container
+        app: ad-build-container-rhel8
     spec:
       containers:
-      - name: ad-build-container
+      - name: ad-build-container-rhel8
         image: pnispero/rocky9-env:latest
         imagePullPolicy: Always
         # start the build script
@@ -40,8 +40,8 @@ spec:
               pwd && ls &&
               echo "$ python3 start_build.py" &&
               python3 start_build.py &&
-              echo "$ sleep 9999 to keep container alive for debug" &&
-              sleep 9999
+              echo "$ sleep 99999 to keep container alive for debug" &&
+              sleep 99999
         # envFrom:
         # - configMapRef:
         #     name: epics-env-config

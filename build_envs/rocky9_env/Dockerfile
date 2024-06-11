@@ -21,6 +21,9 @@ RUN yum install -y vim && yum install -y python3 && yum install -y pip
 RUN pip install pyyaml \
     && pip install requests
 
+# install perl
+RUN yum install -y perl
+
 # install git
 RUN yum install -y git
 

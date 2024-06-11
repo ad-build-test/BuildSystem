@@ -14,8 +14,14 @@ RUN yum install -y glibc
 # install gcc and make
 RUN yum install -y gcc-c++ && yum install -y make
 
-# install vim and python3 and pip
-RUN yum install -y vim && yum install -y python3 && yum install -y pip
+# install vim and python3
+RUN yum install -y vim && yum install -y python3
+
+# install wget
+RUN yum install -y wget
+
+# install pip
+RUN cd /etc/ && wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && python3 ./get-pip.py
 
 # install pyyaml, requests
 RUN pip install pyyaml \
