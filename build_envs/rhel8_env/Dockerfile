@@ -32,3 +32,7 @@ RUN yum install -y git
 
 # Add build scripts to /build
 ADD build_scripts /build/
+
+# Make /build open to 'adbuild' user
+RUN chown -R 46487:1006 /build/
+

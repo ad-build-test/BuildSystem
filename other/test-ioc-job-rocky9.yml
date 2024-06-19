@@ -15,9 +15,12 @@ kind: Pod
 metadata:
   name: test-build-rocky9
 spec:
+  securityContext:
+    runAsUser: 46487
+    runAsGroup: 1006
   containers:
   - name: test-build-rocky9
-    image: pnispero/rocky9-env:dev
+    image: pnispero/rocky9-env:latest
     imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]

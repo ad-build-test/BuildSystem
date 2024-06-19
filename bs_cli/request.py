@@ -20,18 +20,19 @@ class Request(object):
         self.payload[key] = value
 
     def set_component_fields(self):
-        self.set_component_name(True)
-        self.set_component_branch_name(True)
+        self.set_component_name()
+        self.set_component_branch_name()
+    
+    def set_component_name(self):
+        self.component.set_component_field_logic("name")
 
-    def set_component_name(self, logic: bool=False):
-        if (logic): self.component.set_component_field_logic("name")
-        self.add_to_payload("component", self.component.name)
-
-    def set_component_branch_name(self, logic: bool=False):
-        if (logic): self.component.set_component_field_logic("branch")
-        self.add_to_payload("branch", self.component.branch_name)
+    def set_component_branch_name(self):
+        self.component.set_component_field_logic("branch")
 
     def post_request(self):
-        return requests.post(self.url, self.headers, self.payload)
+        return requests.post(self.url, headers=self.headers, json=self.payload)
+    
+    def put_request(self):
+        return requests.put(self.url, headers=self.headers, json=self.payload)
 
 

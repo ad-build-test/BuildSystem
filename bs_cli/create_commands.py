@@ -4,6 +4,7 @@ from auto_complete import AutoComplete
 from component import Component
 import logging
 import inquirer
+from bs_main import INPUT_PREFIX
 
 
 @click.group()
@@ -13,23 +14,33 @@ def create():
 
 @create.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
+@click.option("-o", "--organization", required=False, help="Organization Name", prompt=INPUT_PREFIX + "Specify organization name")
+@click.option("-t", "--testing-criteria", required=False, help="Testing Criteria", prompt=INPUT_PREFIX + "Specify testing criteria")
+@click.option("-a", "--approval-rule", required=False, help="Approval Rule", prompt=INPUT_PREFIX + "Specify approval rule")
+@click.option("-d", "--desc", required=False, help="Description", prompt=INPUT_PREFIX + "Specify component description")
 @click.option("-u", "--url", required=False, help="Add existing component to build system")
-def repo(component: str, branch: str, url: str):
+def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, url: str):
     """Create a new repo"""
-    request = Request(Component(component, branch))
+    request = Request(Component(component))
     # args: (May make most of these prompted to user)
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
     # TODO: May make the requests.post a function in request class as well since its repeating
     request.set_endpoint('component')
-    request.set_component_fields()
+    request.set_component_name()
+    request.add_to_payload("name", request.component.name)
+    request.add_to_payload("description", desc)
+    request.add_to_payload("testingCriteria", testing_criteria)
+    request.add_to_payload("approvalRule", approval_rule)
+    request.add_to_payload("organization", organization)
     if (url): request.add_to_payload("url", url)
-    # payload_received = request.post_request()
+    response = request.post_request()
 
-    logging.info(request.headers)
-    logging.info(request.payload)
-    logging.info(payload_received)
+    logging.info(response.status_code)
+    logging.info(response.json())
+    logging.info(response.request.url)
+    logging.info(response.request.body)
+    logging.info(response.request.headers)
     
 
 @create.command()
@@ -49,78 +60,77 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     if (not component_obj.set_cur_dir_component()):
         click.echo('fatal: not a git repository (or any of the parent directories)')
         return
-    # 1.1) if adding existing branch, then use current repo/branch
-    if (add):
-        full_branch_name = component_obj.branch_name
+    # 2) See if branch, tag, committ option filled out, or prompt user
+    branches = component_obj.git_get_branches()
+    tags = component_obj.git_get_tags()
+    # commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
+    if (branch): 
+        if (branch in branches):
+            branch_point_type = 'branch'
+            branch_point_value = branch
+        else:
+            click.echo('fatal: invalid branch name!')
+            return
+    elif (tag): 
+        if (tag in tags):
+            branch_point_type = 'tag'
+            branch_point_value = tag
+        else:
+            click.echo('fatal: invalid tag name!')
+            return
+    elif (commit): 
+        branch_point_type = 'commit'
+        branch_point_value = commit
+        # if (commit in commits):
+        #     branch_point_type = 'commit'
+        #     branch_point_value = commit
+        # else:
+        #     click.echo('fatal: invalid commit name!')
+        #     return
     else:
-        # 2) See if branch, tag, committ option filled out, or prompt user
-        branches = component_obj.git_get_branches()
-        tags = component_obj.git_get_tags()
-        # commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
-        if (branch): 
-            if (branch in branches):
-                branch_point_type = 'branch'
-                branch_point_value = branch
-            else:
-                click.echo('fatal: invalid branch name!')
-                return
-        elif (tag): 
-            if (tag in tags):
-                branch_point_type = 'tag'
-                branch_point_value = tag
-            else:
-                click.echo('fatal: invalid tag name!')
-                return
-        elif (commit): 
-            branch_point_type = 'commit'
-            branch_point_value = commit
-            # if (commit in commits):
-            #     branch_point_type = 'commit'
-            #     branch_point_value = commit
-            # else:
-            #     click.echo('fatal: invalid commit name!')
-            #     return
-        else:
-            question = [inquirer.List(
-                        "branch_point",
-                        message="Specify what to branch from",
-                        choices=["branch", "tag", "commit"])]
-            branch_point_type = inquirer.prompt(question)['branch_point']
-            if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
-            elif (branch_point_type == 'tag'): AutoComplete.set_auto_complete_vals('tag', tags)
-            
-            branch_point_value = input("Specify name of " + branch_point_type + ": ")
+        question = [inquirer.List(
+                    "branch_point",
+                    message="Specify what to branch from",
+                    choices=["branch", "tag", "commit"])]
+        branch_point_type = inquirer.prompt(question)['branch_point']
+        if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
+        elif (branch_point_type == 'tag'): AutoComplete.set_auto_complete_vals('tag', tags)
+        
+        branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
-        # 3) See if fix, feat, or dev option filled out, or prompt user
-        if (fix): 
-            branch_type = 'fix'
-            branch_type_value = fix
-        elif (feat):
-            branch_type = 'feat'
-            branch_type_value = feat
-        elif (dev):
-            branch_type = 'dev'
-            branch_type_value = dev
-        else:
-            question = [inquirer.List(
-                        "branch_type",
-                        message="Specify type of branch to create",
-                        choices=["fix", "feat", "dev"])]
-            branch_type = inquirer.prompt(question)['branch_type']
-            branch_type_value = input("Specify name of issue number (or dev name): ")
+    # 3) See if fix, feat, or dev option filled out, or prompt user
+    if (fix): 
+        branch_type = 'fix'
+        branch_type_value = fix
+    elif (feat):
+        branch_type = 'feat'
+        branch_type_value = feat
+    elif (dev):
+        branch_type = 'dev'
+        branch_type_value = dev
+    else:
+        question = [inquirer.List(
+                    "branch_type",
+                    message="Specify type of branch to create",
+                    choices=["fix", "feat", "dev"])]
+        branch_type = inquirer.prompt(question)['branch_type']
+        branch_type_value = input("Specify name of issue number (or dev name): ")
 
-        full_branch_name = branch_type + '-' + branch_type_value
+    full_branch_name = branch_type + '-' + branch_type_value
 
     # 4) Write to database
     endpoint = 'component/' + component_obj.name + '/branch'
     request.set_endpoint(endpoint)
-    request.set_component_name()
-    request.add_to_payload("branch", full_branch_name)
-    payload_received = request.post_request()
+    request.add_to_payload("type", branch_point_type)
+    request.add_to_payload("branchPoint", branch_point_value)
+    request.add_to_payload("branchName", full_branch_name)
+    response = request.put_request()
 
-    logging.info(request.headers)
-    logging.info(request.payload)
-    logging.info(payload_received)
+    logging.info(response.status_code)
+    logging.info(response.json())
+    logging.info(response.request.url)
+    logging.info(response.request.body)
+    logging.info(response.request.headers)
 
     # 5) Create the branch using git and push
     if (not add): # Dont create branch if user just wants to add to database
@@ -150,7 +160,7 @@ def issue():
                     "issueTracker": type,
                     "linux_username": cli_configuration["linux_uname"],
                     "github_username": cli_configuration["github_uname"] }
-    payload_received = requests.post(full_url, send_payload)
-    print(payload_received)
+    response = requests.post(full_url, send_payload)
+    print(response)
 
     

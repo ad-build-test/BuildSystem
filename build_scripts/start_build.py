@@ -18,13 +18,6 @@ import shutil
 # 4) Then run the function in start_test.py
     # 4.1) Which will look into certain directories and run those tests
     
-
-def parse_build_config():
-    with open('build_config.json') as f:
-        d = json.load(f)
-        print('Print contents of build_config.json:')
-        print(d)
-
 def parse_yaml(yaml_filepath: str) -> dict:
 
     # Load YAML data from file
@@ -45,10 +38,13 @@ def get_environment() -> dict:
     return env_config
 
 def parse_dependencies(config_yaml: dict, env: dict) -> dict:
-    if (config_yaml['format'] == 2):
-        dependencies = config_yaml['environments'][env['os_env']]['dependencies']
-    else:
-        dependencies = config_yaml['dependencies']
+    try:
+        if (config_yaml['format'] == 2):
+            dependencies = config_yaml['environments'][env['os_env']]['dependencies']
+        else:
+            dependencies = config_yaml['dependencies']
+    except KeyError:
+        return None
     return dependencies
 
 def get_component_from_registry(component: str, tag: str, os_env: str):
@@ -147,7 +143,6 @@ def create_docker_file():
 
 if __name__ == "__main__":
     print("Dev Version")
-    # parse_build_config()
     # 1) Enter build directory
     env = get_environment()
     os.chdir(env['source_dir'])
@@ -155,8 +150,9 @@ if __name__ == "__main__":
     config_yaml = parse_yaml('configure/CONFIG.yaml')
     # 3) Parse dependencies
     dependencies = parse_dependencies(config_yaml, env)
-    # 4) Install dependencies
-    install_dependencies(dependencies, env)
+    if (dependencies):
+        # 4) Install dependencies
+        install_dependencies(dependencies, env)
     # 5) Run repo build script
     run_build(config_yaml)
 

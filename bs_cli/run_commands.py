@@ -22,12 +22,13 @@ def build(component: str, branch: str):
     # 2) Write to database
     endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
     request.set_endpoint(endpoint)
-    payload_received = request.post_request()
+    response = request.post_request()
 
-    logging.info(request.headers)
-    logging.info(request.payload)
-    logging.info(payload_received)
-    logging.info(request.url)
+    logging.info(response.status_code)
+    logging.info(response.json())
+    logging.info(response.request.url)
+    logging.info(response.request.body)
+    logging.info(response.request.headers)
 
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
@@ -39,10 +40,12 @@ def test(component: str, branch: str):
     request.set_component_fields()
 
     # 2) Write to database
-    endpoint = 'component/' + request.component.name + '/test'
+    endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
     request.set_endpoint(endpoint)
-    payload_received = request.post_request()
+    response = request.post_request()
 
-    logging.info(request.headers)
-    logging.info(request.payload)
-    logging.info(payload_received)
+    logging.info(response.status_code)
+    logging.info(response.json())
+    logging.info(response.request.url)
+    logging.info(response.request.body)
+    logging.info(response.request.headers)

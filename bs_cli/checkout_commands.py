@@ -41,8 +41,8 @@ def component(): # TODO We may not need this so leave for now
                     "branch": branch_name,
                     "linux_username": cli_configuration["linux_uname"],
                     "github_username": cli_configuration["github_uname"] }
-    payload_received = requests.post(full_url, send_payload)
-    print(payload_received)
+    response = requests.post(full_url, send_payload)
+    print(response)
 
     # 3) Clone the repo/branch here
     
