@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: podman-builder
+spec:
+  containers:
+    - name: podman
+      image: quay.io/podman/stable:latest  # Example image with Podman installed
+      command: ["/bin/sh"]
+      args:
+        - -c
+        - >-
+            echo "$ sleep to keep container alive for debug" &&
+            sleep infinity
+      # command: ["podman"]
+      # args:
+      #   - "--storage-driver=vfs"  # Specify the storage driver if needed
+      #   - "info"
+      securityContext:
+        runAsUser: 1000  # Replace with the UID of your non-root user
+        runAsGroup: 1000  # Replace with the GID of your non-root user's group
+      volumeMounts:
+        - name: podman-storage
+          mountPath: /var/lib/containers/storage  # Mount point for Podman storage
+  volumes:
+    - name: podman-storage
+      emptyDir: {}  # Use an emptyDir volume for storage
+  restartPolicy: Never  # Adjust based on your application's requirements

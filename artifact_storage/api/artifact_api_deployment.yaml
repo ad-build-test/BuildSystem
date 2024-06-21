@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-api-service
+spec:
+  selector:
+    matchLabels:
+      app: artifact-api-service
+  template:
+    metadata:
+      labels:
+        app: artifact-api-service
+    spec:
+      containers:
+      - name: artifact-api-service
+        image: pnispero/artifact-api:latest  # Replace with your Docker image
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080  # Replace with your service's port

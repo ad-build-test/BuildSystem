@@ -90,7 +90,7 @@ if __name__ == '__main__':
     readline.parse_and_bind('tab: complete')
     logging.basicConfig(
         level=logging.INFO, # TODO: Change this to NOTSET when use in production
-        format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] | %(message)s")
+        format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
     entry_point(prog_name='bs')
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",

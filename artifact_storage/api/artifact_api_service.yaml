@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: artifact-api-service
+spec:
+  selector:
+    app: artifact-api-service  # Match the labels in your Deployment/Pod
+  ports:
+  - protocol: TCP
+    port: 8080   # Port on the service
+    targetPort: 8080  # Port your application is listening on inside the Pod

@@ -1,8 +1,8 @@
-# How to build: docker build --tag pnispero/rocky9-env:latest .
+# How to build: docker build --tag pnispero/artifact-api:latest .
 # base image
 # How to build:
-# 1) Go to top of repo
-# 2) docker build --tag pnispero/rocky9-env:latest -f build_envs/rocky9_env/Dockerfile .
+# 1) Go to artifact_storage/api/
+# 2) docker build --tag pnispero/artifact-api:latest -f Dockerfile .
 FROM rockylinux:9
 
 # update
@@ -30,8 +30,14 @@ RUN yum install -y git
 # install podman
 RUN yum install -y podman
 
-# Add build scripts to /build
-ADD build_scripts /build/
+# Add app files
+RUN mkdir app
+ADD app /app/
+ADD requirements.txt /app/
 
-# Make /build open to 'adbuild' user
-RUN chown -R 46487:1006 /build/
+# Install requirements.txt
+RUN pip install -r app/requirements.txt
+
+# set the entrypoint
+CMD ["fastapi", "run", "app/main.py", "--port", "8080"]
+

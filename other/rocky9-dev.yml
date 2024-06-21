@@ -13,11 +13,15 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: rocky9-test
+  name: test-build-rocky9-dev
 spec:
+  securityContext:
+    runAsUser: 46487
+    runAsGroup: 1006
   containers:
-  - name: rocky9-test
+  - name: test-build-rocky9-dev
     image: pnispero/rocky9-env:dev
+    imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]
     args:
@@ -43,6 +47,8 @@ spec:
     volumeMounts:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt
+    - name: podman-storage
+      mountPath: /home # Mount point inside the container
     resources:
       limits:
         memory: 8Gi
@@ -51,3 +57,5 @@ spec:
   - name: s3df-dev-container-ad-group
     persistentVolumeClaim:
       claimName: s3df-dev-container-ad-group
+  - name: podman-storage
+    emptyDir: {}  # Use an emptyDir volume for storage

@@ -3,6 +3,7 @@ import yaml
 import os
 import subprocess
 import shutil
+from start_test import run_unit_tests
 
 # Flow
 # 1) Parse the contents of /config/build_config.json
@@ -137,8 +138,12 @@ def run_build(config_yaml: dict):
 
 def create_docker_file():
     # 5) Create dockerfile with dependencies installed. then push to /output
-    # Maybe using 'docker commit' outside of the container is the solution instead
-        # Maybe not since that isn't availble in kubernetes
+    # create dockerfile here, and build in this container, and use for test, 
+        # then once pass test THEN you can push the dockerfile and the built image to
+        # artifact storage
+        # Then that image can be used as dev/test/deploy env
+    # problem is we don't know if we can build an image within a container
+    # May just send the dockerfile to r
     pass
 
 if __name__ == "__main__":
@@ -155,4 +160,5 @@ if __name__ == "__main__":
         install_dependencies(dependencies, env)
     # 5) Run repo build script
     run_build(config_yaml)
-
+    # 6) Run unit_tests
+    run_unit_tests()
