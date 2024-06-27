@@ -48,7 +48,7 @@ spec:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt
     - name: podman-storage
-      mountPath: /home # Mount point inside the container
+      mountPath: /var/lib/containers/storage  # Mount point for Podman storage
     resources:
       limits:
         memory: 8Gi
