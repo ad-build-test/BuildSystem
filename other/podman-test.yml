@@ -1,11 +1,24 @@
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s3df-dev-container-ad-group
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
 kind: Pod
 metadata:
-  name: podman-builder
+  name: podman-builder1
 spec:
   containers:
     - name: podman
-      image: quay.io/podman/stable:latest  # Example image with Podman installed
+      image: pnispero/podman-builder:latest  # Example image with Podman installed
+      imagePullPolicy: Always
       command: ["/bin/sh"]
       args:
         - -c
@@ -17,12 +30,17 @@ spec:
       #   - "--storage-driver=vfs"  # Specify the storage driver if needed
       #   - "info"
       securityContext:
-        runAsUser: 1000  # Replace with the UID of your non-root user
-        runAsGroup: 1000  # Replace with the GID of your non-root user's group
+        runAsUser: 1000
+        runAsGroup: 1000
       volumeMounts:
+        - name: s3df-dev-container-ad-group
+          mountPath: /mnt
         - name: podman-storage
           mountPath: /var/lib/containers/storage  # Mount point for Podman storage
   volumes:
+    - name: s3df-dev-container-ad-group
+      persistentVolumeClaim:
+        claimName: s3df-dev-container-ad-group
     - name: podman-storage
       emptyDir: {}  # Use an emptyDir volume for storage
   restartPolicy: Never  # Adjust based on your application's requirements

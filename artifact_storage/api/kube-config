@@ -1,0 +1,19 @@
+apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://k8s.slac.stanford.edu:443/api/ad-build-dev
+  name: ad-build-dev
+contexts:
+- context:
+    cluster: ad-build-dev
+    namespace: artifact
+    user: myexample-sa
+  name: ad-build-dev
+current-context: ad-build-dev
+kind: Config
+preferences: {}
+users:
+- name: myexample-sa
+  user:
+    token: ${artifact_api_token}

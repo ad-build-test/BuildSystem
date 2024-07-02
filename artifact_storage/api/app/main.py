@@ -1,5 +1,7 @@
 import os
+import uvicorn
 from fastapi import FastAPI, UploadFile, File
+from kubernetes import client, config, utils
 # Example request when ran on k8s port 8080 curl -X GET http://artifact-api-service:8080/image
 app = FastAPI()
 """
@@ -10,6 +12,7 @@ to create an rpm package)
 But green light, fill in these endpoints for now.
 """
 registry_base_path = "/mnt/eed/ad/ad-build/registry/"
+k8s_client = client.ApiClient()
 
 @app.get("/image")
 # TODO: 
@@ -27,13 +30,12 @@ async def get_image(component: str, branch: str, arch: str):
 async def build_image(dockerfile: str):
     # ex: dockerfile = mps-main-rocky9
     # TODO: Try podman python api
-    # 1) Either have client upload dockerfile
-    # 2) have client copy it over somewhere in the registry, and send filepath
+    # 1) have client copy it over somewhere in the registry, and send filepath
         # This may be optimal so the artifact service can set env var for container
         # that builds the image
         # Dockerfile is created dynamically, and can copy over the components as long
         # as the volume mount to the artifact storage is there
-    # 3) Start container to Build image, push to registry
+    # 2) Start container to Build image, push to registry
     # check out this filepath: /mnt/eed/ad-build/registry/epics-base/R7.0.8/epics-base/configure/os
     return {"dockerfile_sent": dockerfile}
 
@@ -43,8 +45,7 @@ async def build_image(dockerfile: str):
 # ARGS: component, tag, arch
 async def get_component(component: str, tag: str, arch: str):
     # 1) Check if component already exists in registry
-    base_path = '/mnt/eed/ad/ad-build/registry/'
-    if (os.path.exists(base_path + component + '/' + tag + '/')):
+    if (os.path.exists(registry_base_path + component + '/' + tag + '/')):
         pass
 
     # 1.1) If not exists, 
@@ -61,3 +62,21 @@ async def get_component(component: str, tag: str, arch: str):
 # May not need this endpoint
 async def build_component(component: str, tag: str, arch: str):
     return {"message": "Build Component"}
+
+def kube_list_pods():
+    v1 = client.CoreV1Api()
+    print("Listing pods with their IPs:")
+    ret = v1.list_pod_for_all_namespaces(watch=False)
+    for i in ret.items:
+        print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
+
+def kube_apply_from_file(yaml_file: str):
+    utils.create_from_yaml(k8s_client,yaml_file,verbose=True)
+
+if __name__ == '__main__':
+    # TODO: have a script login to the kubernetes cluster before you run this main.py
+    config.load_kube_config() 
+    kube_list_pods()
+    # kube_apply_from_file('../test-ioc-dev-patrick.yml')
+    uvicorn.run('main:app', host='0.0.0.0', port=8080, reload=True)
+

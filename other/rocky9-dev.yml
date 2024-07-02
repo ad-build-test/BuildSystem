@@ -44,6 +44,10 @@ spec:
       # value: /mnt/build-scratch/ad-build/test-ioc-main/output
     - name: ADBS_OS_ENVIRONMENT
       value: rocky9
+    - name: ADBS_COMPONENT
+      value: test-ioc
+    - name: ADBS_BRANCH
+      value: dev-patrick
     volumeMounts:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt

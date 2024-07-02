@@ -21,7 +21,7 @@ from start_test import run_unit_tests
     # 4.1) Which will look into certain directories and run those tests
 class Build(object):
     def __init__(self):
-        self.registry_base_path = "/mnt/eed/ad/ad-build/registry/"
+        self.registry_base_path = "/mnt/eed/ad-build/registry/"
         self.artifact_api_url = "http://artifact-api-service:8080/"
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
@@ -148,17 +148,19 @@ class Build(object):
         # Create dockerfile with dependencies installed
         # Then send to artifact storage to be built
         dockerfile_name = env["component"] + "-" + env["branch"] + "-" + env["os_env"]
-        with open(self.registry_base_path + "dockerfiles/" + dockerfile_name, "w") as f:   # Opens file and casts as f 
-            f.write("FROM " + "pnispero/" + env["os_env"] + "-env:latest")       # base image
+        docker_full_filepath = self.registry_base_path + "dockerfiles/" + dockerfile_name
+        with open(docker_full_filepath, "w") as f:   # Opens file and casts as f 
+            f.write("FROM " + "pnispero/" + env["os_env"] + "-env:latest\n")       # base image
             for dependency in dependencies:
                 for name,tag in dependency.items():
-                    f.write("ADD " + self.registry_base_path + "/" + name + "/" + tag + " /build")
+                    f.write("ADD " + self.registry_base_path + name + "/" + tag + " /build\n")
             # File closed automatically
         # Send api request to build
         payload = {"dockerfile": dockerfile_name}
         print("Send image build request to artifact storage...")
         response = requests.post(self.artifact_api_url + 'image', payload)
-        print(response)
+        print(response.status_code)
+        print(response.json())
 
 
 if __name__ == "__main__":
