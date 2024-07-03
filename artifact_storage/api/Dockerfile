@@ -45,10 +45,20 @@ RUN yum install -y kubectl
 RUN mkdir app
 ADD app /app/
 ADD requirements.txt /app/
+ADD startup.sh /app/
+ADD podman-builder.yml /app/
+RUN chmod +x /app/startup.sh
 
 # Install requirements.txt
-RUN pip install -r app/requirements.txt
+RUN pip install --no-cache-dir -r app/requirements.txt
 
-# set the entrypoint
-CMD ["fastapi", "run", "app/main.py", "--port", "8080"]
+# Give access to /root and /app folder
+# Premake the .kube/config file
+RUN mkdir /root/.kube
+RUN touch /root/.kube/config
+RUN chown -R 46487:1006 /root
+RUN chown -R 46487:1006 /app
+
+# set the entrypoint - Set it in the deployment instead
+# CMD ["fastapi", "run", "app/main.py", "--port", "8080"]
 

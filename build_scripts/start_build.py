@@ -56,67 +56,30 @@ class Build(object):
             return None
         return dependencies
 
-    def get_component_from_registry(self, component: str, tag: str, os_env: str):
+    def get_component_from_registry(self, component: str, tag: str, os_env: str) -> str:
         # TODO: Waiting on when registry is implemented
         # For now look into the /mnt/eed/ad-build/registry
         # rest api
         print(component, tag)     
-        # Plan:
-        """
-        0) MAKE a prototype 'registry' which will be on the /mnt//mnt/eed/ad-build/registry
-        But make the code infrastructure here for it. but substitute with 'just look into dir'
-        Split tree into registry/component/OS/tag
-        1) Look into the registry (its a cache basically) for the component if it exists
-            1.1) if exists, then just grab it
-            1.2) if not exist, then start_build.py is responsible for building it
-                1.2.1) Look into the config yaml, for the component dependency name, 
-                        and an additional 'build' field on how to build the component. 
-                1.2.2) 
-        2) Once you have the compiled component, do we put it in /lib of the repo?
-            Or put it in the container /usr/local
-        """
-        component_path = '/mnt/eed/ad-build/registry/' + component + '/' + tag + '/'
-        container_build_path = '/build/'
-        print("component path: ", component_path)
-        if (os.path.exists(component_path)):
-            print("Registry has component - ", component, tag)
-            # For now, copy it directly to /build
-            print("copying over ", component_path, " to ", container_build_path)
-            shutil.copytree(component_path, container_build_path, dirs_exist_ok = True)
-            # Then if epics (need to specify somewhere in config.yaml?)
-            # NOTE - this only needed if running scripts, can still build without these vars
-            # if (component == 'epics-base'):
-            #     os.environ['EPICS_BASE']="/build/epics-base"
-            #     os.environ['EPICS_HOST_ARCH']="/build/epics-base"
-            #     os.environ['PATH']="/build/epics-base:" + os.environ['PATH']
-            #     # export EPICS_BASE=/build/epics-base
-            #     # export EPICS_HOST_ARCH=$(${EPICS_BASE}/startup/EpicsHostArch)
-            #     # export PATH=${EPICS_BASE}/bin/${EPICS_HOST_ARCH}:${PATH}
-            # to active terminal and to .bashrc if this is dev image
-        else:
-            print("Registry doesn't have component - ", component, tag)
-            print("TODO: build the component")
-
-        # Then see if we should clone to registry, and put a BOM with build instructions
-            # or should we put it in database just in case it is external component
-            # That we cannot add a BOM to.
-        # Should the build instrutions in the component tell where the output is?
-        # For C/C++
-        # Do we automatically put the .so/.a files in /usr/lib64? 
-            # then call ldconfig, and their build instructions hopefully has gcc ... -l<component>
-                # how can their makefile reference the CONFIG.yaml for components?
-                    # a: have this function output into one large string like '-lepics -lsqlite3' Then pass that
-                    # into the MakeFile $LIBS, then in MakeFile gcc -o $(OBJECTS) $(LIBS)
-            # AND get the binaries, like if its epics, we would want the epics binaries to run iocConsole for ex
-            # And can update $LD_LIBRARY_PATH (for lib) and/or $PATH (for bin)
-            # or currently, $TOOLS/script provides epics scripts.
+        payload = {"component": component, "tag": tag, "arch": env["os_env"]}
+        print(payload)
+        print("Get component request to artifact storage...")
+        response = requests.get(url=self.artifact_api_url + 'component', json=payload)
+        response = response.json()
+        print(response)
+        # For now we can assume the component exists, otherwise the api builds and returns it
+        component_path = response['component']
+        return component_path
 
     def install_dependencies(self, dependencies: dict, env: dict):
         print("Installing dependencies")
         print(dependencies)
+        container_build_path = '/build/'
         for dependency in dependencies:
             for name,tag in dependency.items():
                     component_from_registry = self.get_component_from_registry(name, tag, env['os_env'])
+                    print("copying over ", component_from_registry, " to ", container_build_path)
+                    shutil.copytree(component_from_registry, container_build_path, dirs_exist_ok = True)
                 # perform buildInstructions, and add to Dockerfile
 
         # 3) For each dependency
@@ -156,9 +119,10 @@ class Build(object):
                     f.write("ADD " + self.registry_base_path + name + "/" + tag + " /build\n")
             # File closed automatically
         # Send api request to build
-        payload = {"dockerfile": dockerfile_name}
+        payload = {"dockerfile": dockerfile_name, "arch": env["os_env"]}
+        print(payload)
         print("Send image build request to artifact storage...")
-        response = requests.post(self.artifact_api_url + 'image', payload)
+        response = requests.post(url=self.artifact_api_url + 'image', json=payload)
         print(response.status_code)
         print(response.json())
 

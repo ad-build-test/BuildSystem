@@ -1,2 +1,2 @@
-fastapi
-kubernetes
+fastapi==0.111.0
+kubernetes==30.1.0

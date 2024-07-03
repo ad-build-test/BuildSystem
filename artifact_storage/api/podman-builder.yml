@@ -1,19 +1,21 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: s3df-dev-container-ad-group
-spec:
-  storageClassName: sdf-group-ad
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
----
+# This pod manifest is used for artifact-api to build images
+# Only apply this once for a namespace
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: s3df-dev-container-ad-group
+# spec:
+#   storageClassName: sdf-group-ad
+#   accessModes:
+#     - ReadWriteMany
+#   resources:
+#     requests:
+#       storage: 5Gi
+# ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: podman-builder1
+  name: $BUILDER_NAME
 spec:
   containers:
     - name: podman
@@ -23,13 +25,13 @@ spec:
       args:
         - -c
         - >-
-            echo "$ sleep to keep container alive for debug" &&
-            sleep infinity
-      # command: ["podman"]
-      # args:
-      #   - "--storage-driver=vfs"  # Specify the storage driver if needed
-      #   - "info"
-      securityContext:
+            /build/podman_builder.sh
+      env:
+      - name: ADBS_DOCKERFILE
+        value: $ADBS_DOCKERFILE
+      - name: ADBS_OS_ENVIRONMENT 
+        value: $ADBS_OS_ENVIRONMENT
+      securityContext: # Must be user 1000 (podman) for this to work
         runAsUser: 1000
         runAsGroup: 1000
       volumeMounts:

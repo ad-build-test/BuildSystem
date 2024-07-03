@@ -1,6 +1,7 @@
 # base image
 # How to build:
-# 1) docker build --tag pnispero/podman-builder:latest -f podman-builder .
+# 1) Go to top of repo
+# 2) docker build --tag pnispero/podman-builder:latest -f other/podman-builder .
 FROM quay.io/podman/stable:latest
 
 # update
@@ -13,5 +14,8 @@ RUN yum install -y vim && yum install -y pip
 RUN pip install pyyaml \
     && pip install requests
 
+# add build scripts to /build
+ADD build_scripts/podman_builder.sh /build/
 
 # RUN chown -R 46487:1006 /home/podman
+RUN chmod +x /build/podman_builder.sh

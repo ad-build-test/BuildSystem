@@ -1,0 +1,28 @@
+# This pod manifest is used for artifact-api to build images
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s3df-dev-container-ad-group
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-ioc-dev-patrick
+spec:
+  containers:
+    - name: podman
+      image: pnispero/podman-builder:latest  # Example image with Podman installed
+      imagePullPolicy: Always
+      command: ["/bin/sh"]
+      args:
+        - -c
+        - >-
+            echo "$ sleep to keep container alive for debug" &&
+            sleep infinity
