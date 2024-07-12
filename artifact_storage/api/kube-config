@@ -7,13 +7,13 @@ clusters:
 contexts:
 - context:
     cluster: ad-build-dev
-    namespace: artifact
-    user: myexample-sa
+    
+    user: artifact-sa
   name: ad-build-dev
 current-context: ad-build-dev
 kind: Config
 preferences: {}
 users:
-- name: myexample-sa
+- name: artifact-sa
   user:
     token: ${artifact_api_token}

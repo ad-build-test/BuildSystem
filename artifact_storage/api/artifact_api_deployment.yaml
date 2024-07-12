@@ -2,7 +2,6 @@ apiVersion: apps/v1 # App deployment
 kind: Deployment
 metadata:
   name: artifact-api-service
-  namespace: artifact
 spec:
   selector:
     matchLabels:
@@ -15,7 +14,7 @@ spec:
       securityContext:
         runAsUser: 46487
         runAsGroup: 1006
-      serviceAccountName: myexample-sa
+      serviceAccountName: artifact-sa
       containers:
       - name: artifact-api-service
         image: pnispero/artifact-api:latest
@@ -37,7 +36,7 @@ spec:
         - name: artifact_api_token
           valueFrom: 
             secretKeyRef:
-              name: myexample-sa-token
+              name: artifact-sa-token
               key: token
         volumeMounts:
         - name: s3df-dev-container-ad-group

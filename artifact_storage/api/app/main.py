@@ -50,7 +50,7 @@ registry_base_path = "/mnt/eed/ad-build/registry/"
 config.load_kube_config() 
 k8s_client = client.ApiClient()
 k8s_api = client.CoreV1Api()
-k8s_namespace = 'artifact'
+k8s_namespace = 'default'
 
 async def run(cmd: str):
     proc = await asyncio.create_subprocess_exec(
@@ -162,7 +162,7 @@ async def build_component(component: str, tag: str, arch: str):
 def kube_list_pods():
     v1 = client.CoreV1Api()
     print("Listing pods with their IPs:")
-    ret = v1.list_namespaced_pod('artifact')
+    ret = v1.list_namespaced_pod(k8s_namespace)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
 
