@@ -13,6 +13,8 @@ from pydantic import BaseModel
 # and resources, where multithreading would include those issues
 
 # Example request when ran on k8s port 8080 
+# Can only accept requests from other pods in the cluster within same nammespace
+# UNLESS you specify namespace, like artifact-api-service.artifact:8080 
 """
 curl -X 'GET' http://artifact-api-service:8080/component \
 -H 'accept: application/json' \
@@ -50,7 +52,7 @@ registry_base_path = "/mnt/eed/ad-build/registry/"
 config.load_kube_config() 
 k8s_client = client.ApiClient()
 k8s_api = client.CoreV1Api()
-k8s_namespace = 'default'
+k8s_namespace = 'artifact'
 
 async def run(cmd: str):
     proc = await asyncio.create_subprocess_exec(

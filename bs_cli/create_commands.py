@@ -25,7 +25,7 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
     # args: (May make most of these prompted to user)
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
-    # TODO: May make the requests.post a function in request class as well since its repeating
+    # Backend creates the repo, may make option for user to clone it directly after creating
     request.set_endpoint('component')
     request.set_component_name()
     request.add_to_payload("name", request.component.name)

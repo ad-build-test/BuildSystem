@@ -1,0 +1,8 @@
+# To deploy api service, just do 'kubectl apply -k artifact_deployment/'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- artifact_api_service.yaml
+- artifact_api_deployment.yaml
+- artifact_service_account.yaml

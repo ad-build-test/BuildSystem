@@ -2,6 +2,7 @@ apiVersion: apps/v1 # App deployment
 kind: Deployment
 metadata:
   name: artifact-api-service
+  namespace: artifact
 spec:
   selector:
     matchLabels:

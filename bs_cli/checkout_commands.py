@@ -9,7 +9,7 @@ def checkout():
     """checkout an existing [ component/branch ]"""
 
 @checkout.command()
-def component(): # TODO We may not need this so leave for now
+def component(): # TODO We may not need this (may just use git clone) so leave for now
     """Checkout an existing component/branch"""
 
     # TODO:
