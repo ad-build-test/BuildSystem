@@ -60,7 +60,7 @@ EOL
 
 function run_ansible_playbook() {
     ANSIBLE_CONFIG="${base_dir}/ansible.cfg"
-    # More 'v in -v (verbose) adds more verbosity'
+    # More v in -v (verbose) adds more verbosity
     echo "Running test-playbook.yaml playbook"
     ansible-playbook -i "${TEMP_INVENTORY_FILE}" -v "${base_dir}/test-playbook.yaml"
     echo "Running machine-setup.yml playbook"
