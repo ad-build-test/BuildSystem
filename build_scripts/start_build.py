@@ -97,6 +97,21 @@ class Build(object):
         # For now we can assume the component exists, otherwise the api builds and returns it
         component_path = response['component']
         return component_path
+    
+    def manual_copy_tree(self, src, dst):
+        # This function is used if python < 3.8 where 'dirs_exist_ok' flag doesnt exist
+        if not os.path.exists(dst):
+            os.makedirs(dst)
+
+        for item in os.listdir(src):
+            s = os.path.join(src, item)
+            d = os.path.join(dst, item)
+            if os.path.isdir(s):
+                # Recursively copy directories
+                shutil.copytree(s, d, False, None)
+            else:
+                # Copy files
+                shutil.copy2(s, d)
 
     def install_dependencies(self, dependencies: dict):
         print("== ADBS == Installing dependencies")
@@ -106,7 +121,10 @@ class Build(object):
             for name,tag in dependency.items():
                     component_from_registry = self.get_component_from_registry(name, tag)
                     print("copying over ", component_from_registry, " to ", container_build_path)
-                    shutil.copytree(component_from_registry, container_build_path, dirs_exist_ok = True)
+                    if sys.version_info[1] < 8: # python minor version less than 8 doesnt have dirs_exist_ok
+                        self.manual_copy_tree(component_from_registry, container_build_path)
+                    else:
+                        shutil.copytree(component_from_registry, container_build_path, dirs_exist_ok = True)
                 # perform buildInstructions, and add to Dockerfile
 
         # 3) For each dependency

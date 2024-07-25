@@ -33,14 +33,21 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
     request.add_to_payload("testingCriteria", testing_criteria)
     request.add_to_payload("approvalRule", approval_rule)
     request.add_to_payload("organization", organization)
+    # TODO: Ask user to specify build os - This should be automatic assuming 
+    # the build os(s) are specified in the config manifest
+    question = [
+    inquirer.Checkbox(
+        "buildOs",
+        message="What are the operating systems this app runs on? (Arrow keys for selection, enter if done)",
+        choices=["ROCKY9", "UBUNTU", "RHEL8", "RHEL7", "RHEL6", "RHEL5"],
+        default=[],
+        ),
+    ]
+    build_os_list = inquirer.prompt(question)
+    print(build_os_list)
+    request.add_dict_to_payload(build_os_list)
     if (url): request.add_to_payload("url", url)
-    response = request.post_request()
-
-    logging.info(response.status_code)
-    logging.info(response.json())
-    logging.info(response.request.url)
-    logging.info(response.request.body)
-    logging.info(response.request.headers)
+    request.post_request(log=True)
     
 
 @create.command()
@@ -60,6 +67,7 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     if (not component_obj.set_cur_dir_component()):
         click.echo('fatal: not a git repository (or any of the parent directories)')
         return
+
     # 2) See if branch, tag, committ option filled out, or prompt user
     branches = component_obj.git_get_branches()
     tags = component_obj.git_get_tags()
@@ -88,9 +96,15 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
         #     click.echo('fatal: invalid commit name!')
         #     return
     else:
+        # Change prompt if adding an existing branch
+        if (add):
+            prompt_branch_from = "Specify branch point you branched off of"
+        else:
+            prompt_branch_from = "Specify what to branch from"
+
         question = [inquirer.List(
                     "branch_point",
-                    message="Specify what to branch from",
+                    message=prompt_branch_from,
                     choices=["branch", "tag", "commit"])]
         branch_point_type = inquirer.prompt(question)['branch_point']
         if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
@@ -109,14 +123,18 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
         branch_type = 'dev'
         branch_type_value = dev
     else:
-        question = [inquirer.List(
-                    "branch_type",
-                    message="Specify type of branch to create",
-                    choices=["fix", "feat", "dev"])]
-        branch_type = inquirer.prompt(question)['branch_type']
-        branch_type_value = input("Specify name of issue number (or dev name): ")
-
-    full_branch_name = branch_type + '-' + branch_type_value
+        # If adding existing branch, skip asking type of branch to create
+        if (add):
+            AutoComplete.set_auto_complete_vals('branch', branches)
+            full_branch_name = input("Specify name of existing branch: ")
+        else:
+            question = [inquirer.List(
+                        "branch_type",
+                        message="Specify type of branch to create",
+                        choices=["fix", "feat", "dev"])]
+            branch_type = inquirer.prompt(question)['branch_type']
+            branch_type_value = input("Specify name of issue number (or dev name): ")
+            full_branch_name = branch_type + '-' + branch_type_value
 
     # 4) Write to database
     endpoint = 'component/' + component_obj.name + '/branch'
@@ -124,13 +142,7 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)
     request.add_to_payload("branchName", full_branch_name)
-    response = request.put_request()
-
-    logging.info(response.status_code)
-    logging.info(response.json())
-    logging.info(response.request.url)
-    logging.info(response.request.body)
-    logging.info(response.request.headers)
+    request.put_request(log=True)
 
     # 5) Create the branch using git and push
     if (not add): # Dont create branch if user just wants to add to database

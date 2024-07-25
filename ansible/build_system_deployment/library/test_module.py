@@ -10,7 +10,6 @@ DOCUMENTATION = r'''
 module: my_test
 
 short_description: This is my test module
-In order to run this once done, user needs to be logged into the appropiate k8s cluster
 
 # If this is part of a collection, you need to use semantic versioning,
 # i.e. the version is of the form "2.5.0" and not "2.4".
@@ -72,79 +71,39 @@ message:
 
 from ansible.module_utils.basic import AnsibleModule
 
-"""
-1) Checkout screeniocs                                    
-
-> cvs co epics/iocCommon/All/dev        
-2) If you have screeniocs already then do an update (warning: this deletes local changes and pulls in new ones)
-
-> cvs -P -d update      
-3) Update the screenioc, ensure no duplicates, add to top of file the comments of what you changed                                    
-4) check in changes
-
-> cvs ci -m "Made changes"    
-5) Go to $IOC/facility. And pull in latest changes you made. Done. 
-
-> cvs -qn update       
-# This checks which files changed like (git status). "-q" means be somewhat quiet, -n means don’t change anything   
-> cvs update <file>                               
-# Optional: you can check where the screeniocs are by following symbolic link
-> ls -l $IOC/screeniocs
-6) Add the actual ioc pointers and startup command at $IOC_COMMON
-
-> cd $IOC
-# Make the directory for the sioc if it doesn't exist
-> mkdir sioc-b34-mp01 && cd sioc-b34-mp01
-# Add in the symbolic link to point to your development piece. If prod, Then make it point to the top level of the project where it sits in like $PHYSICS_TOP or $PYDM
-# Make it point to the TOP of your directory
-> ln -s /afs/slac.stanford.edu/u/cd/pnispero/mps/central_node_ioc/ iocSpecificRelease
-# Add in the startup.cmd. You can copy from one of the templates at $IOC_COMMON/template
-> cp ../template/startup.cmd.linuxRT ./startup.cmd
-# Edit the startup.cmd to replace <ioc> with your actual ioc_name
-7) Add the ioc_data stuff in $IOC_DATA 
-
-> cd $IOC_DATA                               
-# Make the directory if not already exists                               
-> mkdir sioc-b034-mp01 && cd sioc-b34-mp01                               
-# Create these required directories                               
-> mkdir archive autosave autosave-req iocInfo restore yaml                        
-# if adding yaml, you generally use that for fw, so for this example I copied all the contents in /yaml in previous sioc to new one  
-8) Done, If still not working. Try starting it inside laci 
-
-# enter cpu that has sioc                               
-> ssh laci@cpu-b34-mp01                               
-# Start the sioc, -t makes new terminal                               
-> iocConsole.sh -t sioc-b34-mp01                               
-# look at error messages if any                               
-# Check your code if the epicsEnvSet("IOC", "") is set correctly  
-"""
-def run_ioc():
-    # 1) use iocConsole <sioc> / siocRestart <sioc>
-    # 2) If neither works, you can enter cpu that has the sioc running, then iocConsole.sh -t <sioc>
+def deploy_registry():
+    # TODO: make a registry-deployment/ directory
+    # Cloning BuildSystem already done from artifact_api
+    # 1) kubectl apply -k BuildSystem/artifact_storage/registry-deployment/
     pass
-def update_ioc_data():
-    # 1) In $IOC_DATA, make directory for ioc if doesn't already exist
-    # 2) in the ioc folder, create these directories: archive, autosave, autosave-req, iocInfo, restore, yaml
+def deploy_artifact_api():
+    # 1) git clone https://github.com/ad-build-test/BuildSystem.git
+    # 2) kubectl apply -k BuildSystem/artifact_storage/artifact-deployment/
     pass
-def update_ioc_startup():
-    # 1) In $IOC, make directory for ioc if doesn't already exist
-    # 2) in the ioc folder, add in symbolic link to point to the TOP of your repo (for dev)
-    # 3) Add in the startup.cmd, use one of the templates at $IOC_COMMON/template
-        # 3.1) Edit the startup.cmd to replace <ioc> with actual ioc_name
+def deploy_core_build_system():
+    # 1) git clone https://github.com/eed-web-application/core-build-system-deployment.git
+    # 2) kubectl apply -k core-build-system-deployment/test/
     pass
-def update_screeniocs():
-    # 1) Checkout screeniocs through cvs
-    # 2) Update appropriate IOC
+def deploy_percona_mongodb():
+    # 1) git clone https://github.com/eed-web-application/eed-accel-webapp-clusters-wide-setup.git
+    # 2) kubectl apply --server-side -f eed-accel-webapp-clusters-wide-setup/test/mongodb-operator/resource-1.15.0.yaml
     pass
 
-def deploy_ioc() -> dict:
+def deploy_build_system() -> dict:
     output = {"msg1": "msg1", "msg2": "msg2"}
     print("deploy_ioc() called")
+    
+    # 1) mkdir temp/ && cd temp/
 
-    update_screeniocs()
-    update_ioc_startup()
-    update_ioc_data()
-    run_ioc()
+    # 2) Deploy mongodb percona server
+    deploy_percona_mongodb()
+    # 3) Deploy core-build-system
+    deploy_core_build_system()
+    # 4) Deploy artifact-api
+    deploy_artifact_api()
+    # 5) Deploy registry
+    deploy_registry()
+    # 6) Nuke temp folder: rm -rf temp/
 
     return output
 
@@ -180,7 +139,7 @@ def ansible_run_module():
         supports_check_mode=True
     )
 
-    result['custom_output'] = deploy_ioc()
+    result['custom_output'] = deploy_build_system()
     
     # if the user is working with this module in only check mode we do not
     # want to make any changes to the environment, just return the current

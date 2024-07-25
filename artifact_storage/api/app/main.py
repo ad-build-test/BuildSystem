@@ -116,7 +116,8 @@ async def build_image(payload: BuildImage):
     # Cleanup
     os.remove(custom_podman)
     if stdout or stderr:
-        kube_delete_pod(build_name)
+        # TODO: Temporarily comment out deleting pod for testing purposes
+        # kube_delete_pod(build_name)
         # Output results
         if stdout:
             print(f"stdout: {stdout}")
@@ -182,7 +183,7 @@ def kube_apply_from_file(yaml_file: str):
 async def kube_wait_pod_finish(pod_name: str, payload: BuildImage):
     print("== AD-BUILD == Asyn wait for pod to finish")
     pod_name = 'pod/' + pod_name
-    wait_command = ["kubectl", "wait", "--for=jsonpath={.status.phase}=Succeeded", pod_name, "--timeout=60s"]
+    wait_command = ["kubectl", "wait", "--for=jsonpath={.status.phase}=Succeeded", pod_name, "--timeout=120s"]
     print(wait_command)
     task = asyncio.create_task(run(wait_command))
     stdout, stderr = await task

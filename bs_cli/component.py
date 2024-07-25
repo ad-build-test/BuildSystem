@@ -16,6 +16,10 @@ class Component(object):
         except:
             return None
         
+    def git_clone(self, url: str):
+        # Clone repo from github url
+        self.git_repo.git.clone(url)
+        
     def git_create_branch(self, branch_point_type: str, branch_point_value: str, branch_name: str):
         # Create the branch
         # Tag is the only special case
@@ -100,5 +104,6 @@ class Component(object):
                 if (self.set_cur_dir_component() == False):
                     # 3) Else prompt user for component
                     self.prompt_branch_name()
+                    
 
                 

@@ -1,0 +1,6 @@
+click==8.1.7
+requests==2.31.0
+pyyaml==5.4.1
+inquirer==3.2.4
+wget==3.2
+ansible_runner==2.4.0

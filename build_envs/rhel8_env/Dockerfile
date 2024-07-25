@@ -27,8 +27,14 @@ RUN cd /etc/ && wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && python3 ./g
 RUN pip install pyyaml \
     && pip install requests
 
+# install perl
+RUN yum install -y perl
+
 # install git
 RUN yum install -y git
+
+# install podman
+RUN yum install -y podman
 
 # Add build scripts to /build
 ADD build_scripts /build/
