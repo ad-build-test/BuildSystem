@@ -1,0 +1,12 @@
+# ubuntu-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-pod
+  namespace: registry
+spec:
+  containers:
+  - name: ubuntu-container
+    image: ubuntu:latest
+    command: ['sh', '-c', 'while true; do sleep 3600; done']
+

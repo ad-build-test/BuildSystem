@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry-ingress
+  namespace: registry
+  annotations:
+    #nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"  # If using TLS
+    nginx.ingress.kubernetes.io/rewrite-targer: /$2
+    nginx.ingress.kubernetes.io/whitelist-source-range: 134.79.0.0/16,172.16.0.0/12 
+  labels:
+    name: registry-ingress
+spec:
+  rules:
+  - host: "registry.ad-build-dev.slac.stanford.edu"
+    http:
+      paths:
+      - path: /api/cbs(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: registry
+            port:
+              number: 80
+  #tls:
+    #- hosts:
+#- registry.example.com
+      #secretName: registry-tls-secret  # Reference to a TLS secret
+
