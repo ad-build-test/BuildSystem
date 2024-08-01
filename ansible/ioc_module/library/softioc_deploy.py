@@ -9,8 +9,7 @@ DOCUMENTATION = r'''
 ---
 module: my_test
 
-short_description: This is my test module
-In order to run this once done, user needs to be logged into the appropiate k8s cluster
+short_description: This is my test module. In order to run this once done, user needs to be logged into the appropiate k8s cluster
 
 # If this is part of a collection, you need to use semantic versioning,
 # i.e. the version is of the form "2.5.0" and not "2.4".
@@ -137,14 +136,14 @@ def update_screeniocs():
     # 2) Update appropriate IOC
     pass
 
-def deploy_ioc() -> dict:
+def deploy_ioc():
     output = {"msg1": "msg1", "msg2": "msg2"}
     print("deploy_ioc() called")
 
     update_screeniocs()
-    patrick - see if we can run this cli in dev-3, because we can assume end user will
-    run this cli on dev-3/s3df where screeniocs is available
-    we can update a fake screeniocs for now, just make a copy called screeniocs_bs
+    # patrick - see if we can run this cli in dev-3, because we can assume end user will
+    # run this cli on dev-3/s3df where screeniocs is available
+    # we can update a fake screeniocs for now, just make a copy called screeniocs_bs
     update_ioc_startup()
     update_ioc_data()
     run_ioc()

@@ -82,8 +82,14 @@ def deployment(component: str, branch: str):
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
     playbook_args = f'{{"name": "{ioc_name}"}}'
-    r = ansible_runner.run(private_data_dir='/tmp', host_pattern='localhost',
+    playbook_output_path = os.getcwd() + "/deployment_tmp"
+    isExist = os.path.exists(playbook_output_path)
+    if not isExist:
+        print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+        os.mkdir(playbook_output_path)
+    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost',
                             module='softioc_deploy', module_args=playbook_args)
+    # r = ansible_runner.run(private_data_dir='/tmp', playbook='bs_collection/playbooks/testmod.yml')
     print("{}: {}".format(r.status, r.rc))
     # successful: 0
     for each_host_event in r.events:
