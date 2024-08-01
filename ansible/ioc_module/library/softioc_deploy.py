@@ -142,6 +142,9 @@ def deploy_ioc() -> dict:
     print("deploy_ioc() called")
 
     update_screeniocs()
+    patrick - see if we can run this cli in dev-3, because we can assume end user will
+    run this cli on dev-3/s3df where screeniocs is available
+    we can update a fake screeniocs for now, just make a copy called screeniocs_bs
     update_ioc_startup()
     update_ioc_data()
     run_ioc()

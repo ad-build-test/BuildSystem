@@ -50,7 +50,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 EPILOG = """EXAMPLES\n
             bs checkout component
         """
-INPUT_PREFIX = "[?] "
+
 @click.group(context_settings=CONTEXT_SETTINGS)
 def entry_point():
     """ Build System CLI\n

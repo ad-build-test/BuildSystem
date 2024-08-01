@@ -4,7 +4,7 @@ from auto_complete import AutoComplete
 from component import Component
 import logging
 import inquirer
-from bs_main import INPUT_PREFIX
+from cli_configuration import INPUT_PREFIX
 
 
 @click.group()

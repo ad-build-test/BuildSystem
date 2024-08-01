@@ -5,6 +5,7 @@ import os
 import ansible_runner # TODO: Move to its own module once done testing
 from component import Component
 from request import Request
+from cli_configuration import INPUT_PREFIX
 
 # TODO: May make logic a single function since its the same for all 3
 # make the endpoint an argument
@@ -60,7 +61,7 @@ def deployment(component: str, branch: str):
     #   and the custom playbook (if specified)
         # Get URL from database
     if (not request.component.git_repo):
-        clone_filepath = input("Specify filepath to clone repo temporarily: ")
+        clone_filepath = input(INPUT_PREFIX + "Specify filepath to clone repo temporarily: ")
         os.chdir(clone_filepath)
         component_info = request.get_component_from_db()
         # url = component_info['url'] + '/raw/' + request.component.branch_name + '/configure/CONFIG.yaml'
@@ -78,7 +79,11 @@ def deployment(component: str, branch: str):
     print(yaml_data["deploy"])
 
     # 3) Run the playbook
-    r = ansible_runner.run(private_data_dir='/tmp', host_pattern='localhost', module='shell', module_args='whoami')
+    # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
+    ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
+    playbook_args = f'{{"name": "{ioc_name}"}}'
+    r = ansible_runner.run(private_data_dir='/tmp', host_pattern='localhost',
+                            module='softioc_deploy', module_args=playbook_args)
     print("{}: {}".format(r.status, r.rc))
     # successful: 0
     for each_host_event in r.events:
