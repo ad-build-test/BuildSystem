@@ -1,5 +1,4 @@
 import click
-import wget
 import yaml
 import os
 import ansible_runner # TODO: Move to its own module once done testing
