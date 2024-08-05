@@ -1,0 +1,17 @@
+# ansible-playbook ./testmod.yml
+- name: Soft IOC Deployment
+  hosts: localhost
+  tasks:
+  - name: Running softioc_deploy
+    softioc_deploy:
+      deploy_type: '{{ deploy_type }}'
+      ioc_type: '{{ ioc_type }}'
+      ioc_name: '{{ ioc_name }}'
+      host_user: '{{ host_user }}'
+      server_user_node_port: '{{ server_user_node_port }}'
+      executable_path: '{{ executable_path }}'
+      output_path: '{{ output_path }}'
+    register: softioc_deploy_output
+  - name: dump softioc_deploy output
+    debug:
+      msg: '{{ softioc_deploy_output }}'

@@ -1,8 +1,9 @@
 import click
-import wget
 import yaml
 import os
 import ansible_runner # TODO: Move to its own module once done testing
+import inquirer
+import json
 from component import Component
 from request import Request
 from cli_configuration import INPUT_PREFIX
@@ -80,23 +81,44 @@ def deployment(component: str, branch: str):
 
     # 3) Run the playbook
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
+    question = [inquirer.List(
+                "deploy_type",
+                message="Specify type of deployment",
+                choices=["DEV", "PRODUCTION"])]
+    deploy_type = inquirer.prompt(question)['deploy_type']
+    question = [inquirer.List(
+                "ioc_type",
+                message="Specify type of ioc",
+                choices=["SIOC", "HIOC", "VIOC"])]
+    ioc_type = inquirer.prompt(question)['ioc_type']
     ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
-    playbook_args = f'{{"name": "{ioc_name}"}}'
-    playbook_output_path = os.getcwd() + "/deployment_tmp"
+    host_user = input(INPUT_PREFIX + "Specify host user account used to run screen\n(ex: laci@lcls-dev1): ")
+    executable_path = input(INPUT_PREFIX + "Specify executable path\n(ex:/afs/slac/g/lcls/epics/iocCommon/sioc-sys0-al02/iocSpecificRelease/bin/rhel7-x86_64/alhPV): ")
+    if (ioc_type == 'HIOC'):
+        server_user_node_port = input(INPUT_PREFIX + "Specify terminal server user, node, port\n(ex: root@ts-b15-mg01:2001): ")
+    else:
+        server_user_node_port = None
+    playbook_output_path = os.getcwd() + "/ADBS_TMP"
+
+    playbook_args = f'{{"deploy_type": "{deploy_type}", "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
+                     "server_user_node_port": "{server_user_node_port}", "executable_path": "{executable_path}",\
+                     "output_path": "{playbook_output_path}"}}'
+    # Convert the JSON-formatted string to a dictionary
+    playbook_args_dict = json.loads(playbook_args)
+                     
+    print(playbook_args_dict)
     isExist = os.path.exists(playbook_output_path)
     if not isExist:
         print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
         os.mkdir(playbook_output_path)
-    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost',
-                            module='softioc_deploy', module_args=playbook_args)
-    # r = ansible_runner.run(private_data_dir='/tmp', playbook='bs_collection/playbooks/testmod.yml')
+
+    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost', playbook='/u/cd/pnispero/.ansible/playbooks/softioc_deploy.yml',
+                           extravars=playbook_args_dict)
     print("{}: {}".format(r.status, r.rc))
-    # successful: 0
-    for each_host_event in r.events:
-        print(each_host_event['event'])
-    print("Final status:")
-    print(r.stats)
-    print(r.stdout)
+    if (r.rc != 0): # 0 means success
+        print("Final status:")
+        print(f"error output path: {r.stderr}")
+        print(f"regular path: {r.stdout}")
 
     # 3) if not, check the database
         # 3.1) if not, ask user to add to database

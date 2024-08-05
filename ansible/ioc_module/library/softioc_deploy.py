@@ -70,6 +70,8 @@ message:
 '''
 
 from ansible.module_utils.basic import AnsibleModule
+import subprocess
+import os
 
 """
 1) Checkout screeniocs                                    
@@ -117,6 +119,8 @@ from ansible.module_utils.basic import AnsibleModule
 # look at error messages if any                               
 # Check your code if the epicsEnvSet("IOC", "") is set correctly  
 """
+DEPLOYMENT_TMP_FOLDER = "deployment_tmp/" # This is where any files created/checkouted out will exist
+
 def run_ioc():
     # 1) use iocConsole <sioc> / siocRestart <sioc>
     # 2) If neither works, you can enter cpu that has the sioc running, then iocConsole.sh -t <sioc>
@@ -131,22 +135,36 @@ def update_ioc_startup():
     # 3) Add in the startup.cmd, use one of the templates at $IOC_COMMON/template
         # 3.1) Edit the startup.cmd to replace <ioc> with actual ioc_name
     pass
-def update_screeniocs():
+def update_screeniocs() -> str:
     # 1) Checkout screeniocs through cvs
+    try:
+        cvs_bytes = subprocess.check_output(['cvs', 'co', 'epics/iocCommon/All/dev/screeniocs'])
+        cvs_output = cvs_bytes.decode("utf-8")
+    except Exception as e:
+        print("== SOFTIOC_DEPLOY == **ERROR** - in update_screeniocs(): " + str(e))
     # 2) Update appropriate IOC
-    pass
+        you are here
+    # 3) Check if entry already exists, actually prompt user in cli for screeniocs info
+        # specifically 
+        #IOC Type (SIOC, HIOC, VIOC)
+#       IOC Name/Alias
+#       host user account used to run screen and host where screen is run
+#       Executable absolute path
+#       For HIOCs, host user account used to run screen, terminal server, and terminal server port number
+#                        For SIOCs and VIOCs, full executable path (optional)
 
-def deploy_ioc():
-    output = {"msg1": "msg1", "msg2": "msg2"}
-    print("deploy_ioc() called")
+    return cvs_output
 
-    update_screeniocs()
-    # patrick - see if we can run this cli in dev-3, because we can assume end user will
-    # run this cli on dev-3/s3df where screeniocs is available
+def deploy_ioc(module_params: dict):
+    output = {}
+    # NOTE - cant use live output in ansible modules, so just alter output dict
+    # But prints will print out if script crashes
+    cvs_output = update_screeniocs()
     # we can update a fake screeniocs for now, just make a copy called screeniocs_bs
     update_ioc_startup()
     update_ioc_data()
     run_ioc()
+    output["cvs_output"] = cvs_output
 
     return output
 
@@ -157,7 +175,13 @@ def ansible_run_module():
     """
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        name=dict(type='str', required=True),
+        deploy_type=dict(type='str', required=True),
+        ioc_type=dict(type='str', required=True),
+        ioc_name=dict(type='str', required=True),
+        host_user=dict(type='str', required=True),
+        executable_path=dict(type='str', required=True),
+        server_user_node_port=dict(type='str', required=False),
+        output_path=dict(type='str', required=True),
         dev=dict(type='bool', required=False, default=False),
         prod=dict(type='bool', required=False, default=False),
         new=dict(type='bool', required=False, default=False)
@@ -167,10 +191,8 @@ def ansible_run_module():
     # changed is if this module effectively modified the target
     # state will include any data that you want your module to pass back
     # for consumption, for example, in a subsequent task
-    result = dict(
+    result = dict( 
         changed=False,
-        original_message='',
-        message='',
         custom_output=dict
     )
     # the AnsibleModule object will be our abstraction working with Ansible
@@ -181,18 +203,14 @@ def ansible_run_module():
         argument_spec=module_args,
         supports_check_mode=True
     )
-
-    result['custom_output'] = deploy_ioc()
+    os.chdir(module.params['output_path'])
+    result['custom_output'] = deploy_ioc(module.params)
     
     # if the user is working with this module in only check mode we do not
     # want to make any changes to the environment, just return the current
     # state with no modifications
     if module.check_mode:
         module.exit_json(**result)
-    # manipulate or modify the state as needed (this is going to be the
-    # part where your module will do what it needs to do)
-    result['original_message'] = module.params['name']
-    result['message'] = 'goodbye'
     # use whatever logic you need to determine whether or not this module
     # made any modifications to your target
     if module.params['new']:
@@ -200,7 +218,7 @@ def ansible_run_module():
     # during the execution of the module, if there is an exception or a
     # conditional state that effectively causes a failure, run
     # AnsibleModule.fail_json() to pass in the message and the result
-    if module.params['name'] == 'fail me':
+    if module.params['ioc_name'] == 'fail me':
         module.fail_json(msg='You requested this to fail', **result)
     # in the event of a successful module execution, you will want to
     # simple AnsibleModule.exit_json(), passing the key/value results
