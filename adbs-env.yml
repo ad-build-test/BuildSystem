@@ -37,9 +37,17 @@ dependencies:
   - xz=5.4.6=h5eee18b_1
   - zlib=1.2.13=h5eee18b_1
   - pip:
+      - ansible-runner==2.4.0
       - blessed==1.20.0
+      - docutils==0.21.2
       - editor==1.6.6
       - inquirer==3.2.4
+      - lockfile==0.12.2
+      - packaging==24.1
+      - pexpect==4.9.0
+      - ptyprocess==0.7.0
+      - python-daemon==3.0.1
+      - pyyaml==6.0.1
       - readchar==4.1.0
       - runs==1.2.2
       - six==1.16.0
