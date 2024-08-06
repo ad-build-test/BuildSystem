@@ -91,6 +91,11 @@ def deployment(component: str, branch: str):
                 message="Specify type of ioc",
                 choices=["SIOC", "HIOC", "VIOC"])]
     ioc_type = inquirer.prompt(question)['ioc_type']
+    question = [inquirer.List(
+                "initial",
+                message="Initial deployment?",
+                choices=[True, False])]
+    initial = inquirer.prompt(question)['initial']
     ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
     host_user = input(INPUT_PREFIX + "Specify host user account used to run screen\n(ex: laci@lcls-dev1): ")
     executable_path = input(INPUT_PREFIX + "Specify executable path\n(ex:/afs/slac/g/lcls/epics/iocCommon/sioc-sys0-al02/iocSpecificRelease/bin/rhel7-x86_64/alhPV): ")
@@ -99,8 +104,16 @@ def deployment(component: str, branch: str):
     else:
         server_user_node_port = None
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
+    ioc_common = os.environ.get('IOC')
+    ioc_data = os.environ.get('IOC_DATA')
+    linux_uname = os.environ.get('USER')
 
-    playbook_args = f'{{"deploy_type": "{deploy_type}", "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
+    # TODO: Delete these lines once done testing
+    ioc_common = '/afs/slac.stanford.edu/u/cd/pnispero/ansible_test/iocCommon'
+    ioc_data = '/afs/slac.stanford.edu/u/cd/pnispero/ansible_test/iocData'
+
+    playbook_args = f'{{"initial": "{initial}","deploy_type": "{deploy_type}", "user": "{linux_uname}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
+                     "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
                      "server_user_node_port": "{server_user_node_port}", "executable_path": "{executable_path}",\
                      "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
@@ -119,7 +132,11 @@ def deployment(component: str, branch: str):
         print("Final status:")
         print(f"error output path: {r.stderr}")
         print(f"regular path: {r.stdout}")
-
+    # todo: change deployment command to ask
+    #     - first time deploying?
+    #     - do the initial deployment playbook and get the arguments for that
+    #     - otherwise go to regular deployment playbook and get the arguments
+    #         which is just <tag> and <facility> 
     # 3) if not, check the database
         # 3.1) if not, ask user to add to database
     # 4) Run the playbook

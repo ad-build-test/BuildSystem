@@ -72,6 +72,7 @@ message:
 from ansible.module_utils.basic import AnsibleModule
 import subprocess
 import os
+import shutil
 
 """
 1) Checkout screeniocs                                    
@@ -132,10 +133,17 @@ def update_ioc_data():
 def update_ioc_startup():
     # 1) In $IOC, make directory for ioc if doesn't already exist
     # 2) in the ioc folder, add in symbolic link to point to the TOP of your repo (for dev)
-    # 3) Add in the startup.cmd, use one of the templates at $IOC_COMMON/template
-        # 3.1) Edit the startup.cmd to replace <ioc> with actual ioc_name
+    # 3) two options for startup.cmd
+        # 3.1) Add in the startup.cmd, use one of the templates at $IOC_COMMON/template
+        #      Edit the startup.cmd to replace <ioc> with actual ioc_name
+        # 3.2) Add startup.cmd in the component src tree, and make symlink to it from $IOC
+    
     pass
-def update_screeniocs() -> str:
+def update_screeniocs(ioc_type: str, ioc_name: str, host_user: str, executable_path: str, server_user_node_port: str) -> str:
+    Update - we don't want to automate this piece as part of ansible, instead
+    screeniocs can be a component, with scripts that An already made to parse and possibly
+    update screeniocs.
+    may not need this custom ansible, except for the run_ioc part, although could use bash command for that?
     # 1) Checkout screeniocs through cvs
     try:
         cvs_bytes = subprocess.check_output(['cvs', 'co', 'epics/iocCommon/All/dev/screeniocs'])
@@ -143,7 +151,8 @@ def update_screeniocs() -> str:
     except Exception as e:
         print("== SOFTIOC_DEPLOY == **ERROR** - in update_screeniocs(): " + str(e))
     # 2) Update appropriate IOC
-        you are here
+    shutil.copy('epics/iocCommon/All/dev/screeniocs', 'ADBS_screeniocs')
+        # you are here - just make a copy of the screeniocs and edit that one for prototype purposes
     # 3) Check if entry already exists, actually prompt user in cli for screeniocs info
         # specifically 
         #IOC Type (SIOC, HIOC, VIOC)
@@ -159,8 +168,8 @@ def deploy_ioc(module_params: dict):
     output = {}
     # NOTE - cant use live output in ansible modules, so just alter output dict
     # But prints will print out if script crashes
-    cvs_output = update_screeniocs()
-    # we can update a fake screeniocs for now, just make a copy called screeniocs_bs
+    cvs_output = update_screeniocs(module_params["ioc_type"], module_params["ioc_name"], module_params["host_user"],
+                                   module_params["executable_path"], module_params["server_user_node_port"])
     update_ioc_startup()
     update_ioc_data()
     run_ioc()
