@@ -84,7 +84,7 @@ def deployment(component: str, branch: str):
     question = [inquirer.List(
                 "deploy_type",
                 message="Specify type of deployment",
-                choices=["DEV", "PRODUCTION"])]
+                choices=["DEV", "PROD"])]
     deploy_type = inquirer.prompt(question)['deploy_type']
     question = [inquirer.List(
                 "ioc_type",
@@ -112,7 +112,7 @@ def deployment(component: str, branch: str):
     ioc_common = '/afs/slac.stanford.edu/u/cd/pnispero/ansible_test/iocCommon'
     ioc_data = '/afs/slac.stanford.edu/u/cd/pnispero/ansible_test/iocData'
 
-    playbook_args = f'{{"initial": "{initial}","deploy_type": "{deploy_type}", "user": "{linux_uname}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
+    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}","deploy_type": "{deploy_type}", "user": "{linux_uname}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
                      "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
                      "server_user_node_port": "{server_user_node_port}", "executable_path": "{executable_path}",\
                      "output_path": "{playbook_output_path}"}}'
@@ -124,8 +124,11 @@ def deployment(component: str, branch: str):
     if not isExist:
         print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
         os.mkdir(playbook_output_path)
-
-    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost', playbook='/u/cd/pnispero/.ansible/playbooks/softioc_deploy.yml',
+    adbs_playbooks_dir = "/afs/slac/u/cd/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+    # here - change localhost to mylocal, and host_pattern below to inventory to point to your inv
+    # r = ansible_runner.run(private_data_dir=playbook_output_path, inventory=adbs_playbooks_dir + 'local_inventory', playbook=adbs_playbooks_dir + 'ioc_deploy.yml',
+    #                        extravars=playbook_args_dict)
+    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost', playbook=adbs_playbooks_dir + 'ioc_deploy.yml',
                            extravars=playbook_args_dict)
     print("{}: {}".format(r.status, r.rc))
     if (r.rc != 0): # 0 means success

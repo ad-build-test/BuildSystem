@@ -1,0 +1,52 @@
+# How to Run 
+# ansible-playbook -i local_inventory --extra-vars "initial=true user=$USER iocCommon=$IOC iocData=$IOC_DATA ioc_name=sioc-123-123 executable_path=/afs/slac.stanford.edu/u/cd/pnispero/mps/central_node_ioc/" ./ioc_deploy.yml
+# This is for dev, and doesn't include using 'cram' and deploying a component to a 
+# deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
+# Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
+# TODO: This is a 'master playbook' that would call other ioc playbooks based off
+# what is needed, mainly initial / continual deployment
+
+- hosts: localhost
+  vars: 
+    initial: '{{ initial }}'
+    iocCommon: '{{ iocCommon }}' # Taken from user env
+    iocData: '{{ iocData }}' # Taken from user env
+    component_name: '{{ component_name }}'
+    user: '{{ user }}'
+    ioc_name: '{{ ioc_name }}'
+    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
+    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+    # TODO: Add variables/arguments for the different facilities
+    # possible to add hosts dynamically? or make multiple inventory files?
+    # I believe making multiple inventory files is optimal, then you just pass in the correct
+    # one to the ansible playbook
+
+  # use CLI configure command to set bashrc for user which includes env variables
+  # set /sdf/scratch/ad/build if on s3df
+  # TODO: Instead of tasks, just call the other 'regular' ioc deployment playbook
+
+- name: Initial ioc deployment # This playbook is usually only ran once when an ioc
+  ansible.builtin.import_playbook: initial_ioc_deploy.yml
+  when: initial | bool
+  vars:
+    iocCommon: '{{ iocCommon }}' # Taken from user env
+    iocData: '{{ iocData }}' # Taken from user env
+    user: '{{ user }}'
+    ioc_name: '{{ ioc_name }}'
+    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
+    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+
+- name: Continuous ioc deployment # This playbook is always called
+  ansible.builtin.import_playbook: continuous_ioc_deploy.yml
+  vars:
+    iocCommon: '{{ iocCommon }}' # Taken from user env
+    iocData: '{{ iocData }}' # Taken from user env
+    component_name: '{{ component_name }}'
+    user: '{{ user }}'
+    ioc_name: '{{ ioc_name }}'
+    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
+    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+
+
+
+
