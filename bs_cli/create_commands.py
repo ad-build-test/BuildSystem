@@ -98,7 +98,7 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     else:
         # Change prompt if adding an existing branch
         if (add):
-            prompt_branch_from = "Specify branch point you branched off of"
+            prompt_branch_from = "Specify branch point you branched off of (skip if main)"
         else:
             prompt_branch_from = "Specify what to branch from"
 

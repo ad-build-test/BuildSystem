@@ -165,7 +165,7 @@ class Build(object):
         # Run the repo-defined build-script
         build_script = './' + config_yaml['build']
         print("== ADBS == Running Build:")
-        try:
+        try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
             build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             build_output_bytes = e.output
