@@ -4,6 +4,8 @@ import os
 import ansible_runner # TODO: Move to its own module once done testing
 import inquirer
 import json
+import logging
+import subprocess
 from component import Component
 from request import Request
 from cli_configuration import INPUT_PREFIX
@@ -15,19 +17,82 @@ def run():
     """Run a [ build | deployment | test ]"""
     pass
 
+def clone_repo(request: Request):
+    ## Helper function
+    # If user is not in existing repo, ask user where to clone repo, to get the manifest
+    #   and the custom playbook (if specified)
+    # Get URL from database
+    if (not request.component.git_repo):
+        clone_filepath = input(INPUT_PREFIX + "Specify filepath to clone repo temporarily: ")
+        os.chdir(clone_filepath)
+        component_info = request.get_component_from_db()
+        request.component.git_clone(component_info['url'])
+
+def parse_manifest() -> dict:
+    # Parse manifest - filepath is only here, so if ever need to change its only one location
+    yaml_filepath = 'configure/CONFIG.yaml' 
+    with open(yaml_filepath, 'r') as file:
+        yaml_data = yaml.safe_load(file)
+    logging.info(yaml_data)
+    return yaml_data
+
+
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-def build(component: str, branch: str):
-    """Trigger a build"""
+@click.option("-l", "--local", is_flag=True, required=False, help="Local build")
+@click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
+@click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
+def build(component: str, branch: str, local: bool, remote: bool, container: bool):
+    """Trigger a build (local | remote | container)"""
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
+    # 2) Prompt if local or remote build
+    if (not local and not remote and not container):
+        question = [inquirer.List(
+                "build_type",
+                message="Specify type of build",
+                choices=["LOCAL", "REMOTE", "CONTAINER"])]
+        build_type = inquirer.prompt(question)['build_type']
+    elif (local):
+        build_type = "LOCAL"
+    elif (remote):
+        build_type = "REMOTE"
+    elif (container):
+        build_type = "CONTAINER"
 
-    # 2) Write to database
-    endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
-    request.set_endpoint(endpoint)
-    request.post_request(log=True)
+    ## Local build
+    if (build_type == "LOCAL"):
+        # 1) Clone repo if doesn't exist in user space
+        clone_repo(request)
+        # 2) Parse manifest
+        manifest_data = parse_manifest()
+        # 3) Run the script or build command
+        # Assuming the script exists at the $TOP of the repo
+        print("== ADBS == Running Build:")
+        if (manifest_data['build'].endswith('.sh')):
+            build_script = './' + manifest_data['build']
+            result = subprocess.run(['bash', build_script], capture_output=True, text=True)
+        elif (manifest_data['build'].endswith('.py')):
+            build_script = manifest_data['build']
+            result = subprocess.run(['python', build_script], capture_output=True, text=True)
+        else: # Run the command directly
+            build_command = manifest_data['build']
+            result = subprocess.run([build_command], capture_output=True, text=True)
+        print('== ADBS == output:', result.stdout)
+        print('== ADBS == errors:', result.stderr)
+
+    ## Remote build
+    elif (build_type == "REMOTE"):
+        # 2) Send request to backend
+        endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
+        request.set_endpoint(endpoint)
+        request.post_request(log=True)
+        
+    ## Container build
+    elif (build_type == "CONTAINER"): # (NOTE - this feature will be long-term goal and is not priority atm)
+        print("== ADBS == ** Container build is not ready, under development **")
 
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
@@ -38,7 +103,7 @@ def test(component: str, branch: str):
     request = Request(Component(component, branch))
     request.set_component_fields()
 
-    # 2) Write to database
+    # 2) Send request to backend
     endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
     request.set_endpoint(endpoint)
     request.post_request(log=True)
@@ -58,26 +123,11 @@ def deployment(component: str, branch: str):
     but user can specify another compononent (useful like if someone made a script
     to deploy a bunch of components). In that case, then you'd have to clone the repo
     to get the manifest and possibly a user-defined deployment script"""
-    # 2) If user is not in repo, ask user where to clone repo, to get the manifest
-    #   and the custom playbook (if specified)
-        # Get URL from database
-    if (not request.component.git_repo):
-        clone_filepath = input(INPUT_PREFIX + "Specify filepath to clone repo temporarily: ")
-        os.chdir(clone_filepath)
-        component_info = request.get_component_from_db()
-        # url = component_info['url'] + '/raw/' + request.component.branch_name + '/configure/CONFIG.yaml'
-        # print(url)
-        # wget.download(url)
-        request.component.git_clone(component_info['url'])
+    # 2) If user is not in repo, clone repo
+    clone_repo(request)
 
     # Parse yaml
-    yaml_filepath = 'configure/CONFIG.yaml'
-    with open(yaml_filepath, 'r') as file:
-        yaml_data = yaml.safe_load(file)
-        # Print the parsed YAML data
-    print("Parsed YAML data:")
-    print(yaml_data)
-    print(yaml_data["deploy"])
+    manifest_data = parse_manifest()
 
     # 3) Run the playbook
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
