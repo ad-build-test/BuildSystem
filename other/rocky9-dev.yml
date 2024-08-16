@@ -37,17 +37,19 @@ spec:
           sleep infinity
     env:
     - name: ADBS_SOURCE
-      value: /mnt/eed/ad-build/scratch/test-ioc
+      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
       # value: /mnt/build-scratch/ad-build/test-ioc-main
     - name: ADBS_OUTPUT
-      value: /mnt/eed/ad-build/scratch/test-ioc
-      # value: /mnt/build-scratch/ad-build/test-ioc-main/output
+      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
+      # value: /mnt/build-scratch/ad-build/test-ioc-main-pnispero/output
     - name: ADBS_OS_ENVIRONMENT
       value: rocky9
+    - name: ADBS_BUILD_TYPE
+      value: normal
     - name: ADBS_COMPONENT
       value: test-ioc
     - name: ADBS_BRANCH
-      value: dev-patrick
+      value: main
     volumeMounts:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt

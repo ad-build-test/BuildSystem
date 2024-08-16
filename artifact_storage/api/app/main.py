@@ -4,6 +4,7 @@ import subprocess
 import time
 import asyncio
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse
 from kubernetes import client, config, utils
 from kubernetes.client.rest import ApiException
 from contextlib import asynccontextmanager
@@ -137,9 +138,10 @@ async def build_image(payload: BuildImage):
 # ARGS: component, tag, arch
 async def get_component(payload: GetComponent):
     # 1) Check if component already exists in registry
-    component_path = registry_base_path + payload.component + '/' + payload.tag + '/'
+    component_path = registry_base_path + payload.component + '/' + payload.tag + '.tar.gz'
     print(component_path)
     if (os.path.exists(component_path)):
+        return FileResponse(component_path)
         return {"status": "Component Exists",
             "component": component_path}
     # TODO: if component doesnt exist, can do either

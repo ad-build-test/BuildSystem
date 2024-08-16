@@ -2,6 +2,7 @@ import json
 import yaml
 import os
 import sys
+import tarfile
 import subprocess
 import shutil
 import requests
@@ -40,12 +41,13 @@ class Build(object):
     def get_environment(self):
         # 0) Get environment variables - assuming we're not using a configMap
         self.os_env = os.getenv("ADBS_OS_ENVIRONMENT")
+        self.build_type = os.getenv('ADBS_BUILD_TYPE') # Either 'normal' or 'container'
         self.source_dir = os.getenv('ADBS_SOURCE') # This is full filepath, like /mnt/eed/ad-build/scratch/66721557fd891a5aac14b3d0-ROCKY9-test-ioc-dev-patrick/
         self.output_dir = os.getenv('ADBS_OUTPUT')
         self.component = os.getenv('ADBS_COMPONENT')
         self.branch = os.getenv('ADBS_BRANCH')
-        env = {"os_env": self.os_env, "source_dir": self.source_dir, "output_dir": self.output_dir,
-               "component":  self.component, "branch": self.branch}
+        env = {"os_env": self.os_env, "build_type": self.build_type, "source_dir": self.source_dir, "output_dir": self.output_dir,
+               "component":  self.component, "branch": self.branch} # This env is just for sanity checking
         for key, value in env.items():
             if (value == None):
                 # Raise exception
@@ -81,10 +83,23 @@ class Build(object):
         output = output_bytes.decode("utf-8")
         print(output)
         return pkgs_file
+    
+    def download_file(self, tarball_filename, response):
+        # Download file from api, and extract to ADBS_SOURCE
+        # Download the .tar.gz file
+        if response.status_code == 200:
+            with open(tarball_filename, 'wb') as file:
+                file.write(response.content)
+            print('== ADBS == Tarball downloaded successfully')
 
+            # Extract the .tar.gz file
+            with tarfile.open(tarball_filename, 'r:gz') as tar:
+                tar.extractall(path=self.source_dir)
+            print(f'== ADBS == Files extracted to {self.source_dir}')
+        else:
+            print('== ADBS == Failed to retrieve the file. Status code:', response.status_code)
 
-    def get_component_from_registry(self, component: str, tag: str) -> str:
-        # TODO: Waiting on when registry is implemented
+    def get_component_from_registry(self, component: str, tag: str):
         # For now look into the /mnt/eed/ad-build/registry
         # rest api
         print(component, tag)     
@@ -92,26 +107,9 @@ class Build(object):
         print(payload)
         print("== ADBS == Get component request to artifact storage...")
         response = requests.get(url=self.artifact_api_url + 'component', json=payload)
-        response = response.json()
-        print(response)
+        filename = tag + '.tar.gz'
+        self.download_file(filename, response)
         # For now we can assume the component exists, otherwise the api builds and returns it
-        component_path = response['component']
-        return component_path
-    
-    def manual_copy_tree(self, src, dst):
-        # This function is used if python < 3.8 where 'dirs_exist_ok' flag doesnt exist
-        if not os.path.exists(dst):
-            os.makedirs(dst)
-
-        for item in os.listdir(src):
-            s = os.path.join(src, item)
-            d = os.path.join(dst, item)
-            if os.path.isdir(s):
-                # Recursively copy directories
-                shutil.copytree(s, d, False, None)
-            else:
-                # Copy files
-                shutil.copy2(s, d)
 
     def install_dependencies(self, dependencies: dict):
         print("== ADBS == Installing dependencies")
@@ -119,26 +117,49 @@ class Build(object):
         container_build_path = '/build/'
         for dependency in dependencies:
             for name,tag in dependency.items():
-                    component_from_registry = self.get_component_from_registry(name, tag)
-                    print("copying over ", component_from_registry, " to ", container_build_path)
-                    if sys.version_info[1] < 8: # python minor version less than 8 doesnt have dirs_exist_ok
-                        self.manual_copy_tree(component_from_registry, container_build_path)
-                    else:
-                        shutil.copytree(component_from_registry, container_build_path, dirs_exist_ok = True)
-                # perform buildInstructions, and add to Dockerfile
+                    self.get_component_from_registry(name, tag)
 
-        # 3) For each dependency
-            # Do we have these prebuilt somewhere, and we can grab them from registry?
-            # If not exists, then we can send request to backend to build that dependency
-            # Currently, every dependency exists somewhere on afs prebuilt, and we reference
-                # those in the ioc-config file, specifying the filepath to the dependency,
-                # and the /{ARCH}/lib and /{ARCH}/include folders.
-                # this is shared libraries/dynamic linking. Another option is static linking
-            # 3.1) Clone the repo
+    def update_release_site(self):
+        # This only applies to IOCs
+        # 1) Update the release site to point to the repos here
+        # Update to point to self.source_dir/epics
+        # TODO: Update self.source_dir so its not self.source_dir/component-branch/
+        # TODO: in the install_dependencies(), make sure it creates <component>/ dirs
+        pass
+        # BASE_MODULE_VERSION=7.0.3.1-1.0
+        # EPICS_SITE_TOP=/mnt/eed/ad-build/scratch/test-ioc-main-pnispero/epics
+        # BASE_SITE_TOP=${EPICS_SITE_TOP}/base
+        # EPICS_MODULES=${EPICS_SITE_TOP}/${BASE_MODULE_VERSION}/modules
+        # IOC_SITE_TOP=${EPICS_SITE_TOP}/iocTop
+        # PACKAGE_SITE_TOP=/afs/slac/g/lcls/package
+        # MATLAB_PACKAGE_TOP=/afs/slac/g/lcls/package/matlab
+        # PSPKG_ROOT=/afs/slac/g/lcls/pkg_mgr
+        # TOOLS_SITE_TOP=/afs/slac/g/lcls/tools
+        # ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
+    
+        # 1) Read the file and parse the key-value pairs
+        filename = 'RELEASE_SITE'
+        with open(filename, 'r') as file:
+            lines = file.readlines()
 
-            # 3.2) Usually its just a 'make', creates the /lib/*.so compiled shared object files
+        # 2) Create a dictionary to store the current key-value pairs
+        release_site_dict = {}
+        for line in lines:
+            if '=' in line:
+                key, value = line.strip().split('=', 1)
+                release_site_dict[key] = value
 
-            # 3.3) But how do we package that? I think we just move all of it to /lib of the repo?
+        # 3) Update the dictionary with new values
+        new_release_site = {
+            'BASE_MODULE_VERSION': release_site_dict['BASE_MODULE_VERSION'], # Keep the same
+            'EPICS_SITE_TOP': self.source_dir + '/epics'
+        }
+        release_site_dict.update(new_release_site)
+
+        # 4) Write the updated key-value pairs back to the file
+        with open(filename, 'w') as file:
+            for key, value in release_site_dict.items():
+                file.write(f'{key}={value}\n')
 
     def run_build(self, config_yaml: dict):
         # Run the repo-defined build-script
@@ -182,7 +203,10 @@ if __name__ == "__main__":
     print("Dev Version")
     build = Build()
     # 1) Enter build directory
+    build.source_dir = build.source_dir + '/' + build.component + '-' + build.branch
+    # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
     os.chdir(build.source_dir)
+    print("== ADBS == Current dir: " + str(os.getcwd()))
     # 2) Parse yaml
     config_yaml = build.parse_yaml('configure/CONFIG.yaml')
     # 3) Parse dependencies
@@ -192,10 +216,14 @@ if __name__ == "__main__":
         build.install_dependencies(dependencies)
     # 4.1) Install python packages if available
     py_pkgs_file = build.install_python_packages(config_yaml)
+    # 5) Update RELEASE_SITE
+    build.
     # 5) Run repo build script
     build.run_build(config_yaml)
     # 6) Run unit_tests
     test = Test()
     test.run_unit_tests(build.source_dir)
-    # 7) Build dockerfile
-    build.create_docker_file(dependencies, py_pkgs_file)
+
+    # 7) If container build - Build dockerfile
+    if (build.build_type.lower() == 'container'):
+        build.create_docker_file(dependencies, py_pkgs_file)
