@@ -26,6 +26,7 @@ class Build(object):
         self.registry_base_path = "/mnt/eed/ad-build/registry/"
         self.artifact_api_url = "http://artifact-api-service.artifact:8080/"
         self.get_environment()
+        self.full_source_dir = self.source_dir + '/' + self.component + '-' + self.branch
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
 
@@ -42,16 +43,20 @@ class Build(object):
         # 0) Get environment variables - assuming we're not using a configMap
         self.os_env = os.getenv("ADBS_OS_ENVIRONMENT")
         self.build_type = os.getenv('ADBS_BUILD_TYPE') # Either 'normal' or 'container'
-        self.source_dir = os.getenv('ADBS_SOURCE') # This is full filepath, like /mnt/eed/ad-build/scratch/66721557fd891a5aac14b3d0-ROCKY9-test-ioc-dev-patrick/
+        self.source_dir = os.getenv('ADBS_SOURCE') # This is full filepath, like /mnt/eed/ad-build/scratch/66721557fd891a5aac14b3d0-ROCKY9-test-ioc-dev-patrick
         self.output_dir = os.getenv('ADBS_OUTPUT')
         self.component = os.getenv('ADBS_COMPONENT')
         self.branch = os.getenv('ADBS_BRANCH')
-        env = {"os_env": self.os_env, "build_type": self.build_type, "source_dir": self.source_dir, "output_dir": self.output_dir,
+        custom_env = {"os_env": self.os_env, "build_type": self.build_type, "source_dir": self.source_dir, "output_dir": self.output_dir,
                "component":  self.component, "branch": self.branch} # This env is just for sanity checking
-        for key, value in env.items():
+        for key, value in custom_env.items():
             if (value == None):
                 # Raise exception
                 raise ValueError("Missing environment variable - " + key)
+        # Copy the current environment
+        self.env = os.environ.copy()
+        # Update with new environment variables
+        self.env.update(custom_env)
 
     def parse_dependencies(self, config_yaml: dict) -> dict:
         try:
@@ -74,7 +79,7 @@ class Build(object):
         except KeyError:
             return None
         # Search repo for the pkgs_file (like requirements.txt)
-        pkgs_file = self.find_file(pkgs_file_name, self.source_dir)
+        pkgs_file = self.find_file(pkgs_file_name, self.full_source_dir)
         print("== ADBS == Installing python packages from " + pkgs_file_name)
         try:
             output_bytes = subprocess.check_output(['pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
@@ -84,18 +89,29 @@ class Build(object):
         print(output)
         return pkgs_file
     
-    def download_file(self, tarball_filename, response):
+    def download_file(self, component, tag, response, epics_base=False):
         # Download file from api, and extract to ADBS_SOURCE
         # Download the .tar.gz file
+        tarball_filename = tag + '.tar.gz'
         if response.status_code == 200:
             with open(tarball_filename, 'wb') as file:
                 file.write(response.content)
             print('== ADBS == Tarball downloaded successfully')
-
+            output_dir = self.source_dir
+            if (epics_base): # Epics_base special case, path into source_dir/epics/base/<ver>
+                output_dir = output_dir + '/epics/base'
+                os.makedirs(output_dir)
+                # Add epics to the LD_LIBRARY_PATH
+                # TODO: For now, just hardcode the architecture
+                self.env['LD_LIBRARY_PATH'] = output_dir + '/' + tag + '/lib/linux-x86_64/'
+            else:
+                # Create the directory for component
+                output_dir = self.source_dir + '/' + component
+                os.mkdir(output_dir)
             # Extract the .tar.gz file
             with tarfile.open(tarball_filename, 'r:gz') as tar:
-                tar.extractall(path=self.source_dir)
-            print(f'== ADBS == Files extracted to {self.source_dir}')
+                tar.extractall(path=output_dir)
+            print(f'== ADBS == {tarball_filename} extracted to {output_dir}')
         else:
             print('== ADBS == Failed to retrieve the file. Status code:', response.status_code)
 
@@ -105,25 +121,24 @@ class Build(object):
         print(component, tag)     
         payload = {"component": component, "tag": tag, "arch": self.os_env}
         print(payload)
-        print("== ADBS == Get component request to artifact storage...")
+        print(f"== ADBS == Get component {component},{tag} request to artifact storage...")
         response = requests.get(url=self.artifact_api_url + 'component', json=payload)
-        filename = tag + '.tar.gz'
-        self.download_file(filename, response)
+        if (component == 'epics-base'): # special case
+            self.download_file(component, tag, response, epics_base=True)
+        else:
+            self.download_file(component, tag, response)
         # For now we can assume the component exists, otherwise the api builds and returns it
 
     def install_dependencies(self, dependencies: dict):
         print("== ADBS == Installing dependencies")
         print(dependencies)
-        container_build_path = '/build/'
         for dependency in dependencies:
             for name,tag in dependency.items():
                     self.get_component_from_registry(name, tag)
 
     def update_release_site(self):
-        # This only applies to IOCs
+        # This only applies to IOCs for REMOTE builds
         # 1) Update the release site to point to the repos here
-        # Update to point to self.source_dir/epics
-        # TODO: Update self.source_dir so its not self.source_dir/component-branch/
         # TODO: in the install_dependencies(), make sure it creates <component>/ dirs
         pass
         # BASE_MODULE_VERSION=7.0.3.1-1.0
@@ -150,9 +165,16 @@ class Build(object):
                 release_site_dict[key] = value
 
         # 3) Update the dictionary with new values
+        # TODO: Once s3df figures out other dirs, update paths after IOC_SITE_TOP
+        # check if we have to emulate exactly the structure of how it looks,
+        # Because we don't want to alter the RELEASE for remote builds, just a RELEASE_SITE
+        # Ideally all modules including epics are on the same level, but its not in this format
         new_release_site = {
             'BASE_MODULE_VERSION': release_site_dict['BASE_MODULE_VERSION'], # Keep the same
-            'EPICS_SITE_TOP': self.source_dir + '/epics'
+            'EPICS_SITE_TOP': self.source_dir + '/epics', # Point to modules next to the where app being built
+            'BASE_SITE_TOP': "${EPICS_SITE_TOP}/base",
+            'EPICS_MODULES': self.source_dir,
+            'IOC_SITE_TOP': "${EPICS_SITE_TOP}/iocTop"
         }
         release_site_dict.update(new_release_site)
 
@@ -166,7 +188,9 @@ class Build(object):
         build_script = './' + config_yaml['build']
         print("== ADBS == Running Build:")
         try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
-            build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT)
+            print("os.environ=" + str(os.environ))
+            print("self.env=" + str(self.env))
+            build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT, env=self.env)
         except subprocess.CalledProcessError as e:
             build_output_bytes = e.output
         build_output = build_output_bytes.decode("utf-8")
@@ -203,9 +227,8 @@ if __name__ == "__main__":
     print("Dev Version")
     build = Build()
     # 1) Enter build directory
-    build.source_dir = build.source_dir + '/' + build.component + '-' + build.branch
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
-    os.chdir(build.source_dir)
+    os.chdir(build.full_source_dir)
     print("== ADBS == Current dir: " + str(os.getcwd()))
     # 2) Parse yaml
     config_yaml = build.parse_yaml('configure/CONFIG.yaml')
@@ -217,12 +240,12 @@ if __name__ == "__main__":
     # 4.1) Install python packages if available
     py_pkgs_file = build.install_python_packages(config_yaml)
     # 5) Update RELEASE_SITE
-    build.
+    build.update_release_site()
     # 5) Run repo build script
     build.run_build(config_yaml)
     # 6) Run unit_tests
     test = Test()
-    test.run_unit_tests(build.source_dir)
+    test.run_unit_tests(build.full_source_dir)
 
     # 7) If container build - Build dockerfile
     if (build.build_type.lower() == 'container'):

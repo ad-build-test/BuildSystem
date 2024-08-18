@@ -1,10 +1,10 @@
 import click
-from request import Request
-from auto_complete import AutoComplete
-from component import Component
+from adbs_cli.request import Request
+from adbs_cli.auto_complete import AutoComplete
+from adbs_cli.component import Component
 import logging
 import inquirer
-from cli_configuration import INPUT_PREFIX
+from adbs_cli.cli_configuration import INPUT_PREFIX
 
 
 @click.group()

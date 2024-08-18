@@ -1,5 +1,5 @@
-from cli_configuration import cli_configuration
-from component import Component
+from adbs_cli.cli_configuration import cli_configuration
+from adbs_cli.component import Component
 import logging
 import requests
 

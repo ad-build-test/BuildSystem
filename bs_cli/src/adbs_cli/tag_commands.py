@@ -1,7 +1,7 @@
 import click
 import subprocess
 import readline
-from auto_complete import AutoComplete
+from adbs_cli.auto_complete import AutoComplete
 
 @click.group()
 def tag():

@@ -10,58 +10,67 @@ spec:
     requests:
       storage: 5Gi
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: test-build-rocky9-dev
+  name: test-build-rocky9-dev-deployment
 spec:
-  securityContext:
-    runAsUser: 46487
-    runAsGroup: 1006
-  containers:
-  - name: test-build-rocky9-dev
-    image: pnispero/rocky9-env:dev
-    imagePullPolicy: Always
-    # start the build script
-    command: ["/bin/sh"]
-    args:
-      - -c
-      - >-
-          echo "$ cd /build/" &&
-          cd /build/ && 
-          echo "$ pwd && ls" &&
-          pwd && ls &&
-          echo "$ python3 start_build.py" &&
-          python3 start_build.py &&
-          echo "$ sleep to keep container alive for debug" &&
-          sleep infinity
-    env:
-    - name: ADBS_SOURCE
-      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
-      # value: /mnt/build-scratch/ad-build/test-ioc-main
-    - name: ADBS_OUTPUT
-      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
-      # value: /mnt/build-scratch/ad-build/test-ioc-main-pnispero/output
-    - name: ADBS_OS_ENVIRONMENT
-      value: rocky9
-    - name: ADBS_BUILD_TYPE
-      value: normal
-    - name: ADBS_COMPONENT
-      value: test-ioc
-    - name: ADBS_BRANCH
-      value: main
-    volumeMounts:
-    - name: s3df-dev-container-ad-group
-      mountPath: /mnt
-    - name: podman-storage
-      mountPath: /var/lib/containers/storage  # Mount point for Podman storage
-    resources:
-      limits:
-        memory: 8Gi
-        cpu: 4000m
-  volumes:
-  - name: s3df-dev-container-ad-group
-    persistentVolumeClaim:
-      claimName: s3df-dev-container-ad-group
-  - name: podman-storage
-    emptyDir: {}  # Use an emptyDir volume for storage
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-build-rocky9-dev
+  template:
+    metadata:
+      labels:
+        app: test-build-rocky9-dev
+    spec:
+      securityContext:
+        runAsUser: 46487
+        runAsGroup: 1006
+      containers:
+      - name: test-build-rocky9-dev
+        image: pnispero/rocky9-env:dev
+        imagePullPolicy: Always
+        # start the build script
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - >-
+              echo "$ cd /build/" &&
+              cd /build/ && 
+              echo "$ pwd && ls" &&
+              pwd && ls &&
+              echo "$ python3 start_build.py" &&
+              python3 start_build.py &&
+              echo "$ sleep to keep container alive for debug" &&
+              sleep infinity
+        env:
+        - name: ADBS_SOURCE
+          value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
+          # value: /mnt/build-scratch/ad-build/test-ioc-main
+        - name: ADBS_OUTPUT
+          value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
+          # value: /mnt/build-scratch/ad-build/test-ioc-main-pnispero/output
+        - name: ADBS_OS_ENVIRONMENT
+          value: rocky9
+        - name: ADBS_BUILD_TYPE
+          value: normal
+        - name: ADBS_COMPONENT
+          value: test-ioc
+        - name: ADBS_BRANCH
+          value: main
+        volumeMounts:
+        - name: s3df-dev-container-ad-group
+          mountPath: /mnt
+        - name: podman-storage
+          mountPath: /var/lib/containers/storage  # Mount point for Podman storage
+        resources:
+          limits:
+            memory: 8Gi
+            cpu: 4000m
+      volumes:
+      - name: s3df-dev-container-ad-group
+        persistentVolumeClaim:
+          claimName: s3df-dev-container-ad-group
+      - name: podman-storage
+        emptyDir: {}  # Use an emptyDir volume for storage

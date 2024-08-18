@@ -1,6 +1,6 @@
 import os
 from git import Repo, exc
-from auto_complete import AutoComplete
+from adbs_cli.auto_complete import AutoComplete
 
 class Component(object):
     def __init__(self, name: str=None, branch_name: str=None):

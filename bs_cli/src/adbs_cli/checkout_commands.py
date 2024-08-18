@@ -1,8 +1,8 @@
 import click
 import requests
-from auto_complete import AutoComplete
-from request import Request
-from component import Component
+from adbs_cli.auto_complete import AutoComplete
+from adbs_cli.request import Request
+from adbs_cli.component import Component
 
 @click.group()
 def checkout():

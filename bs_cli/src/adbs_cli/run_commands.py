@@ -6,9 +6,9 @@ import inquirer
 import json
 import logging
 import subprocess
-from component import Component
-from request import Request
-from cli_configuration import INPUT_PREFIX
+from adbs_cli.component import Component
+from adbs_cli.request import Request
+from adbs_cli.cli_configuration import INPUT_PREFIX
 
 # TODO: May make logic a single function since its the same for all 3
 # make the endpoint an argument

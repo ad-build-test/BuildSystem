@@ -35,12 +35,12 @@ import click
 import os
 import readline
 import logging
-from cli_configuration import cli_configuration
+from adbs_cli.cli_configuration import cli_configuration
 
-import create_commands as create_group
-import run_commands as run_group
-import checkout_commands as checkout_group
-import tag_commands as tag_group
+import adbs_cli.create_commands as create_group
+import adbs_cli.run_commands as run_group
+import adbs_cli.checkout_commands as checkout_group
+import adbs_cli.tag_commands as tag_group
 
 # TODO: When done, add exception handling to all possible break points
 # like [requests, environment vars, ]
@@ -80,8 +80,8 @@ def configure():
             outfile.write(write_env)
         click.echo("** Successfully added to .bashrc **\n" + \
                     "Please 'source ~" + linux_uname + "/.bashrc' or reload shell")
-
-if __name__ == '__main__':
+        
+def main():
     entry_point.add_command(create_group.create)
     entry_point.add_command(run_group.run)
     entry_point.add_command(checkout_group.checkout)
@@ -92,6 +92,9 @@ if __name__ == '__main__':
         level=logging.INFO, # TODO: Change this to NOTSET when use in production
         format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
     entry_point(prog_name='bs')
+
+if __name__ == '__main__':
+    main()
 
 # TODO: If you want it as an exe that you can call from anywhere like "$ bs",
 #  you can do the following:

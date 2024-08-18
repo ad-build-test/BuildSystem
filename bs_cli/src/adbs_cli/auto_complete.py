@@ -1,6 +1,6 @@
 import requests
 import readline
-from cli_configuration import cli_configuration
+from adbs_cli.cli_configuration import cli_configuration
 
 # Tab auto-complete
 class AutoComplete(object):
