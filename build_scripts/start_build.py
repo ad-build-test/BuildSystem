@@ -21,12 +21,13 @@ from start_test import Test
 
 # 4) Then run the function in start_test.py
     # 4.1) Which will look into certain directories and run those tests
+
 class Build(object):
     def __init__(self):
         self.registry_base_path = "/mnt/eed/ad-build/registry/"
         self.artifact_api_url = "http://artifact-api-service.artifact:8080/"
         self.get_environment()
-        self.full_source_dir = self.source_dir + '/' + self.component + '-' + self.branch
+        self.root_dir = None # This is the root/top directory
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
 
@@ -41,16 +42,19 @@ class Build(object):
 
     def get_environment(self):
         # 0) Get environment variables - assuming we're not using a configMap
-        self.os_env = os.getenv("ADBS_OS_ENVIRONMENT")
-        self.build_type = os.getenv('ADBS_BUILD_TYPE') # Either 'normal' or 'container'
-        self.source_dir = os.getenv('ADBS_SOURCE') # This is full filepath, like /mnt/eed/ad-build/scratch/66721557fd891a5aac14b3d0-ROCKY9-test-ioc-dev-patrick
-        self.output_dir = os.getenv('ADBS_OUTPUT')
-        self.component = os.getenv('ADBS_COMPONENT')
-        self.branch = os.getenv('ADBS_BRANCH')
-        custom_env = {"os_env": self.os_env, "build_type": self.build_type, "source_dir": self.source_dir, "output_dir": self.output_dir,
-               "component":  self.component, "branch": self.branch} # This env is just for sanity checking
+        self.os_env = os.getenv("ADBS_OS_ENVIRONMENT") # From backend
+        self.build_type = os.getenv('ADBS_BUILD_TYPE') # From CLI - Either 'normal' or 'container'
+        self.source_dir = os.getenv('ADBS_SOURCE') # From backend - This is full filepath, like /mnt/eed/ad-build/scratch/component-a-branch1-RHEL8-66c4e8cb1dabd45f50f3112f/component-a
+        self.component = os.getenv('ADBS_COMPONENT') # From CLI
+        self.branch = os.getenv('ADBS_BRANCH') # From CLI
+        custom_env = {"ADBS_OS_ENVIRONMENT": self.os_env, "ADBS_BUILD_TYPE": self.build_type, "ADBS_SOURCE": self.source_dir,
+               "ADBS_COMPONENT":  self.component, "ADBS_BRANCH": self.branch} # This env is just for sanity checking
         for key, value in custom_env.items():
-            if (value == None):
+            if (key == "ADBS_BUILD_TYPE"):
+                if (value == None): # Special case, default to 'normal'
+                    custom_env["ADBS_BUILD_TYPE"] = 'normal'
+                    self.build_type = 'normal'
+            elif (value == None):
                 # Raise exception
                 raise ValueError("Missing environment variable - " + key)
         # Copy the current environment
@@ -79,7 +83,7 @@ class Build(object):
         except KeyError:
             return None
         # Search repo for the pkgs_file (like requirements.txt)
-        pkgs_file = self.find_file(pkgs_file_name, self.full_source_dir)
+        pkgs_file = self.find_file(pkgs_file_name, self.source_dir)
         print("== ADBS == Installing python packages from " + pkgs_file_name)
         try:
             output_bytes = subprocess.check_output(['pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
@@ -97,8 +101,8 @@ class Build(object):
             with open(tarball_filename, 'wb') as file:
                 file.write(response.content)
             print('== ADBS == Tarball downloaded successfully')
-            output_dir = self.source_dir
-            if (epics_base): # Epics_base special case, path into source_dir/epics/base/<ver>
+            output_dir = self.root_dir
+            if (epics_base): # Epics_base special case, path into root_dir/epics/base/<ver>
                 output_dir = output_dir + '/epics/base'
                 os.makedirs(output_dir)
                 # Add epics to the LD_LIBRARY_PATH
@@ -106,7 +110,7 @@ class Build(object):
                 self.env['LD_LIBRARY_PATH'] = output_dir + '/' + tag + '/lib/linux-x86_64/'
             else:
                 # Create the directory for component
-                output_dir = self.source_dir + '/' + component
+                output_dir = self.root_dir + '/' + component
                 os.mkdir(output_dir)
             # Extract the .tar.gz file
             with tarfile.open(tarball_filename, 'r:gz') as tar:
@@ -171,9 +175,9 @@ class Build(object):
         # Ideally all modules including epics are on the same level, but its not in this format
         new_release_site = {
             'BASE_MODULE_VERSION': release_site_dict['BASE_MODULE_VERSION'], # Keep the same
-            'EPICS_SITE_TOP': self.source_dir + '/epics', # Point to modules next to the where app being built
+            'EPICS_SITE_TOP': self.root_dir + '/epics', # Point to modules next to the where app being built
             'BASE_SITE_TOP': "${EPICS_SITE_TOP}/base",
-            'EPICS_MODULES': self.source_dir,
+            'EPICS_MODULES': self.root_dir,
             'IOC_SITE_TOP': "${EPICS_SITE_TOP}/iocTop"
         }
         release_site_dict.update(new_release_site)
@@ -228,8 +232,10 @@ if __name__ == "__main__":
     build = Build()
     # 1) Enter build directory
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
-    os.chdir(build.full_source_dir)
+    os.chdir(build.source_dir)
+    build.root_dir = os.path.dirname(build.source_dir)
     print("== ADBS == Current dir: " + str(os.getcwd()))
+    print("== ADBS == Root dir: " + build.root_dir)
     # 2) Parse yaml
     config_yaml = build.parse_yaml('configure/CONFIG.yaml')
     # 3) Parse dependencies
@@ -239,14 +245,18 @@ if __name__ == "__main__":
         build.install_dependencies(dependencies)
     # 4.1) Install python packages if available
     py_pkgs_file = build.install_python_packages(config_yaml)
-    # 5) Update RELEASE_SITE
-    build.update_release_site()
+    # 5) Update RELEASE_SITE if EPICS IOC
+    # TODO: Update logic to figure out what kind of app were building, for now focus on IOC
+    if (dependencies):
+        build.update_release_site()
     # 5) Run repo build script
     build.run_build(config_yaml)
     # 6) Run unit_tests
     test = Test()
-    test.run_unit_tests(build.full_source_dir)
+    test.run_unit_tests(build.source_dir)
 
     # 7) If container build - Build dockerfile
     if (build.build_type.lower() == 'container'):
-        build.create_docker_file(dependencies, py_pkgs_file)
+        pass
+        # TODO: Don't release this yet until done with regular remote build
+        # build.create_docker_file(dependencies, py_pkgs_file)

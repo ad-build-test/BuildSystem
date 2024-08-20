@@ -45,19 +45,14 @@ spec:
               echo "$ sleep to keep container alive for debug" &&
               sleep infinity
         env:
-        - name: ADBS_SOURCE
-          value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
+        - name: ADBS_SOURCE # From backend
+          value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc
           # value: /mnt/build-scratch/ad-build/test-ioc-main
-        - name: ADBS_OUTPUT
-          value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero
-          # value: /mnt/build-scratch/ad-build/test-ioc-main-pnispero/output
-        - name: ADBS_OS_ENVIRONMENT
+        - name: ADBS_OS_ENVIRONMENT # From backend
           value: rocky9
-        - name: ADBS_BUILD_TYPE
-          value: normal
-        - name: ADBS_COMPONENT
+        - name: ADBS_COMPONENT # From CLI
           value: test-ioc
-        - name: ADBS_BRANCH
+        - name: ADBS_BRANCH # From CLI
           value: main
         volumeMounts:
         - name: s3df-dev-container-ad-group

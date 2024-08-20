@@ -48,6 +48,8 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
+    request.add_to_payload("ADBS_COMPONENT", request.component.name)
+    request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
     # 2) Prompt if local or remote build
     if (not local and not remote and not container):
         question = [inquirer.List(
@@ -88,6 +90,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         # 2) Send request to backend
         endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
         request.set_endpoint(endpoint)
+        request.add_to_payload("ADBS_BUILD_TYPE", "normal")
         request.post_request(log=True)
         
     ## Container build
@@ -102,6 +105,8 @@ def test(component: str, branch: str):
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
+    request.add_to_payload("ADBS_COMPONENT", request.component.name)
+    request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
 
     # 2) Send request to backend
     endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name

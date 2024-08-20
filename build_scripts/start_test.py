@@ -36,7 +36,12 @@ class Test(object):
         print("== ADBS == Running unit tests")
         # 1) Enter build directory
         test_dir = source_dir + "/unit_tests"
-        os.chdir(test_dir)
+        try:
+            os.chdir(test_dir)
+        except FileNotFoundError:
+            print("== ADBS == Unit tests do not exist for this repo")
+            return
+            
         # 2) Run the bash/python scripts in the directory
         files = [f for f in os.listdir(".") if os.path.isfile(os.path.join(".", f))]
         for file in files:

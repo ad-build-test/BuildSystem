@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adbs_cli"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name="Patrick Nisperos", email="pnispero@slac.stanford.edu" },
   { name="Jerry Katzung", email="katzung@slac.stanford.edu" },
