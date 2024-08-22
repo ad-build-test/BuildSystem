@@ -29,7 +29,7 @@ class Component(object):
 
     def git_commit(self, branch_name: str):
         # Commit empty
-        commit_msg = 'initial commit for ' + branch_name
+        commit_msg = 'initial commit for #' + branch_name
         self.git_repo.git.commit("--allow-empty", '-m', commit_msg)
 
     def git_push(self, branch_name: str):
