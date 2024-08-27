@@ -84,13 +84,45 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         print('== ADBS == output:', result.stdout)
         print('== ADBS == errors:', result.stderr)
         # 4) Copy over build results to build_results/
+        #   # 4.1) mkdir build_results && mkdir build_results/<component-version>
+        #   # 4.2) cp -r bin/ db/ dbd/ iocBoot/ build_results/<component-version> # This piece may be an ansible script
         # 5) Build the rpm package for the app
             # 5.1) cd build_results
-            # 5.2) tar czf component-branch.tar.gz *
+            # 5.2) tar czf component-version.tar.gz <component-branch>
             # 5.3) mkdir rpm && cd rpm/
-            # 5.4) mkdir BUILD RPMS SOURCES SPECS
-            # 5.5) mv ../component-branch.tar.gz SOURCES
-            # 5.) Create component-branch.spec
+            # 5.4) mkdir BUILD BUILDROOT RPMS SOURCES SPECS
+            # 5.5) mv ../component-version.tar.gz SOURCES
+            # 5.) Create component-version.spec
+                # Refer to the prototype one in test-ioc for how we can make this
+            # 6) Build the rpm
+                # Build the src rpm first
+                    # rpmbuild -bs --define "_topdir $(pwd)" SPECS/test-ioc.spec
+                # Then build the binary rpm 
+                    # rpmbuild -bb --define "_topdir $(pwd)" SPECS/test-ioc.spec
+                # Or just use -ba for both
+                    # rpmbuild -ba --define "_topdir $(pwd)" SPECS/test-ioc.spec
+            # Current issues:
+            PATRICK HERE - Look into deployment (Actually deploying this built rpm),
+            skip this for now
+        
+                # 1) TODO: can only build using the architecture where the build is 
+                # 2) solved - can't make the rpm package relocatable for some reason
+                    # and documentaion is dated and limited on this
+                    # Figured it out, use '--relocate /ioctop=path/to/top' when installing
+                    rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --relocate /iocTop=/afs/slac/u/cd/pnispero/bs_test/ --nodeps
+                # 3) TODO: I get failed dependencies, should i specify dependencies in Require?
+                    # And these are different dependencies than the manifest.yaml
+                    # Fow now: can just use --nodeps
+                    # When scripting we may just get output of ldd bin/<os>/test-ioc to put into
+                        # 'Requires' field of the .spec
+                # 4) TODO: Can only install rpms as root
+                    # Either get a VM or build a container for this
+                
+            # 7) In deployment script
+                # NEeds to be relocatable since we never actually install iocs in a cpu
+                # Instead cpu's just have the afs or nfs filesystem mounted
+                # s3df prefix: rpm -i test-ioc.rpm --prefix /sdf/scratch/ad/build/lcls/epics/iocTop
+                # dev3 prefix: rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --prefix /afs/slac/u/cd/pnispero/bs_test/
             # 6) To solve the problem of different filepaths to install to, here are the options:
                 # a) create multiple rpms, each with a slightly different .spec to install in certain dir
                 # b) Have rpm's install in standard directory like /opt/rpm_installs
@@ -101,6 +133,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
                 # a) possible options besides slicing that piece of cram
                 # a) union of envPaths, with if (facility) then (var)
                 # b) define one crucial environment var, which is the facility which would be added in st.cmd
+                # c) Or just make a post-process script that uses that part of cram.
                 
 
     ## Remote build
@@ -154,6 +187,7 @@ def deployment(component: str, branch: str):
 
     # 3) Run the playbook
     print("== ADBS == At the moment, deployment only for IOCs is supported")
+    print("== ADBS == \n\n\n ****** if testing please source BuildSystem/other/test-env.bash ******")
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     question = [inquirer.List(
                 "deploy_type",
@@ -178,9 +212,9 @@ def deployment(component: str, branch: str):
     else:
         server_user_node_port = None
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
-    print("== ADBS == if testing please source BuildSystem/other/test-env.bash!!")
     ioc_common = os.environ.get('IOC')
     ioc_data = os.environ.get('IOC_DATA')
+    ioc_top = os.environ.get('APP')
     linux_uname = os.environ.get('USER')
     # TODO: Need logic for different types of apps (ioc, hla, script), and then an ansible playbook for each
     # 1) But base other IOC directories based off env variables
@@ -191,7 +225,8 @@ def deployment(component: str, branch: str):
         # Create a adbs_test.bash and add to your s3df .bashrc to point IOC, APP, IOC_DATA to  
         # /sdf/ad/scratch/build/ as base path
 
-    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}","deploy_type": "{deploy_type}", "user": "{linux_uname}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
+    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}","deploy_type": "{deploy_type}", "user": "{linux_uname}",\
+                     "iocTop": "{ioc_top}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
                      "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
                      "server_user_node_port": "{server_user_node_port}", "executable_path": "{executable_path}",\
                      "output_path": "{playbook_output_path}"}}'
@@ -203,7 +238,7 @@ def deployment(component: str, branch: str):
     if not isExist:
         print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
         os.mkdir(playbook_output_path)
-    adbs_playbooks_dir = "~/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+    adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
     # here - change localhost to mylocal, and host_pattern below to inventory to point to your inv
     # r = ansible_runner.run(private_data_dir=playbook_output_path, inventory=adbs_playbooks_dir + 'local_inventory', playbook=adbs_playbooks_dir + 'ioc_deploy.yml',
     #                        extravars=playbook_args_dict)

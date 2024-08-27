@@ -8,14 +8,16 @@
 
 - hosts: localhost
   vars: 
-    initial: '{{ initial }}'
+    deploy_type: '{{ deploy_type }}' # From CLI
+    initial: '{{ initial }}' # From CLI
     iocCommon: '{{ iocCommon }}' # Taken from user env
     iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+    iocTop: '{{ iocTop }}' # Taken from user env
+    component_name: '{{ component_name }}' # From CLI
+    user: '{{ user }}' # From CLI
+    ioc_name: '{{ ioc_name }}' # From CLI
+    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}' # Construct from previous vars
+    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}' # Construct from previous vars
     # TODO: Add variables/arguments for the different facilities
     # possible to add hosts dynamically? or make multiple inventory files?
     # I believe making multiple inventory files is optimal, then you just pass in the correct
@@ -29,23 +31,26 @@
   ansible.builtin.import_playbook: initial_ioc_deploy.yml
   when: initial | bool
   vars:
+    deploy_type: '{{ deploy_type }}'
     iocCommon: '{{ iocCommon }}' # Taken from user env
     iocData: '{{ iocData }}' # Taken from user env
+    iocTop: '{{ iocTop }}' # Taken from user env
     user: '{{ user }}'
     ioc_name: '{{ ioc_name }}'
     ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
     ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
 
-- name: Continuous ioc deployment # This playbook is always called
-  ansible.builtin.import_playbook: continuous_ioc_deploy.yml
-  vars:
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+## TODO: at the moment this playbook is a duplicate of initial ioc deployment
+# - name: Continuous ioc deployment # This playbook is always called
+#   ansible.builtin.import_playbook: continuous_ioc_deploy.yml
+#   vars:
+#     iocCommon: '{{ iocCommon }}' # Taken from user env
+#     iocData: '{{ iocData }}' # Taken from user env
+#     component_name: '{{ component_name }}'
+#     user: '{{ user }}'
+#     ioc_name: '{{ ioc_name }}'
+#     ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
+#     ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
 
 
 

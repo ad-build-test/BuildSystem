@@ -3,6 +3,7 @@
 # This is for dev, and doesn't include using 'cram' and deploying a component to a 
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
+This is a duplicate of initial_ioc_deploy.yml, please update logic
 - name: Continuous IOC Deployment
   hosts: localhost
   vars: 
