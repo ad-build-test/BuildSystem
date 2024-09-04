@@ -6,6 +6,7 @@ import inquirer
 import json
 import logging
 import subprocess
+import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
 from adbs_cli.cli_configuration import INPUT_PREFIX
@@ -22,6 +23,7 @@ def clone_repo(request: Request):
     # If user is not in existing repo, ask user where to clone repo, to get the manifest
     #   and the custom playbook (if specified)
     # Get URL from database
+    # Change into filepath of cloned repo
     if (not request.component.git_repo):
         clone_filepath = input(INPUT_PREFIX + "Specify filepath to clone repo temporarily: ")
         os.chdir(clone_filepath)
@@ -35,6 +37,52 @@ def parse_manifest() -> dict:
         yaml_data = yaml.safe_load(file)
     logging.info(yaml_data)
     return yaml_data
+
+def find_rpm(base_path):
+    # Assuming theres only ONE rpm
+    # Define the base directory
+    base_dir = pathlib.Path(base_path)
+
+    # Search for RPM files
+    for path in base_dir.rglob('*.rpm'):
+        # Assuming there's only one RPM file
+        return path
+    
+    return None
+
+def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
+    os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
+    command = [
+        'ansible-playbook',
+        '-i', inventory,
+        '-l', host_pattern,
+        playbook
+    ]
+
+    if extra_vars:
+        extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
+        command += ['--extra-vars', extra_vars_str]
+
+    # Use subprocess.Popen to forward output directly
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    # Print output in real-time
+    for line in iter(process.stdout.readline, ''):
+        print(line, end='')  # Print each line as it is output
+
+    # Ensure all stderr is also handled
+    for line in iter(process.stderr.readline, ''):
+        print(line, end='')
+
+    process.stdout.close()
+    process.stderr.close()
+    return_code = process.wait()
+    return return_code
 
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
@@ -84,7 +132,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         print('== ADBS == output:', result.stdout)
         print('== ADBS == errors:', result.stderr)
         # 4) Copy over build results to build_results/
-        #   # 4.1) mkdir build_results && mkdir build_results/<component-version>
+        #   # 4.1) mkdir -p build_results/<component-version>
         #   # 4.2) cp -r bin/ db/ dbd/ iocBoot/ build_results/<component-version> # This piece may be an ansible script
         # 5) Build the rpm package for the app
             # 5.1) cd build_results
@@ -102,14 +150,14 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
                 # Or just use -ba for both
                     # rpmbuild -ba --define "_topdir $(pwd)" SPECS/test-ioc.spec
             # Current issues:
-            PATRICK HERE - Look into deployment (Actually deploying this built rpm),
-            skip this for now
+            # PATRICK HERE - Look into deployment (Actually deploying this built rpm),
+            # skip this for now
         
                 # 1) TODO: can only build using the architecture where the build is 
                 # 2) solved - can't make the rpm package relocatable for some reason
                     # and documentaion is dated and limited on this
                     # Figured it out, use '--relocate /ioctop=path/to/top' when installing
-                    rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --relocate /iocTop=/afs/slac/u/cd/pnispero/bs_test/ --nodeps
+                    # rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --relocate /iocTop=/afs/slac/u/cd/pnispero/bs_test/ --nodeps
                 # 3) TODO: I get failed dependencies, should i specify dependencies in Require?
                     # And these are different dependencies than the manifest.yaml
                     # Fow now: can just use --nodeps
@@ -173,27 +221,21 @@ def deployment(component: str, branch: str):
     request = Request(Component(component, branch))    
     request.set_component_fields()
 
-    """ASK ABOUT THIS: This may not make sense to clone manifest, since we 
-    can assume that the repo the user is in, is the one they want to deploy
-    answer: have both options, ideally they'd be in the repo they want to deploy,
-    but user can specify another compononent (useful like if someone made a script
-    to deploy a bunch of components). In that case, then you'd have to clone the repo
-    to get the manifest and possibly a user-defined deployment script"""
-    # 2) If user is not in repo, clone repo
-    clone_repo(request)
+    # For now assume the user is in the repo they want to deploy
+    # TODO: Add logic for cloning repo or just the build results?
+    # # 2) If user is not in repo, clone repo
+    # clone_repo(request)
 
-    # Parse yaml
+    # Parse yaml if user-defined deployment script
     manifest_data = parse_manifest()
 
     # 3) Run the playbook
     print("== ADBS == At the moment, deployment only for IOCs is supported")
-    print("== ADBS == \n\n\n ****** if testing please source BuildSystem/other/test-env.bash ******")
+        # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
+    # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
+    #  then suggest to user which iocs they want to deploy
+
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
-    question = [inquirer.List(
-                "deploy_type",
-                message="Specify type of deployment",
-                choices=["DEV", "PROD"])]
-    deploy_type = inquirer.prompt(question)['deploy_type']
     question = [inquirer.List(
                 "ioc_type",
                 message="Specify type of ioc",
@@ -204,76 +246,48 @@ def deployment(component: str, branch: str):
                 message="Initial deployment?",
                 choices=[True, False])]
     initial = inquirer.prompt(question)['initial']
+    question = [inquirer.Checkbox(
+                "facility",
+                message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
+                choices=["S3DF", "LCLS", "FACET", "TestFac"],
+                default=[],
+                ),]
+    # TODO: Make the different facilities command line arguments
+    facilities = inquirer.prompt(question)['facility']
+    print(facilities)
     ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
-    host_user = input(INPUT_PREFIX + "Specify host user account used to run screen\n(ex: laci@lcls-dev1): ")
-    executable_path = input(INPUT_PREFIX + "Specify executable path\n(ex:/afs/slac/g/lcls/epics/iocCommon/sioc-sys0-al02/iocSpecificRelease/bin/rhel7-x86_64/alhPV): ")
-    if (ioc_type == 'HIOC'):
-        server_user_node_port = input(INPUT_PREFIX + "Specify terminal server user, node, port\n(ex: root@ts-b15-mg01:2001): ")
-    else:
-        server_user_node_port = None
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
-    ioc_common = os.environ.get('IOC')
-    ioc_data = os.environ.get('IOC_DATA')
-    ioc_top = os.environ.get('APP')
     linux_uname = os.environ.get('USER')
-    # TODO: Need logic for different types of apps (ioc, hla, script), and then an ansible playbook for each
-    # 1) But base other IOC directories based off env variables
-        # see /afs/slac/g/lcls/epics/config/common_dirs.sh
-        # and /usr/local/lcls/epics/config/common_dirs.sh
-        # Main: /afs/slac/g/lcls/tools/script/ENVS64.bash
-        # There isn't one for s3df yet, so for testing purposes, 
-        # Create a adbs_test.bash and add to your s3df .bashrc to point IOC, APP, IOC_DATA to  
-        # /sdf/ad/scratch/build/ as base path
+    rpm_path = os.getcwd() + '/build_results/rpm/RPMS' # Assuming were in the component $TOP
+    rpm_pkg = find_rpm(rpm_path)
+    if (rpm_pkg == None):
+        print("== ADBS == No RPM found in " + rpm_path)
 
-    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}","deploy_type": "{deploy_type}", "user": "{linux_uname}",\
-                     "iocTop": "{ioc_top}", "iocCommon": "{ioc_common}", "iocData": "{ioc_data}",\
-                     "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", "host_user": "{host_user}",\
-                     "server_user_node_port": "{server_user_node_port}", "executable_path": "{executable_path}",\
-                     "output_path": "{playbook_output_path}"}}'
+    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}", "user": "{linux_uname}",\
+        "rpm_pkg": "{rpm_pkg}", "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", \
+        "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
-                     
-    print(playbook_args_dict)
-    isExist = os.path.exists(playbook_output_path)
-    if not isExist:
-        print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
-        os.mkdir(playbook_output_path)
-    adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
-    # here - change localhost to mylocal, and host_pattern below to inventory to point to your inv
-    # r = ansible_runner.run(private_data_dir=playbook_output_path, inventory=adbs_playbooks_dir + 'local_inventory', playbook=adbs_playbooks_dir + 'ioc_deploy.yml',
-    #                        extravars=playbook_args_dict)
-    r = ansible_runner.run(private_data_dir=playbook_output_path, host_pattern='localhost', playbook=adbs_playbooks_dir + 'ioc_deploy.yml',
-                           extravars=playbook_args_dict)
-    print("{}: {}".format(r.status, r.rc))
-    if (r.rc != 0): # 0 means success
-        print("Final status:")
-        print(f"error output path: {r.stderr}")
-        print(f"regular path: {r.stdout}")
-    # todo: change deployment command to ask
-    #     - first time deploying?
-    #     - do the initial deployment playbook and get the arguments for that
-    #     - otherwise go to regular deployment playbook and get the arguments
-    #         which is just <tag> and <facility> 
-    # 3) if not, check the database
-        # 3.1) if not, ask user to add to database
-    # 4) Run the playbook
-    # hold off, work on steps to deploy build system entirely
-    # 1) call the appropiate playbook - I believe we can store the component type in db,
-    # then that can determine the type of deployment playbook to use
-    # TODO: Where should we store these playbooks, same repo as CLI? 
-        # If so, is that best practice? What if we make frequent playbook updates?
-        # Do we roll out updates to /usr/bin frequent too?
-        # Or do we want an API to take these requests like the rest of the commands here
-        # If so, then the playbook would run on our cluster rather then on user space. Is that
-        # what we want?
-    # for the moment,
-    # ? Upload the playbook and custom module to a collection then to the galaxy so its accessible
-    # Specify the playbook in the test-ioc/configure/CONFIG.yaml manifest
-    # And we can parse it locally here, eventually we will move this logic to backend
-    #    grab the manifest from the component url, dont clone the whole thing
-    #     just grab the manifest, (use wget/curl?)
-    # Then if its not there, then we can check the deployment database if its spelled out
-    # A user may make their own playbook if they want to, and then specify it in the manifest
 
-    # TEMP - for now just use the test playbook
-    # 2) 
+    # call deployment playbook for every facility user chose
+    for facility in facilities:
+        playbook_args_dict['facility'] = facility
+        if (facility == 'S3DF'):
+            # For now get local directory since we can assume that development version is on local dir
+            # But also may exist on $APP
+            src_repo = request.component.git_get_top_dir()
+            print(src_repo)
+            playbook_args_dict['src_repo'] = src_repo
+
+        print(playbook_args_dict)
+        isExist = os.path.exists(playbook_output_path)
+        if not isExist:
+            print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+            os.mkdir(playbook_output_path)
+        adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+
+        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                           adbs_playbooks_dir + 'ioc_deploy.yml',
+                                            facility,
+                                            playbook_args_dict)
+        print("Playbook execution finished with return code:", return_code)
