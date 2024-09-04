@@ -5,7 +5,7 @@
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
 
-- name: Continuous IOC Deployment
+- name: Normal IOC Deployment
   hosts: all
   # All vars from ioc_deploy.yml are accessible
 
@@ -13,21 +13,12 @@
   # - name: Add component to $EPICS_IOC_TOP
     # Location would depend on the facility
   # - name: Add ioc(s) to $IOC
-  - name: Print Status
-    ansible.builtin.debug:
-      msg: IOC deployment to facility - {{ facility }}
-
-    # TODO: We should have the build container make the 
-    # artifact storage request, and THEN install rpm for IOC 
 
   # For local/remote deployment, the user is already sitting in the repo
-  # TODO: Otherwise make the cli give the $TOP of directory,
-    # then we can just do $TOP/build_results/rpm/RPMS/<arch>/<rpm_name>
-    # Or the whole thing in the CLI which probably makes more sense
-
-  - name: Install RPM for Component
-    ansible.builtin.shell:
-      cmd: rpm -i '{{ rpm_pkg }}' --relocate /iocTop='{{ ioc_release_folder }}'
+  - name: Extract build results to '{{ ioc_release_folder }}/{{ component_name }}'
+    ansible.builtin.unarchive:
+      src: '{{ tarball }}'
+      dest: '{{ ioc_release_folder }}/{{ component_name }}'
 
   # - name: Update envPaths (call cram script for this) '{{ facility }}'
   # But update the ones i listed on confluence
@@ -35,7 +26,11 @@
   # But also a version change (like ../pnispero/app-git -> ../app/app-r1.3.4)
   # I believe it just looks if the app is there and what version you cram 'cram upgrade' to
 
-  # - name: Update symbolic link for iocSpecificRelease in $IOC '{{ facility }}'
+  - name: 'Update sym link {{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+    ansible.builtin.file:
+      src: '{{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+      dest: '{{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease'
+      state: link
 
   # TODO:add to initial_ioc_deploy.yml
   # - name: Update startup.cmd (I think this is initial ioc deployment though)

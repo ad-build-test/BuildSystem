@@ -38,14 +38,13 @@ def parse_manifest() -> dict:
     logging.info(yaml_data)
     return yaml_data
 
-def find_rpm(base_path):
-    # Assuming theres only ONE rpm
+def find_tarball(base_path):
     # Define the base directory
     base_dir = pathlib.Path(base_path)
 
     # Search for RPM files
-    for path in base_dir.rglob('*.rpm'):
-        # Assuming there's only one RPM file
+    for path in base_dir.rglob('*.tar.gz'):
+        # Assuming there's only one tarball file
         return path
     
     return None
@@ -229,23 +228,28 @@ def deployment(component: str, branch: str):
     # Parse yaml if user-defined deployment script
     manifest_data = parse_manifest()
 
-    # 3) Run the playbook
+    # 3) Get fields
     print("== ADBS == At the moment, deployment only for IOCs is supported")
         # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
     # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
     #  then suggest to user which iocs they want to deploy
 
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
-    question = [inquirer.List(
-                "ioc_type",
-                message="Specify type of ioc",
-                choices=["SIOC", "HIOC", "VIOC"])]
-    ioc_type = inquirer.prompt(question)['ioc_type']
+    # question = [inquirer.List(
+    #             "ioc_type",
+    #             message="Specify type of ioc",
+    #             choices=["SIOC", "HIOC", "VIOC"])]
+    # ioc_type = inquirer.prompt(question)['ioc_type']
     question = [inquirer.List(
                 "initial",
                 message="Initial deployment?",
                 choices=[True, False])]
     initial = inquirer.prompt(question)['initial']
+    question = [inquirer.List(
+                "override",
+                message="Point deployment to your user-space repo?",
+                choices=[True, False])]
+    override = inquirer.prompt(question)['override']
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
@@ -254,32 +258,32 @@ def deployment(component: str, branch: str):
                 ),]
     # TODO: Make the different facilities command line arguments
     facilities = inquirer.prompt(question)['facility']
-    print(facilities)
     ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
+    tag = input(INPUT_PREFIX + "Specify full component tagname (ex: test-ioc-1.0.0): ")
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
     linux_uname = os.environ.get('USER')
-    rpm_path = os.getcwd() + '/build_results/rpm/RPMS' # Assuming were in the component $TOP
-    rpm_pkg = find_rpm(rpm_path)
-    if (rpm_pkg == None):
-        print("== ADBS == No RPM found in " + rpm_path)
+    tarball_path = os.getcwd() + '/build_results/'
+    tarball = find_tarball(tarball_path)
+    if (tarball == None):
+        print("== ADBS == No tarball found in " + tarball_path)
 
-    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}", "user": "{linux_uname}",\
-        "rpm_pkg": "{rpm_pkg}", "ioc_type": "{ioc_type}", "ioc_name": "{ioc_name}", \
-        "output_path": "{playbook_output_path}"}}'
+    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}", \
+        "tag": "{tag}", "user": "{linux_uname}", "tarball": "{tarball}", \
+        "ioc_name": "{ioc_name}", "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
 
-    # call deployment playbook for every facility user chose
+    # 3) Run the playbook - call deployment playbook for every facility user chose
     for facility in facilities:
         playbook_args_dict['facility'] = facility
-        if (facility == 'S3DF'):
+        if (override == True):
             # For now get local directory since we can assume that development version is on local dir
             # But also may exist on $APP
-            src_repo = request.component.git_get_top_dir()
-            print(src_repo)
-            playbook_args_dict['src_repo'] = src_repo
+            user_src_repo = request.component.git_get_top_dir()
+            playbook_args_dict['user_src_repo'] = user_src_repo
 
-        print(playbook_args_dict)
+        print("== ADBS == " + str(playbook_args_dict))
+
         isExist = os.path.exists(playbook_output_path)
         if not isExist:
             print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
