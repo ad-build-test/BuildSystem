@@ -1,63 +1,45 @@
 # How to Run 
+# If deploying to multiple facilities, run this playbook multiple times, one for each facility
 # ansible-playbook --extra-vars "user=$USER ioc_name=sioc-123-123 executable_path=/afs/slac.stanford.edu/u/cd/pnispero/mps/central_node_ioc/" ./initial_ioc_deploy.yml
 # This is for dev, and doesn't include using 'cram' and deploying a component to a 
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
-This is a duplicate of initial_ioc_deploy.yml, please update logic
+
 - name: Continuous IOC Deployment
-  hosts: localhost
-  vars: 
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
-    # TODO: Add functionality to CLI to checkout the desired repo/tag 
-    # and we need to figure out where the build results are
-    # and a command to install them., for now solidify the iniital ioc deploy
-    current_directory: '{{ cwd }}' 
+  hosts: all
+  # All vars from ioc_deploy.yml are accessible
 
   tasks:
   # - name: Add component to $EPICS_IOC_TOP
     # Location would depend on the facility
   # - name: Add ioc(s) to $IOC
-  # TODO: most tasks are duplicated from initial ioc_deploy, change them
+  - name: Print Status
+    ansible.builtin.debug:
+      msg: IOC deployment to facility - {{ facility }}
 
-  - name: Create sioc directory in $IOC if it doesn't exist
-    ansible.builtin.file:
-      path: '{{ ioc_filepath }}'
-      state: directory
-      mode: '775' # drwxrwxr-x
+    # TODO: We should have the build container make the 
+    # artifact storage request, and THEN install rpm for IOC 
 
-  - name: Create symbolic link for iocSpecificRelease
-    ansible.builtin.file:
-      src: '{{ executable_path }}'
-      dest: '{{ ioc_filepath }}/iocSpecificRelease'
-      state: link
+  # For local/remote deployment, the user is already sitting in the repo
+  # TODO: Otherwise make the cli give the $TOP of directory,
+    # then we can just do $TOP/build_results/rpm/RPMS/<arch>/<rpm_name>
+    # Or the whole thing in the CLI which probably makes more sense
 
-    # 1) In $IOC_DATA, make directory for ioc if doesn't already exist
-  - name: Create sioc directory in $IOC_DATA if it doesn't exist
-    ansible.builtin.file:
-      path: '{{ ioc_data_filepath }}'
-      state: directory
-      mode: '775' # drwxrwxr-x
-    # 2) in the ioc folder, create these directories: archive, autosave, autosave-req, iocInfo, restore, yaml
-  - name: Create multiple directories in $IOC_DATA/<IOC> if they doesn't exist
-    ansible.builtin.file:
-      path: '{{ item }}'
-      state: directory
-      mode: '775' # drwxrwxr-x
-    loop:
-      - '{{ ioc_data_filepath }}/archive'
-      - '{{ ioc_data_filepath }}/autosave'
-      - '{{ ioc_data_filepath }}/autosave-req'
-      - '{{ ioc_data_filepath }}/iocInfo'
-      - '{{ ioc_data_filepath }}/restore'
-      - '{{ ioc_data_filepath }}/yaml'
+  - name: Install RPM for Component
+    ansible.builtin.shell:
+      cmd: rpm -i '{{ rpm_pkg }}' --relocate /iocTop='{{ ioc_release_folder }}'
 
-  # - name: Start ioc and shell into it
-  #   ansible.builtin.shell: xterm -hold -e "siocRestart '{{ ioc_name }}' && iocConsole '{{ ioc_name }}'"
+  # - name: Update envPaths (call cram script for this) '{{ facility }}'
+  # But update the ones i listed on confluence
+  # The $TOP in particular does a prefix change (like /afs/slac/../iocTop -> /usr/local/../iocTop)
+  # But also a version change (like ../pnispero/app-git -> ../app/app-r1.3.4)
+  # I believe it just looks if the app is there and what version you cram 'cram upgrade' to
+
+  # - name: Update symbolic link for iocSpecificRelease in $IOC '{{ facility }}'
+
+  # TODO:add to initial_ioc_deploy.yml
+  # - name: Update startup.cmd (I think this is initial ioc deployment though)
+
 
   # TODO:
   # - name: Push repo to facilities specified

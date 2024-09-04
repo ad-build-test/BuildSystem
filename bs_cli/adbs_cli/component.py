@@ -16,6 +16,9 @@ class Component(object):
         except:
             return None
         
+    def git_get_top_dir(self):
+        return self.git_repo.git.rev_parse("--show-toplevel")
+        
     def git_clone(self, url: str):
         # Clone repo from github url
         self.git_repo.git.clone(url)

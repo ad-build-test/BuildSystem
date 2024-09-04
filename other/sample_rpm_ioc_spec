@@ -41,14 +41,10 @@ cp -a iocBoot/* %{buildroot}/iocTop/%{name}-%{version}/iocBoot
 
 %files
 # Files refer to copying the files to desired directories on target system
-# This one has to be dynamic with _prefix
-# The install location is dynamic and determined at installation using '_prefix'
-# ex: rpm -i test-ioc.rpm --prefix /sdf/scratch/ad/build/lcls/epics/iocTop
-
-/iocTop/%{name}-%{version}/bin/*
-/iocTop/%{name}-%{version}/db/*
-/iocTop/%{name}-%{version}/dbd/*
-/iocTop/%{name}-%{version}/iocBoot/*
+# The install location is dynamic and determined at installation using 'relocate'
+# ex: rpm -i test-ioc.rpm --relocate /iocTop=/sdf/scratch/ad/build/lcls/epics/iocTop
+# This is recursive, all files under this directory will be copied, and removed during uninstall
+/iocTop/%{name}-%{version}
 
 ## Fixes
 # disable shebang mangling of python scripts
