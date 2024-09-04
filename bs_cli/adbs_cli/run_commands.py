@@ -221,6 +221,15 @@ def deployment(component: str, branch: str):
     request = Request(Component(component, branch))    
     request.set_component_fields()
 
+<<<<<<< HEAD
+=======
+    """ASK ABOUT THIS: This may not make sense to clone manifest, since we 
+    can assume that the repo the user is in, is the one they want to deploy
+    answer: have both options, ideally they'd be in the repo they want to deploy,
+    but user can specify another compononent (useful like if someone made a script
+    to deploy a bunch of components). In that case, then you'd have to clone the repo
+    to get the manifest and possibly a user-defined deployment script"""
+>>>>>>> 10629d3d20f75f30f296d8d1b9f416fb5519a8ab
     # For now assume the user is in the repo they want to deploy
     # TODO: Add logic for cloning repo or just the build results?
     # # 2) If user is not in repo, clone repo
@@ -268,6 +277,68 @@ def deployment(component: str, branch: str):
         "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
+<<<<<<< HEAD
+=======
+
+    # call deployment playbook for every facility user chose
+    for facility in facilities:
+        playbook_args_dict['facility'] = facility
+        if (facility == 'S3DF'):
+            # For now get local directory since we can assume that development version is on local dir
+            # But also may exist on $APP
+            src_repo = request.component.git_get_top_dir()
+            print(src_repo)
+            playbook_args_dict['src_repo'] = src_repo
+            
+            # PATRICK HERE
+            # check if we specify what cpu we deploy on, because i think most of that is in screeniocs
+            # we don't actually install anything on a test stand, mostly just mount /afs to cpu?
+
+        print(playbook_args_dict)
+        isExist = os.path.exists(playbook_output_path)
+        if not isExist:
+            print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+            os.mkdir(playbook_output_path)
+        adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+
+        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                           adbs_playbooks_dir + 'ioc_deploy.yml',
+                                            facility,
+                                            playbook_args_dict)
+        print("Playbook execution finished with return code:", return_code)
+        # result = subprocess.run(['ansible-playbook', '-i', adbs_playbooks_dir + 'global_inventory.ini',
+        #                          adbs_playbooks_dir + 'ioc_deploy.yml', '-l', facility],
+        #                          capture_output=True, text=True)
+        # print('== ADBS == output:', result.stdout)
+        # print('== ADBS == errors:', result.stderr)
+        # ansible-playbook -i global_inventory.ini  ioc_deploy.yml -l <facility>
+
+    # todo: change deployment command to ask
+    #     - first time deploying?
+    #     - do the initial deployment playbook and get the arguments for that
+    #     - otherwise go to regular deployment playbook and get the arguments
+    #         which is just <tag> and <facility> 
+    # 3) if not, check the database
+        # 3.1) if not, ask user to add to database
+    # 4) Run the playbook
+    # hold off, work on steps to deploy build system entirely
+    # 1) call the appropiate playbook - I believe we can store the component type in db,
+    # then that can determine the type of deployment playbook to use
+    # TODO: Where should we store these playbooks, same repo as CLI? 
+        # If so, is that best practice? What if we make frequent playbook updates?
+        # Do we roll out updates to /usr/bin frequent too?
+        # Or do we want an API to take these requests like the rest of the commands here
+        # If so, then the playbook would run on our cluster rather then on user space. Is that
+        # what we want?
+    # for the moment,
+    # ? Upload the playbook and custom module to a collection then to the galaxy so its accessible
+    # Specify the playbook in the test-ioc/configure/CONFIG.yaml manifest
+    # And we can parse it locally here, eventually we will move this logic to backend
+    #    grab the manifest from the component url, dont clone the whole thing
+    #     just grab the manifest, (use wget/curl?)
+    # Then if its not there, then we can check the deployment database if its spelled out
+    # A user may make their own playbook if they want to, and then specify it in the manifest
+>>>>>>> 10629d3d20f75f30f296d8d1b9f416fb5519a8ab
 
     # call deployment playbook for every facility user chose
     for facility in facilities:
