@@ -27,13 +27,6 @@
       state: link
       force: true # Force creation even if src dir doesn't exist since it won't if this is initial deployment
 
-  - name: 'Override {{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease to point to {{ user_src_repo }}'
-    ansible.builtin.file:
-      src: '{{ user_src_repo }}'
-      dest: '{{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease'
-      state: link
-    when: user_src_repo != None # Assuming this is the DEV server
-
     # 1) In $IOC_DATA, make directory for ioc if doesn't already exist
   - name: 'Create sioc directory in {{ ioc_data_folder }}/{{ ioc_name }}'
     ansible.builtin.file:

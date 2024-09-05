@@ -32,7 +32,7 @@ def clone_repo(request: Request):
 
 def parse_manifest() -> dict:
     # Parse manifest - filepath is only here, so if ever need to change its only one location
-    yaml_filepath = 'configure/CONFIG.yaml' 
+    yaml_filepath = 'CONFIG.yaml' 
     with open(yaml_filepath, 'r') as file:
         yaml_data = yaml.safe_load(file)
     logging.info(yaml_data)
@@ -130,58 +130,25 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
             result = subprocess.run([build_command], capture_output=True, text=True)
         print('== ADBS == output:', result.stdout)
         print('== ADBS == errors:', result.stderr)
+        # TODO: Put building package into playbook so accessible by both local and remote
         # 4) Copy over build results to build_results/
         #   # 4.1) mkdir -p build_results/<component-version>
         #   # 4.2) cp -r bin/ db/ dbd/ iocBoot/ build_results/<component-version> # This piece may be an ansible script
-        # 5) Build the rpm package for the app
+        # 5) Build the package for the app
             # 5.1) cd build_results
             # 5.2) tar czf component-version.tar.gz <component-branch>
-            # 5.3) mkdir rpm && cd rpm/
-            # 5.4) mkdir BUILD BUILDROOT RPMS SOURCES SPECS
-            # 5.5) mv ../component-version.tar.gz SOURCES
-            # 5.) Create component-version.spec
-                # Refer to the prototype one in test-ioc for how we can make this
-            # 6) Build the rpm
-                # Build the src rpm first
-                    # rpmbuild -bs --define "_topdir $(pwd)" SPECS/test-ioc.spec
-                # Then build the binary rpm 
-                    # rpmbuild -bb --define "_topdir $(pwd)" SPECS/test-ioc.spec
-                # Or just use -ba for both
-                    # rpmbuild -ba --define "_topdir $(pwd)" SPECS/test-ioc.spec
-            # Current issues:
-            # PATRICK HERE - Look into deployment (Actually deploying this built rpm),
-            # skip this for now
-        
-                # 1) TODO: can only build using the architecture where the build is 
-                # 2) solved - can't make the rpm package relocatable for some reason
-                    # and documentaion is dated and limited on this
-                    # Figured it out, use '--relocate /ioctop=path/to/top' when installing
-                    # rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --relocate /iocTop=/afs/slac/u/cd/pnispero/bs_test/ --nodeps
-                # 3) TODO: I get failed dependencies, should i specify dependencies in Require?
-                    # And these are different dependencies than the manifest.yaml
-                    # Fow now: can just use --nodeps
-                    # When scripting we may just get output of ldd bin/<os>/test-ioc to put into
-                        # 'Requires' field of the .spec
-                # 4) TODO: Can only install rpms as root
-                    # Either get a VM or build a container for this
-                
-            # 7) In deployment script
-                # NEeds to be relocatable since we never actually install iocs in a cpu
-                # Instead cpu's just have the afs or nfs filesystem mounted
-                # s3df prefix: rpm -i test-ioc.rpm --prefix /sdf/scratch/ad/build/lcls/epics/iocTop
-                # dev3 prefix: rpm -i test-ioc-1.0.0-1.el7_9.x86_64.rpm --prefix /afs/slac/u/cd/pnispero/bs_test/
-            # 6) To solve the problem of different filepaths to install to, here are the options:
-                # a) create multiple rpms, each with a slightly different .spec to install in certain dir
-                # b) Have rpm's install in standard directory like /opt/rpm_installs
-                    # But that directory is pointed to from standard deployment locations with symlinks
-                # c) install rpm in standard directory, but have a post-installation script
-                    # that will copy the installation to the desired deployment destination
-            # todo: need to figure out the envPaths problem, just reuse cram logic?
-                # a) possible options besides slicing that piece of cram
-                # a) union of envPaths, with if (facility) then (var)
-                # b) define one crucial environment var, which is the facility which would be added in st.cmd
-                # c) Or just make a post-process script that uses that part of cram.
-                
+            # Patrick here - you are trying to test your ioc_build.yml
+        playbook_args = f'{{"component": "{request.component.name}", \ 
+                    "branch": "{request.component.branch_name}"}}'
+        # Convert the JSON-formatted string to a dictionary
+        playbook_args_dict = json.loads(playbook_args)
+        adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                adbs_playbooks_dir + 'ioc_build.yml',
+                                'S3DF',
+                                playbook_args_dict)
+        print("Playbook execution finished with return code:", return_code)
+
 
     ## Remote build
     elif (build_type == "REMOTE"):
@@ -226,7 +193,7 @@ def deployment(component: str, branch: str):
     # clone_repo(request)
 
     # Parse yaml if user-defined deployment script
-    manifest_data = parse_manifest()
+    # manifest_data = parse_manifest()
 
     # 3) Get fields
     print("== ADBS == At the moment, deployment only for IOCs is supported")
@@ -262,7 +229,8 @@ def deployment(component: str, branch: str):
     tag = input(INPUT_PREFIX + "Specify full component tagname (ex: test-ioc-1.0.0): ")
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
     linux_uname = os.environ.get('USER')
-    tarball_path = os.getcwd() + '/build_results/'
+    user_src_repo = request.component.git_get_top_dir()
+    tarball_path = user_src_repo + '/build_results/'
     tarball = find_tarball(tarball_path)
     if (tarball == None):
         print("== ADBS == No tarball found in " + tarball_path)
@@ -272,6 +240,8 @@ def deployment(component: str, branch: str):
         "ioc_name": "{ioc_name}", "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
+    for multiple iocs, perhaps once the configuration list is made, then
+        we can just parse that and have user select from that list or (all)
 
     # 3) Run the playbook - call deployment playbook for every facility user chose
     for facility in facilities:
@@ -279,7 +249,6 @@ def deployment(component: str, branch: str):
         if (override == True):
             # For now get local directory since we can assume that development version is on local dir
             # But also may exist on $APP
-            user_src_repo = request.component.git_get_top_dir()
             playbook_args_dict['user_src_repo'] = user_src_repo
 
         print("== ADBS == " + str(playbook_args_dict))

@@ -15,7 +15,7 @@
 #  under $SETUP_SITE_TOP
 #
 export FACILITY=sdf
-export FACILITY_ROOT=/$FACILITY/scratch/ad/build/lcls
+export FACILITY_ROOT=/$FACILITY/group/ad/eed/lcls
 export FACILITY_DATA=$FACILITY_ROOT
 export WWW_ROOT=$FACILITY_ROOT
 export COMMON=$FACILITY_ROOT
@@ -31,7 +31,7 @@ export EPICS_CONFIG=$EPICS_TOP/config
 export EPICS_SETUP=$EPICS_TOP/setup
 export EPICS_IOCS=$EPICS_TOP/iocCommon
 export EPICS_CPUS=$EPICS_TOP/cpuCommon
-export PACKAGE_TOP=$FACILITY_ROOT/package
+export PACKAGE_TOP=$FACILITqY_ROOT/package
 export PSPKG_ROOT=$PACKAGE_TOP/pkg_mgr
 export TOOLS=$FACILITY_ROOT/tools
 export GW_SITE_TOP=$FACILITY_ROOT/tools/gateway
@@ -52,3 +52,4 @@ export TOOLS_SITE_TOP=$TOOLS
 ## ADBS - additional variables since i don't want to invoke a hundred scripts like on dev3
 export IOC=$FACILITY_ROOT/epics/iocCommon
 export APP=$FACILITY_ROOT/epics/iocTop
+export EPICS_HOST_ARCH=rhel8-x86_64

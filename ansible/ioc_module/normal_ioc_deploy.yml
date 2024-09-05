@@ -31,6 +31,14 @@
       src: '{{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
       dest: '{{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease'
       state: link
+    when: user_src_repo == None # If user didn't want to point to user-space repo
+
+  - name: 'Override {{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease to point to {{ user_src_repo }}'
+    ansible.builtin.file:
+      src: '{{ user_src_repo }}'
+      dest: '{{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease'
+      state: link
+    when: user_src_repo != None # Assuming this is the DEV server
 
   # TODO:add to initial_ioc_deploy.yml
   # - name: Update startup.cmd (I think this is initial ioc deployment though)
