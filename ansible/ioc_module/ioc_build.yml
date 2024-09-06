@@ -10,25 +10,27 @@
   vars:
     component: '{{ component }}'
     branch: '{{ branch }}'
+    user_src_repo: '{{ user_src_repo }}'
+    build_results: '{{ user_src_repo }}/build_results'
 
   tasks:
   - name: 'Create build_results/{{ component }}-{{ branch }} directory'
     ansible.builtin.file:
-      path: 'build_results/{{ component }}-{{ branch }}'
+      path: '{{ build_results }}/{{ component }}-{{ branch }}'
       state: directory
       mode: '775' # drwxrwxr-x
 
   - name: 'Copy bin/ db/ dbd/ iocBoot/ to build_results/{{ component }}-{{ branch }} directory'
     ansible.builtin.copy:
       src: '{{ item }}'
-      dest: 'build_results/{{ component }}-{{ branch }}'
+      dest: '{{ build_results }}/{{ component }}-{{ branch }}'
     loop:
-      - 'bin'
-      - 'db'
-      - 'dbd'
-      - 'iocBoot'
+      - '{{ user_src_repo }}/bin'
+      - '{{ user_src_repo }}/db'
+      - '{{ user_src_repo }}/dbd'
+      - '{{ user_src_repo }}/iocBoot'
     # no '/' on directories, otherwise it won't copy the directory itself just the contents
 
   - name: Package app with tarball
-    ansible.builtin.shell: cd build_results && tar czf {{ component }}-{{ branch }}.tar.gz {{ component }}-{{ branch }}
+    ansible.builtin.shell: tar czf {{ build_results }}/{{ component }}-{{ branch }}.tar.gz {{ build_results}}/{{ component }}-{{ branch }}
 

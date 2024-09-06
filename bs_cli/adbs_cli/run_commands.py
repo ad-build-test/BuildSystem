@@ -138,8 +138,9 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
             # 5.1) cd build_results
             # 5.2) tar czf component-version.tar.gz <component-branch>
             # Patrick here - you are trying to test your ioc_build.yml
-        playbook_args = f'{{"component": "{request.component.name}", \ 
-                    "branch": "{request.component.branch_name}"}}'
+        user_src_repo = request.component.git_get_top_dir()
+        playbook_args = f'{{"component": "{request.component.name}", "branch": "{request.component.branch_name}", \
+            "user_src_repo": "{user_src_repo}"}}'
         # Convert the JSON-formatted string to a dictionary
         playbook_args_dict = json.loads(playbook_args)
         adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
@@ -240,8 +241,6 @@ def deployment(component: str, branch: str):
         "ioc_name": "{ioc_name}", "output_path": "{playbook_output_path}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
-    for multiple iocs, perhaps once the configuration list is made, then
-        we can just parse that and have user select from that list or (all)
 
     # 3) Run the playbook - call deployment playbook for every facility user chose
     for facility in facilities:
