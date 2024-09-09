@@ -20,7 +20,14 @@
       src: '{{ tarball }}'
       dest: '{{ ioc_release_folder }}/{{ component_name }}'
 
-  # - name: Update envPaths (call cram script for this) '{{ facility }}'
+  # TODO: Add ioc type because is needed for envPaths
+  - name: Update envPaths (call cram script for this) '{{ facility }}'
+    env_paths_update:
+      deploy_type: 'IOC' 
+    register: testout
+  - name: Dump envPaths update output
+    debug:
+      msg: '{{ testout }}'
   # But update the ones i listed on confluence
   # The $TOP in particular does a prefix change (like /afs/slac/../iocTop -> /usr/local/../iocTop)
   # But also a version change (like ../pnispero/app-git -> ../app/app-r1.3.4)

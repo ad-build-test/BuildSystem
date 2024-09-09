@@ -130,14 +130,6 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
             result = subprocess.run([build_command], capture_output=True, text=True)
         print('== ADBS == output:', result.stdout)
         print('== ADBS == errors:', result.stderr)
-        # TODO: Put building package into playbook so accessible by both local and remote
-        # 4) Copy over build results to build_results/
-        #   # 4.1) mkdir -p build_results/<component-version>
-        #   # 4.2) cp -r bin/ db/ dbd/ iocBoot/ build_results/<component-version> # This piece may be an ansible script
-        # 5) Build the package for the app
-            # 5.1) cd build_results
-            # 5.2) tar czf component-version.tar.gz <component-branch>
-            # Patrick here - you are trying to test your ioc_build.yml
         user_src_repo = request.component.git_get_top_dir()
         playbook_args = f'{{"component": "{request.component.name}", "branch": "{request.component.branch_name}", \
             "user_src_repo": "{user_src_repo}"}}'
@@ -149,7 +141,6 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
                                 'S3DF',
                                 playbook_args_dict)
         print("Playbook execution finished with return code:", return_code)
-
 
     ## Remote build
     elif (build_type == "REMOTE"):

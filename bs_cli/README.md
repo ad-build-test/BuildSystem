@@ -5,4 +5,4 @@
 2. ex: ```bs run build```
 
 ## Dev
-1. To rebuild package, just do a ```python -m build```
+1. To install package in 'editable mode', just do a ```pip install -e .``` assuming you are the bs_cli/ directory (top of the source code dir)
