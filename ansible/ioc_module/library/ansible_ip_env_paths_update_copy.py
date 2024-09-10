@@ -1,5 +1,6 @@
 #!/usr/bin/python
-
+Patrick - couldn't get modules to import right, so gave up with converting to 
+ansible module.
 # Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 """
@@ -12,6 +13,74 @@ Specifically:
 - multi_facility_process_helper.py
 
 """
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
+DOCUMENTATION = r'''
+---
+module: my_test
+
+short_description: This is my test module. In order to run this once done, user needs to be logged into the appropiate k8s cluster
+
+# If this is part of a collection, you need to use semantic versioning,
+# i.e. the version is of the form "2.5.0" and not "2.4".
+version_added: "1.0.0"
+
+description: This is my longer description explaining my test module.
+
+options:
+    name:
+        description: This is the message to send to the test module.
+        required: true
+        type: str
+    new:
+        description:
+            - Control to demo if the result of this module is changed or not.
+            - Parameter description can be a list as well.
+        required: false
+        type: bool
+# Specify this value according to your collection
+# in format of namespace.collection.doc_fragment_name
+# extends_documentation_fragment:
+#     - my_namespace.my_collection.my_doc_fragment_name
+
+author:
+    - Your Name (@yourGitHubHandle)
+'''
+
+EXAMPLES = r'''
+# Pass in a message
+- name: Test with a message
+  my_namespace.my_collection.my_test:
+    name: hello world
+
+# pass in a message and have changed true
+- name: Test with a message and changed output
+  my_namespace.my_collection.my_test:
+    name: hello world
+    new: true
+
+# fail the module
+- name: Test failure of the module
+  my_namespace.my_collection.my_test:
+    name: fail me
+'''
+
+RETURN = r'''
+# These are examples of possible return values, and in general should use other names for return values.
+original_message:
+    description: The original name param that was passed in.
+    type: str
+    returned: always
+    sample: 'hello world'
+message:
+    description: The output message that the test module generates.
+    type: str
+    returned: always
+    sample: 'goodbye'
+'''
+
+from ansible.module_utils.basic import AnsibleModule
 
 import os
 import re
@@ -19,17 +88,19 @@ import sys
 import random
 import subprocess
 import logging
-import argparse
+
+# Ensure the directory of this module is on the Python path
+# sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, 'testestes/')
+# raise Exception("file: " + str(__file__))
+raise Exception("Updated Python Path:", sys.path)
+print(__file__)
 
 import envPathsParser
 import cpuEnvPathsParser
 import cdCommandsParser
-import globals
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
-    format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
 """ ============ Begin - multi_facility_process_helper.py (Grabbed certain functions, altered fixEnvPaths()) ============ """
 
@@ -249,25 +320,61 @@ def ansible_run_module():
 # """ ============================================ """
 
 
-def parse_arguments():
-    # Create the argument parser
-    parser = argparse.ArgumentParser(description="env paths update")
-    
-    # Add arguments
-    parser.add_argument('app_name', type=str, help='')
-    parser.add_argument('app_type', type=str, help='')
-    parser.add_argument('release_folder', type=str, help='')
-    parser.add_argument('ioc_name', type=str, help='')
-    parser.add_argument('release_tag', type=str, help='')
-    
+    # define available arguments/parameters a user can pass to the module
+    # From original args not used here: linkFolder, isMaster, facility, user, message
+    module_args = dict(
+        app_name=dict(type='str', required=True),
+        app_type=dict(type='str', required=False), # since we presume this script is for updating IOC envPaths, options are ['SIOC', ']
+        release_folder=dict(type='str', required=False), # full filepath (ex: /sdf/group/ad/eed/lcls/epics/iocTop/test-ioc/test-ioc-1.0.0)
+        ioc_name=dict(type='str', required=False), 
+        release_tag=dict(type='str', required=False)
+    )
 
-    return parser.parse_args()
+    # seed the result dict in the object
+    # we primarily care about changed and state
+    # changed is if this module effectively modified the target
+    # state will include any data that you want your module to pass back
+    # for consumption, for example, in a subsequent task
+    result = dict( 
+        changed=False
+        # custom_output=dict
+    )
+    # the AnsibleModule object will be our abstraction working with Ansible
+    # this includes instantiation, a couple of common attr would be the
+    # args/params passed to the execution, as well as if the module
+    # supports check mode
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+    # 1) Call fixEnvPaths() only for now, ignore the rest of logic since we have it already in the playbook
+    fixEnvPaths(module.params['app_name'],module.params['app_type'],module.params['release_folder'],
+                module.params['ioc_name'],module.params['release_tag'])
+
+    # os.chdir(module.params['output_path'])
+    # result['custom_output'] = deploy_ioc(module.params)
+    
+    # if the user is working with this module in only check mode we do not
+    # want to make any changes to the environment, just return the current
+    # state with no modifications
+    if module.check_mode:
+        module.exit_json(**result)
+    # use whatever logic you need to determine whether or not this module
+    # made any modifications to your target
+    # if module.params['new']:
+    #     result['changed'] = True
+    # during the execution of the module, if there is an exception or a
+    # conditional state that effectively causes a failure, run
+    # AnsibleModule.fail_json() to pass in the message and the result
+    if module.params['ioc_name'] == 'fail me':
+        module.fail_json(msg='You requested this to fail', **result)
+    # in the event of a successful module execution, you will want to
+    # simple AnsibleModule.exit_json(), passing the key/value results
+    module.exit_json(**result)
 
 def main():
-    args = parse_arguments()
-
-    fixEnvPaths(args.app_name, args.app_type, args.release_folder,
-                args.ioc_name, args.release_tag)
+    ansible_run_module()
 
 if __name__ == '__main__':
     main()

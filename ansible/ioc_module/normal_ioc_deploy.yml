@@ -20,18 +20,21 @@
       src: '{{ tarball }}'
       dest: '{{ ioc_release_folder }}/{{ component_name }}'
 
-  # TODO: Add ioc type because is needed for envPaths
+  # TODO:
   - name: Update envPaths (call cram script for this) '{{ facility }}'
-    env_paths_update:
-      deploy_type: 'IOC' 
-    register: testout
-  - name: Dump envPaths update output
-    debug:
-      msg: '{{ testout }}'
-  # But update the ones i listed on confluence
-  # The $TOP in particular does a prefix change (like /afs/slac/../iocTop -> /usr/local/../iocTop)
-  # But also a version change (like ../pnispero/app-git -> ../app/app-r1.3.4)
-  # I believe it just looks if the app is there and what version you cram 'cram upgrade' to
+    ansible.builtin.shell: python3 library/env_paths_update.py {{ component_name }} SIOC {{ ioc_release_folder }} MASTER {{ tag }}
+  # MASTER - i think its safe to assume you want all IOCs in a different facility
+  # to update their envPaths to match, regardless if thats the one you deployed
+  
+  # If have time, make it ansible module for idempotency
+  # - name: Update envPaths (call cram script for this) '{{ facility }}'
+  #   # ansible.builtin.shell: python3 env_paths_update.py {{ app }}
+  #   env_paths_update:
+  #     deploy_type: 'IOC' 
+  #   register: testout
+  # - name: Dump envPaths update output
+  #   debug:
+  #     msg: '{{ testout }}'
 
   - name: 'Update sym link {{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
     ansible.builtin.file:
@@ -47,9 +50,10 @@
       state: link
     when: user_src_repo != None # Assuming this is the DEV server
 
-  # TODO:add to initial_ioc_deploy.yml
-  # - name: Update startup.cmd (I think this is initial ioc deployment though)
-
+  # TODO:
+  - name: 'Add startup.cmd for the IOC at {{ ioc_link_folder }}/{{ ioc_name }}'
+    ansible.builtin.fail:
+      msg: == ADBS == UNFINSHED. Please do this step manually.
 
   # TODO:
   # - name: Push repo to facilities specified

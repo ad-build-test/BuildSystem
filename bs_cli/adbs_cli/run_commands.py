@@ -52,7 +52,7 @@ def find_tarball(base_path):
 def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
     command = [
-        'ansible-playbook',
+        'ansible-playbook', 
         '-i', inventory,
         '-l', host_pattern,
         playbook
@@ -173,7 +173,9 @@ def test(component: str, branch: str):
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-def deployment(component: str, branch: str):
+@click.option("-i", "--initial", is_flag=True, required=False, help="Initial deployment")
+@click.option("-o", "--override", is_flag=True, required=False, help="Point deployment to your user-space repo")
+def deployment(component: str, branch: str, initial: bool, override: bool):
     """Run a deployment"""
     # 1) Set fields
     request = Request(Component(component, branch))    
@@ -203,12 +205,14 @@ def deployment(component: str, branch: str):
                 "initial",
                 message="Initial deployment?",
                 choices=[True, False])]
-    initial = inquirer.prompt(question)['initial']
+    if (not initial):
+        initial = inquirer.prompt(question)['initial']
     question = [inquirer.List(
                 "override",
                 message="Point deployment to your user-space repo?",
                 choices=[True, False])]
-    override = inquirer.prompt(question)['override']
+    if (not override):
+        override = inquirer.prompt(question)['override']
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
