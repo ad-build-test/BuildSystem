@@ -4,52 +4,39 @@
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
 - name: Initial IOC Deployment
-  hosts: localhost
-  vars: 
-    deploy_type: '{{ deploy_type }}'
-    iocTop: '{{ iocTop }}' # Taken from user env
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_deploy_filepath: '{{ iocTop }}/{{ component_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
-
-    # TODO: Add variables/arguments for the different facilities
-    # TODO: Every filepath is dependent on the different facilities. 
-
+  hosts: all
+  # All vars from ioc_deploy.yml are accessible
+  
   tasks:
-  - name: Add component to $EPICS_IOC_TOP
+  - name: Add component to $EPICS_IOC_TOP (ioc app release)
     ansible.builtin.file:
-      path: '{{ ioc_deploy_filepath }}'
+      path: '{{ ioc_release_folder }}/{{ component_name }}'
       state: directory
       mode: '775' # drwxrwxr-x
     # Location would depend on the facility
 
   # TODO: in continuous_ioc_deploy.yml create task for creating/updating 'current' symbolic link that should be after push
   # - name: Add ioc(s) to $IOC
-  - name: Create sioc directory in $IOC if it doesn't exist
+  - name: Create sioc directory in $IOC (ioc link) if it doesn't exist
     ansible.builtin.file:
-      path: '{{ ioc_filepath }}'
+      path: '{{ ioc_link_folder }}/{{ ioc_name }}'
       state: directory
       mode: '775' # drwxrwxr-x
 
-  - name: Create symbolic link for iocSpecificRelease
+  - name: Create symbolic link for iocSpecificRelease for S3DF (DEV)
     ansible.builtin.file:
       src: '{{ executable_path }}'
       dest: '{{ ioc_filepath }}/iocSpecificRelease'
       state: link
-    when: deploy_type = "DEV"
+    when: facility == "S3DF" # Assuming this is the DEV server
 
-  - name: Create symbolic link for iocSpecificRelease
+  - name: Create symbolic link for iocSpecificRelease for PROD
     ansible.builtin.file:
       src: '{{ ioc_deploy_filepath }}'
       dest: '{{ ioc_filepath }}/iocSpecificRelease'
       state: link
       force: true # Force creation even if dir doesn't exist since it won't if this is initial deployment
-    when: deploy_type = "PROD"
+    when: deploy_type == "PROD"
 
     # 1) In $IOC_DATA, make directory for ioc if doesn't already exist
   - name: Create sioc directory in $IOC_DATA if it doesn't exist
@@ -58,7 +45,7 @@
       state: directory
       mode: '775' # drwxrwxr-x
     # 2) in the ioc folder, create these directories: archive, autosave, autosave-req, iocInfo, restore, yaml
-  - name: Create multiple directories in $IOC_DATA/<IOC> if they doesn't exist
+  - name: Create multiple directories in $IOC_DATA/{{ ioc_name }} if they doesn't exist
     ansible.builtin.file:
       path: '{{ item }}'
       state: directory

@@ -3,49 +3,34 @@
 # This is for dev, and doesn't include using 'cram' and deploying a component to a 
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
-# TODO: This is a 'master playbook' that would call other ioc playbooks based off
+# This is a 'master playbook' that would call other ioc playbooks based off
 # what is needed, mainly initial / continual deployment
 
-- hosts: localhost
+- hosts: all
+# All hosts are availble to use, but user can run this playbook on specific
+# servers using '-l <facility>''
   vars: 
-    initial: '{{ initial }}'
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
-    # TODO: Add variables/arguments for the different facilities
-    # possible to add hosts dynamically? or make multiple inventory files?
-    # I believe making multiple inventory files is optimal, then you just pass in the correct
-    # one to the ansible playbook
+    initial: '{{ initial }}' # From CLI
+    facility: '{{ facility }}' # From CLI
+    src_repo: '{{ src_repo }}' # From CLI
+    component_name: '{{ component_name }}' # From CLI
+    user: '{{ user }}' # From CLI
+    # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
+    # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
+    #  then suggest to user which iocs they want to deploy
+    ioc_name: '{{ ioc_name }}' # From CLI
+    rpm_pkg: '{{ rpm_pkg }}' # From CLI
 
   # use CLI configure command to set bashrc for user which includes env variables
   # set /sdf/scratch/ad/build if on s3df
   # TODO: Instead of tasks, just call the other 'regular' ioc deployment playbook
 
-- name: Initial ioc deployment # This playbook is usually only ran once when an ioc
-  ansible.builtin.import_playbook: initial_ioc_deploy.yml
-  when: initial | bool
-  vars:
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+# - name: Initial ioc deployment # This playbook is usually only ran once when an ioc is deployed for the first time
+#   ansible.builtin.import_playbook: initial_ioc_deploy.yml
+#   when: initial | bool
 
 - name: Continuous ioc deployment # This playbook is always called
   ansible.builtin.import_playbook: continuous_ioc_deploy.yml
-  vars:
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
 
 
 
