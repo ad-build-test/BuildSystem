@@ -4,9 +4,22 @@
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
 - name: Initial IOC Deployment
-  hosts: all
-  # All vars from ioc_deploy.yml are accessible
-  
+  hosts: localhost
+  vars: 
+    deploy_type: '{{ deploy_type }}'
+    iocTop: '{{ iocTop }}' # Taken from user env
+    iocCommon: '{{ iocCommon }}' # Taken from user env
+    iocData: '{{ iocData }}' # Taken from user env
+    component_name: '{{ component_name }}'
+    user: '{{ user }}'
+    ioc_name: '{{ ioc_name }}'
+    ioc_deploy_filepath: '{{ iocTop }}/{{ component_name }}'
+    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
+    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
+
+    # TODO: Add variables/arguments for the different facilities
+    # TODO: Every filepath is dependent on the different facilities. 
+
   tasks:
   - name: 'Create component directory at {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
     ansible.builtin.file:
@@ -16,7 +29,7 @@
 
   - name: 'Create sioc directory at $IOC {{ ioc_link_folder }}/{{ ioc_name }}'
     ansible.builtin.file:
-      path: '{{ ioc_link_folder }}/{{ ioc_name }}'
+      path: '{{ ioc_filepath }}'
       state: directory
       mode: '775' # drwxrwxr-x
 

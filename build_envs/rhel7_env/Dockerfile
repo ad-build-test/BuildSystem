@@ -16,21 +16,33 @@ RUN yum install -y glibc
 RUN yum install -y gcc-c++ && yum install -y make
 
 # install vim
-RUN yum install -y vim
+RUN yum install -y vim 
+
+# install python3.8, special case for rhel7 since default is python2.7
+RUN yum install -y rh-python38
+# RUN export PATH=$PATH:/opt/rh/rh-python38/root/usr/bin/
+# RUN ls -l /opt/rh/rh-python38/root/usr/bin/
+
+# Move this to be the default /usr/bin 
+RUN cp /opt/rh/rh-python38/root/usr/bin/python3.8 /usr/bin/python3
+
+# install wget
+RUN yum install -y wget
+
+# install pip
+RUN cd /etc/ && wget https://bootstrap.pypa.io/get-pip.py && python3 ./get-pip.py --force-reinstall
+RUN python3 -m pip install --upgrade pip
 
 # install git
 RUN yum install -y git
 
-# install python3.8, special case for rhel7 since default is python2.7
-RUN yum install -y rh-python38
+# install pyyaml, requests, and urllib3<2.0
+RUN python3 -m pip install pyyaml \
+    && python3 -m pip install requests \
+    && python3 -m pip install 'urllib3<2.0' 
 
-# TODO: This may not work
-# install pyyaml, requests
-RUN pip install pyyaml \
-    && pip install requests
-
-# Move this to be the default /usr/bin 
-RUN cp /opt/rh/rh-python38/root/usr/bin/python3.8 /usr/bin/python3
+# Install rpm-build
+RUN yum install -y rpm-build
 
 # Add build scripts to /build
 ADD build_scripts /build/

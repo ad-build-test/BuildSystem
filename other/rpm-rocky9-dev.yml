@@ -1,0 +1,54 @@
+# Used for rpm building installing testing
+# Run as ROOT to install rpms as well
+# No volume mounts needed, can get dependencies using artifact api
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rpm-rocky9-dev
+spec:
+  selector:
+    matchLabels:
+      app: rpm-rocky9-dev
+  template:
+    metadata:
+      labels:
+        app: rpm-rocky9-dev
+      annotations:
+        app: rpm-rocky9-dev
+    spec:
+      containers:
+      - name: rpm-rocky9-dev
+        image: pnispero/rocky9-env:latest
+        imagePullPolicy: Always
+        # start the build script
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - >-
+              echo "$ cd /build/" &&
+              cd /build/ && 
+              echo "$ pwd && ls" &&
+              pwd && ls &&
+              echo "$ sleep to keep container alive for debug" &&
+              sleep infinity
+        # envFrom:
+        # - configMapRef:
+        #     name: epics-env-config
+        env:
+        - name: ADBS_SOURCE # From backend
+          value: /build/test-ioc
+          # value: /mnt/build-scratch/ad-build/test-ioc-main
+        - name: ADBS_OS_ENVIRONMENT # From backend
+          value: rocky9
+        - name: ADBS_COMPONENT # From CLI
+          value: test-ioc
+        - name: ADBS_BRANCH # From CLI
+          value: main
+        resources:
+          limits:
+            memory: 8Gi
+            cpu: 4000m
+
+
+
+
