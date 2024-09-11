@@ -1,0 +1,8 @@
+- name: Use dictionary passed as a variable
+  hosts: localhost
+  tasks:
+    - name: Print each key-value pair
+      debug:
+        msg: "Key: {{ item.key }}, Value: {{ item.value }}"
+      loop: "{{ ioc_dict | dict2items }}"
+
