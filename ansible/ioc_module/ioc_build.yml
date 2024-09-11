@@ -1,0 +1,36 @@
+# How to Run 
+# If deploying to multiple facilities, run this playbook multiple times, one for each facility
+# ansible-playbook --extra-vars "user=$USER ioc_name=sioc-123-123 executable_path=/afs/slac.stanford.edu/u/cd/pnispero/mps/central_node_ioc/" ./initial_ioc_deploy.yml
+# This is for dev, and doesn't include using 'cram' and deploying a component to a 
+# deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
+# Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
+
+- name: IOC package build
+  hosts: localhost
+  vars:
+    component: '{{ component }}'
+    branch: '{{ branch }}'
+    user_src_repo: '{{ user_src_repo }}'
+    build_results: '{{ user_src_repo }}/build_results'
+
+  tasks:
+  - name: 'Create build_results/{{ component }}-{{ branch }} directory'
+    ansible.builtin.file:
+      path: '{{ build_results }}/{{ component }}-{{ branch }}'
+      state: directory
+      mode: '775' # drwxrwxr-x
+
+  - name: 'Copy bin/ db/ dbd/ iocBoot/ to build_results/{{ component }}-{{ branch }} directory'
+    ansible.builtin.copy:
+      src: '{{ item }}'
+      dest: '{{ build_results }}/{{ component }}-{{ branch }}'
+    loop:
+      - '{{ user_src_repo }}/bin'
+      - '{{ user_src_repo }}/db'
+      - '{{ user_src_repo }}/dbd'
+      - '{{ user_src_repo }}/iocBoot'
+    # no '/' on directories, otherwise it won't copy the directory itself just the contents
+
+  - name: Package app with tarball
+    ansible.builtin.shell: tar czf {{ build_results }}/{{ component }}-{{ branch }}.tar.gz {{ build_results}}/{{ component }}-{{ branch }}
+
