@@ -4,61 +4,75 @@
 # deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
 - name: Initial IOC Deployment
-  hosts: localhost
-  vars: 
-    deploy_type: '{{ deploy_type }}'
-    iocTop: '{{ iocTop }}' # Taken from user env
-    iocCommon: '{{ iocCommon }}' # Taken from user env
-    iocData: '{{ iocData }}' # Taken from user env
-    component_name: '{{ component_name }}'
-    user: '{{ user }}'
-    ioc_name: '{{ ioc_name }}'
-    ioc_deploy_filepath: '{{ iocTop }}/{{ component_name }}'
-    ioc_filepath: '{{ iocCommon }}/{{ ioc_name }}'
-    ioc_data_filepath: '{{ iocData }}/{{ ioc_name }}'
-
-    # TODO: Add variables/arguments for the different facilities
-    # TODO: Every filepath is dependent on the different facilities. 
-
+  hosts: all
+  # All vars from ioc_deploy.yml are accessible in addition to these:
+  vars:
+    data_directories:
+      - 'archive'
+      - 'autosave'
+      - 'autosave-req'
+      - 'iocInfo'
+      - 'restore'
+      - 'yaml'
+  gather_facts: no
   tasks:
-  - name: 'Create component directory at {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+  - name: 'Create component directory at {{ ioc_release_folder }}/{{ component_name }}'
     ansible.builtin.file:
-      path: '{{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+      path: '{{ ioc_release_folder }}/{{ component_name }}'
       state: directory
       mode: '775' # drwxrwxr-x
 
-  - name: 'Create sioc directory at $IOC {{ ioc_link_folder }}/{{ ioc_name }}'
+  - name: 'Create ioc directory at $IOC {{ ioc_link_folder }}/<ioc>'
     ansible.builtin.file:
-      path: '{{ ioc_filepath }}'
+      path: '{{ ioc_link_folder }}/{{ item.key }}'
       state: directory
       mode: '775' # drwxrwxr-x
+    with_dict: "{{ ioc_dict }}"
+    loop_control:
+      label: '{{ ioc_link_folder }} - {{ item.key }}'
 
-  - name: 'Create sym link {{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+  - name: 'Create sym link {{ ioc_link_folder }}/<ioc>/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/<tag>'
     ansible.builtin.file:
-      src: '{{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
-      dest: '{{ ioc_link_folder }}/{{ ioc_name }}/iocSpecificRelease'
+      src: '{{ ioc_release_folder }}/{{ component_name }}/{{ item.value }}'
+      dest: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease'
       state: link
       force: true # Force creation even if src dir doesn't exist since it won't if this is initial deployment
+    with_dict: "{{ ioc_dict }}"
+    loop_control:
+      label: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease -> {{ ioc_release_folder }}/{{ component_name }}/{{ item.value }}'
 
     # 1) In $IOC_DATA, make directory for ioc if doesn't already exist
-  - name: 'Create sioc directory in {{ ioc_data_folder }}/{{ ioc_name }}'
+  - name: 'Create ioc directory in {{ ioc_data_folder }}/<ioc>'
     ansible.builtin.file:
-      path: '{{ ioc_data_folder }}/{{ ioc_name }}'
+      path: '{{ ioc_data_folder }}/{{ item.key }}'
       state: directory
       mode: '775' # drwxrwxr-x
-    # 2) in the ioc folder, create these directories: archive, autosave, autosave-req, iocInfo, restore, yaml
-  - name: 'Create multiple directories in {{ ioc_data_folder }}/{{ ioc_name }}'
+    with_dict: "{{ ioc_dict }}"
+    loop_control:
+      label: '{{ ioc_data_folder }} - {{ item.key }}'
+
+  - name: Create multiple data directories in {{ ioc_data_folder }}/<ioc>
     ansible.builtin.file:
-      path: '{{ item }}'
+      path: "{{ ioc_data_folder }}/{{ item.0 }}/{{ item.1 }}"
       state: directory
-      mode: '775' # drwxrwxr-x
-    loop:
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/archive'
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/autosave'
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/autosave-req'
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/iocInfo'
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/restore'
-      - '{{ ioc_data_folder }}/{{ ioc_name }}/yaml'
+      mode: '775'
+    loop: "{{ (ioc_dict.keys() | list) | product(data_directories) | list }}"
+    loop_control:
+      label: "{{ ioc_data_folder }}/{{ item.0 }} - {{ item.1 }}"
+
+  # TODO:
+  - name: 'Add startup.cmd/st.cmd for the IOC at {{ ioc_link_folder }}/<ioc>'
+    block:
+    - name: 'Add startup.cmd/st.cmd for the IOC at {{ ioc_link_folder }}/<ioc>'
+      ansible.builtin.fail:
+        msg: == ADBS == UNFINSHED. Please do this step manually.
+      with_dict: "{{ ioc_dict }}"
+      loop_control:
+        label: '== ADBS == {{ item.key }}'
+    rescue:
+    - name: == ADBS == Continue despite previous error
+      ansible.builtin.debug:
+        msg: Startup.cmd automation is unfinished, please create the startup.cmd manually.
 
   # TODO: this task (although may not be worth doing if theres too much variation)
   # - name: Create startup.cmd (dev) st.cmd (prod)

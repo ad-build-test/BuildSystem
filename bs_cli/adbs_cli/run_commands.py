@@ -30,10 +30,9 @@ def clone_repo(request: Request):
         component_info = request.get_component_from_db()
         request.component.git_clone(component_info['url'])
 
-def parse_manifest() -> dict:
+def parse_manifest(filename: str) -> dict:
     # Parse manifest - filepath is only here, so if ever need to change its only one location
-    yaml_filepath = 'CONFIG.yaml' 
-    with open(yaml_filepath, 'r') as file:
+    with open(filename, 'r') as file:
         yaml_data = yaml.safe_load(file)
     logging.info(yaml_data)
     return yaml_data
@@ -59,8 +58,11 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     ]
 
     if extra_vars:
-        extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
+        # Convert extra_vars dictionary to JSON string
+        extra_vars_str = json.dumps(extra_vars)
+        # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
         command += ['--extra-vars', extra_vars_str]
+    logging.info(command)
 
     # Use subprocess.Popen to forward output directly
     process = subprocess.Popen(
@@ -175,7 +177,12 @@ def test(component: str, branch: str):
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-i", "--initial", is_flag=True, required=False, help="Initial deployment")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point deployment to your user-space repo")
-def deployment(component: str, branch: str, initial: bool, override: bool):
+@click.option("-s", "--s3df", is_flag=True, required=False, help="Deploy to S3DF Dev")
+@click.option("-l", "--lcls", is_flag=True, required=False, help="Deploy to LCLS Prod")
+@click.option("-f", "--facet", is_flag=True, required=False, help="Deploy to FACET Prod")
+@click.option("-t", "--testfac", is_flag=True, required=False, help="Deploy to TestFac Prod")
+def deployment(component: str, branch: str, initial: bool, override: bool,
+               s3df: bool, lcls: bool, facet: bool, testfac: bool):
     """Run a deployment"""
     # 1) Set fields
     request = Request(Component(component, branch))    
@@ -187,13 +194,10 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
     # clone_repo(request)
 
     # Parse yaml if user-defined deployment script
-    # manifest_data = parse_manifest()
+    # manifest_data = parse_manifest('CONFIG.yaml')
 
     # 3) Get fields
     print("== ADBS == At the moment, deployment only for IOCs is supported")
-        # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
-    # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
-    #  then suggest to user which iocs they want to deploy
 
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     # question = [inquirer.List(
@@ -219,33 +223,59 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
                 choices=["S3DF", "LCLS", "FACET", "TestFac"],
                 default=[],
                 ),]
-    # TODO: Make the different facilities command line arguments
-    facilities = inquirer.prompt(question)['facility']
-    ioc_name = input(INPUT_PREFIX + "Specify name of ioc to deploy: ")
+    # Get the different facilities from command line arguments
+    facilities = []
+    if (s3df): facilities.append("S3DF")
+    if (lcls): facilities.append("LCLS")
+    if (facet): facilities.append("FACET")
+    if (testfac): facilities.append("TestFac")
+    if (facilities == []):
+        facilities = inquirer.prompt(question)['facility']
+
+    ioc_dict = parse_manifest('deploy_config.yaml')
+
+    # 4) Get list of IOCs for user to choose to deploy on DEV
+    if ('S3DF' in facilities):
+        dev_ioc_list = list(ioc_dict.keys())
+        question = [inquirer.Checkbox(
+            "iocs",
+            message="For S3DF Dev, which IOC's do you want to deploy?",
+            choices=['ALL'] + dev_ioc_list,
+            default=[],
+            ),]
+        dev_ioc_list = inquirer.prompt(question)["iocs"]
+        if ('ALL' in dev_ioc_list):
+            dev_ioc_dict = ioc_dict
+        else:
+            dev_ioc_dict = {ioc: ioc_dict[ioc] for ioc in dev_ioc_list if ioc in ioc_dict}
+
     tag = input(INPUT_PREFIX + "Specify full component tagname (ex: test-ioc-1.0.0): ")
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
     linux_uname = os.environ.get('USER')
     user_src_repo = request.component.git_get_top_dir()
     tarball_path = user_src_repo + '/build_results/'
-    tarball = find_tarball(tarball_path)
+    tarball = str(find_tarball(tarball_path))
     if (tarball == None):
         print("== ADBS == No tarball found in " + tarball_path)
 
-    playbook_args = f'{{"initial": "{initial}","component_name": "{request.component.name}", \
-        "tag": "{tag}", "user": "{linux_uname}", "tarball": "{tarball}", \
-        "ioc_name": "{ioc_name}", "output_path": "{playbook_output_path}"}}'
-    # Convert the JSON-formatted string to a dictionary
-    playbook_args_dict = json.loads(playbook_args)
+    playbook_args_dict = {
+        "initial": initial,
+        "component_name": request.component.name,
+        "tag": tag,
+        "user": linux_uname,
+        "tarball": tarball,
+        "ioc_dict": ioc_dict,
+        "output_path": playbook_output_path
+    }
 
-    # 3) Run the playbook - call deployment playbook for every facility user chose
+    # 5) Run the playbook - call deployment playbook for every facility user chose
     for facility in facilities:
         playbook_args_dict['facility'] = facility
-        if (override == True):
-            # For now get local directory since we can assume that development version is on local dir
-            # But also may exist on $APP
-            playbook_args_dict['user_src_repo'] = user_src_repo
-
-        print("== ADBS == " + str(playbook_args_dict))
+        playbook_args_dict['user_src_repo'] = None
+        if (facility == 'S3DF'):
+            playbook_args_dict['ioc_dict'] = dev_ioc_dict
+            if (override == True):
+                playbook_args_dict['user_src_repo'] = user_src_repo
 
         isExist = os.path.exists(playbook_output_path)
         if not isExist:
