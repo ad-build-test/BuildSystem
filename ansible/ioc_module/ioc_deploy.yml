@@ -16,14 +16,11 @@
     component_name: '{{ component_name }}' # From CLI
     tag: '{{ tag }}' # From CLI
     user: '{{ user }}' # From CLI
-    # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
-    # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
-    #  then suggest to user which iocs they want to deploy
     ioc_dict: '{{ ioc_dict }}' # From CLI - <ioc>:<tag>
     tarball: '{{ tarball }}' # From CLI - full filepath to build results tarball
 
-  # TODO: Instead of tasks, just call the other 'regular' ioc deployment playbook
-  # TODO: remove gathering_facts for other playbooks since already done in main one
+  # Instead of tasks, just call the other 'regular' ioc deployment playbook
+  # Removed gathering_facts for other playbooks since already done in this main one
 - name: 'Initial ioc deployment - {{ facility }}' # This playbook is usually only ran once when an ioc is deployed for the first time
   ansible.builtin.import_playbook: initial_ioc_deploy.yml
   when: initial | bool
@@ -33,7 +30,5 @@
 
 - name: 'Normal ioc deployment - {{ facility }}' # This playbook is always called
   ansible.builtin.import_playbook: normal_ioc_deploy.yml
-
-
 
 

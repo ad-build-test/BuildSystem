@@ -14,6 +14,7 @@
       - 'iocInfo'
       - 'restore'
       - 'yaml'
+  gather_facts: no
   tasks:
   - name: 'Create component directory at {{ ioc_release_folder }}/{{ component_name }}'
     ansible.builtin.file:

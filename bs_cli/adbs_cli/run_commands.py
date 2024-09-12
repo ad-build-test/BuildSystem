@@ -62,7 +62,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
         extra_vars_str = json.dumps(extra_vars)
         # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
         command += ['--extra-vars', extra_vars_str]
-    print(command)
+    logging.info(command)
 
     # Use subprocess.Popen to forward output directly
     process = subprocess.Popen(
@@ -177,7 +177,12 @@ def test(component: str, branch: str):
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-i", "--initial", is_flag=True, required=False, help="Initial deployment")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point deployment to your user-space repo")
-def deployment(component: str, branch: str, initial: bool, override: bool):
+@click.option("-s", "--s3df", is_flag=True, required=False, help="Deploy to S3DF Dev")
+@click.option("-l", "--lcls", is_flag=True, required=False, help="Deploy to LCLS Prod")
+@click.option("-f", "--facet", is_flag=True, required=False, help="Deploy to FACET Prod")
+@click.option("-t", "--testfac", is_flag=True, required=False, help="Deploy to TestFac Prod")
+def deployment(component: str, branch: str, initial: bool, override: bool,
+               s3df: bool, lcls: bool, facet: bool, testfac: bool):
     """Run a deployment"""
     # 1) Set fields
     request = Request(Component(component, branch))    
@@ -193,9 +198,6 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
 
     # 3) Get fields
     print("== ADBS == At the moment, deployment only for IOCs is supported")
-        # TODO: There are apps/components which host multiple IOCs, the logic right now assumes
-    # 1 ioc for app, so CLI should parse which iocs are available (cram has this down),
-    #  then suggest to user which iocs they want to deploy
 
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     # question = [inquirer.List(
@@ -221,8 +223,15 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
                 choices=["S3DF", "LCLS", "FACET", "TestFac"],
                 default=[],
                 ),]
-    # TODO: Make the different facilities command line arguments
-    facilities = inquirer.prompt(question)['facility']
+    # Get the different facilities from command line arguments
+    facilities = []
+    if (s3df): facilities.append("S3DF")
+    if (lcls): facilities.append("LCLS")
+    if (facet): facilities.append("FACET")
+    if (testfac): facilities.append("TestFac")
+    if (facilities == []):
+        facilities = inquirer.prompt(question)['facility']
+
     ioc_dict = parse_manifest('deploy_config.yaml')
 
     # 4) Get list of IOCs for user to choose to deploy on DEV
@@ -235,14 +244,11 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
             default=[],
             ),]
         dev_ioc_list = inquirer.prompt(question)["iocs"]
-        print(dev_ioc_list)
         if ('ALL' in dev_ioc_list):
             dev_ioc_dict = ioc_dict
-            print("dev_ioc_dict: ", dev_ioc_dict)
         else:
             dev_ioc_dict = {ioc: ioc_dict[ioc] for ioc in dev_ioc_list if ioc in ioc_dict}
 
-    # after this move to next base case (remote dpeloyment) or moving playbooks to images. 
     tag = input(INPUT_PREFIX + "Specify full component tagname (ex: test-ioc-1.0.0): ")
     playbook_output_path = os.getcwd() + "/ADBS_TMP"
     linux_uname = os.environ.get('USER')
@@ -261,9 +267,8 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
         "ioc_dict": ioc_dict,
         "output_path": playbook_output_path
     }
-    print(playbook_args_dict)
 
-    # 3) Run the playbook - call deployment playbook for every facility user chose
+    # 5) Run the playbook - call deployment playbook for every facility user chose
     for facility in facilities:
         playbook_args_dict['facility'] = facility
         playbook_args_dict['user_src_repo'] = None
@@ -271,8 +276,6 @@ def deployment(component: str, branch: str, initial: bool, override: bool):
             playbook_args_dict['ioc_dict'] = dev_ioc_dict
             if (override == True):
                 playbook_args_dict['user_src_repo'] = user_src_repo
-
-        print("== ADBS == " + str(playbook_args_dict))
 
         isExist = os.path.exists(playbook_output_path)
         if not isExist:

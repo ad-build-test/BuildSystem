@@ -8,13 +8,8 @@
 - name: Normal IOC Deployment
   hosts: all
   # All vars from ioc_deploy.yml are accessible
-
+  gather_facts: no
   tasks:
-  # - name: Add component to $EPICS_IOC_TOP
-    # Location would depend on the facility
-  # - name: Add ioc(s) to $IOC
-
-  # For local/remote deployment, the user is already sitting in the repo
   # - name: DEBUG - Print each key-value pair
   #   ansible.builtin.debug:
   #     msg: "Key: {{ item.key }}, Value: {{ item.value }}"
@@ -39,12 +34,3 @@
     with_dict: "{{ ioc_dict }}"
     loop_control:
       label: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease -> {{ user_src_repo }}'
-  
-  # TODO:
-  # - name: Push repo to facilities specified
-  # 1) Logic in CLI, either its in the repo already, or user specifies a different repo/tag
-  #   Then itll be cloned, and the current working dir will be set so ansible can use that to Push
-  # 2) Ensure ssh keys are added to desired facilities - 
-    # fetch local keys from - ansible.posix.authorized_key:
-    # copy local key to remote - ansible.builtin.copy
-  # 2) copy entire repo/tag from local to remote - ansible.builtin.copy
