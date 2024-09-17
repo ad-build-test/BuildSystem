@@ -1,9 +1,9 @@
 import yaml
 import os
-import tarfile
 import subprocess
 import requests
-# Note - A lot of this logic like api call to artifact api is the same from start_bu
+from artifact_api import ArtifactApi
+from start_test import Test
 
 # Flow
 # 1) Parse the contents of /config/build_config.json
@@ -18,14 +18,12 @@ import requests
 
 # 4) Then run the function in start_test.py
     # 4.1) Which will look into certain directories and run those tests
-TODO: This is a copy of start_build.py, remove what isn't needed 
-and add in new functionality.
+
 class Build(object):
     def __init__(self):
-        self.registry_base_path = "/mnt/eed/ad-build/registry/"
-        self.artifact_api_url = "http://artifact-api-service.artifact:8080/"
         self.get_environment()
         self.root_dir = None # This is the root/top directory
+        self.artifact_api = ArtifactApi()
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
 
@@ -91,54 +89,22 @@ class Build(object):
         print(output)
         return pkgs_file
     
-    def download_file(self, component, tag, response, epics_base=False):
-        maybe move this function to its own class, so we can use it for both
-        build and deploy.
-        # Download file from api, and extract to ADBS_SOURCE
-        # Download the .tar.gz file
-        tarball_filename = tag + '.tar.gz'
-        if response.status_code == 200:
-            with open(tarball_filename, 'wb') as file:
-                file.write(response.content)
-            print('== ADBS == Tarball downloaded successfully')
-            output_dir = self.root_dir
-            if (epics_base): # Epics_base special case, path into root_dir/epics/base/<ver>
-                output_dir = output_dir + '/epics/base'
-                os.makedirs(output_dir)
-                # Add epics to the LD_LIBRARY_PATH
-                # TODO: For now, just hardcode the architecture
-                self.env['LD_LIBRARY_PATH'] = output_dir + '/' + tag + '/lib/linux-x86_64/'
-            else:
-                # Create the directory for component
-                output_dir = self.root_dir + '/' + component
-                os.mkdir(output_dir)
-            # Extract the .tar.gz file
-            with tarfile.open(tarball_filename, 'r:gz') as tar:
-                tar.extractall(path=output_dir)
-            print(f'== ADBS == {tarball_filename} extracted to {output_dir}')
-        else:
-            print('== ADBS == Failed to retrieve the file. Status code:', response.status_code)
-
-    def get_component_from_registry(self, component: str, tag: str):
-        # For now look into the /mnt/eed/ad-build/registry
-        # rest api
-        print(component, tag)     
-        payload = {"component": component, "tag": tag, "arch": self.os_env}
-        print(payload)
-        print(f"== ADBS == Get component {component},{tag} request to artifact storage...")
-        response = requests.get(url=self.artifact_api_url + 'component', json=payload)
-        if (component == 'epics-base'): # special case
-            self.download_file(component, tag, response, epics_base=True)
-        else:
-            self.download_file(component, tag, response)
-        # For now we can assume the component exists, otherwise the api builds and returns it
-
     def install_dependencies(self, dependencies: dict):
         print("== ADBS == Installing dependencies")
         print(dependencies)
         for dependency in dependencies:
             for name,tag in dependency.items():
-                    self.get_component_from_registry(name, tag)
+                    if (name == 'epics-base'): # Epics_base special case, path into root_dir/epics/base/<ver>
+                        download_dir = self.root_dir + '/epics/base' # Create the directory for component
+                        os.makedirs(download_dir)
+                        # Add epics to the LD_LIBRARY_PATH
+                        # TODO: For now, just hardcode the architecture
+                        self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
+                    else:
+                        download_dir = self.root_dir + '/' + name # Create the directory for component
+                        os.mkdir(download_dir)
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
 
     def update_release_site(self):
         # This only applies to IOCs for REMOTE builds
@@ -230,7 +196,6 @@ class Build(object):
 if __name__ == "__main__":
     print("Dev Version")
     build = Build()
-
     # 1) Enter build directory
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
     os.chdir(build.source_dir)

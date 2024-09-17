@@ -45,4 +45,4 @@ RUN python3 -m pip install pyyaml \
 RUN yum install -y rpm-build
 
 # Add build scripts to /build
-ADD build_scripts /build/
+ADD build_deploy_scripts /build/

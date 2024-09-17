@@ -37,7 +37,7 @@ RUN yum install -y git
 RUN yum install -y podman
 
 # Add build scripts to /build
-ADD build_scripts /build/
+ADD build_deploy_scripts /build/
 
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/

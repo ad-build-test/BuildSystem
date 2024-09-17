@@ -20,20 +20,21 @@ spec:
           cd /build/ && 
           echo "$ pwd && ls" &&
           pwd && ls &&
+          echo "$ python3 start_deploy.py" &&
+          python3 start_deploy.py &&
+          echo "$ sleep to keep container alive for debug" &&
           sleep infinity
-    # && echo "$ python3 start_build.py" &&
-    # python3 start_build.py &&
-    # echo "$ sleep to keep container alive for debug" &&
-    # sleep infinity
     env:
-    - name: ADBS_SOURCE
-      value: /mnt/eed/ad-build/scratch/test-ioc
-      # value: /mnt/build-scratch/ad-build/test-ioc-main
-    - name: ADBS_OUTPUT
-      value: /mnt/eed/ad-build/scratch/test-ioc
-      # value: /mnt/build-scratch/ad-build/test-ioc-main/output
-    - name: ADBS_OS_ENVIRONMENT
-      value: rocky9
+    - name: ADBS_FACILITIES
+      value: '["S3DF"]'
+    - name: ADBS_INITIAL
+      value: "true"
+    - name: ADBS_APP_TYPE
+      value: IOC
+    - name: ADBS_COMPONENT
+      value: test-ioc
+    - name: ADBS_TAG
+      value: test-ioc-1.0.0
     resources:
       limits:
         memory: 8Gi
