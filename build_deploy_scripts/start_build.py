@@ -162,10 +162,6 @@ class Build(object):
         # TODO: if rhel7, then do python3 -m ansible playbook <playbook> or try ansible 
         # module from python might work too, then its for rocky9 rhel8/7.
         # test deployment again since altered ansible api, then test build this section specifically
-        patrick left off rocky9 works, rhel8 bugs out cause python too old. Look for another solution
-        Also rebuild deployment to see if still works. 
-        DONE - write to issue
-        Then work on the new comment on the gh issue
         user_src_repo = self.source_dir
         playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
             "user_src_repo": "{user_src_repo}"}}'
