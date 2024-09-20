@@ -23,9 +23,10 @@ RUN yum install -y wget
 # install pip
 RUN cd /etc/ && wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && python3 ./get-pip.py
 
-# install pyyaml, requests
+# install pyyaml, requests, ansible
 RUN pip install pyyaml \
-    && pip install requests
+    && pip install requests \ 
+    && pip install ansible
 
 # install perl
 RUN yum install -y perl
@@ -38,6 +39,13 @@ RUN yum install -y podman
 
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
+
+# Add playbooks to /build
+ADD ansible /build/
+
+# Create adbuild with a specific UID (e.g., 46487)
+RUN groupadd -g 1006 cd && \
+    useradd -u 46487 -g cd -m adbuild
 
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/

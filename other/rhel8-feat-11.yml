@@ -1,16 +1,16 @@
-# Same as test-ioc-job-rocky9-dev.yml except this one points the image to feat-11 tag
+# Same as test-ioc-job-rhel8-dev.yml except this one points the image to feat-11 tag
 # Ansible execution environment test manifest
 apiVersion: v1
 kind: Pod
 metadata:
-  name: rocky9-feat-11
+  name: rhel8-feat-11
 spec:
   securityContext:
     runAsUser: 46487
     runAsGroup: 1006
   containers:
-  - name: rocky9-feat-11
-    image: pnispero/rocky9-env:feat-11
+  - name: rhel8-feat-11
+    image: pnispero/rhel8-env:feat-11
     imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]
@@ -30,7 +30,7 @@ spec:
       value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc
       # value: /mnt/build-scratch/ad-build/test-ioc-main
     - name: ADBS_OS_ENVIRONMENT # From backend
-      value: rocky9
+      value: rhel8
     - name: ADBS_COMPONENT # From CLI
       value: test-ioc
     - name: ADBS_BRANCH # From CLI

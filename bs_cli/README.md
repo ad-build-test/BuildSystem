@@ -1,6 +1,6 @@
 # BuildSystem Command Line Interface
 ## Desc
-0. Assuming you have the /dist, install package with ```pip install ADBS_CLI_PNISPERO_1.x.x```
+0. Assuming you have the /dist, install package with ```pip install dist/adbs_cli-1.0.0-py3-none-any.whl```
 1. Run with ```bs```
 2. ex: ```bs run build```
 

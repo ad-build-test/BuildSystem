@@ -1,6 +1,6 @@
 import os
 import json
-import subprocess
+from ansible_api import run_ansible_playbook
 from app_type import AppType
 from artifact_api import ArtifactApi
 
@@ -9,44 +9,6 @@ class Deploy(object):
         self.get_environment()
         self.root_dir = None # This is the root/top directory
         self.artifact_api = ArtifactApi()
-
-    def run_ansible_playbook(self, inventory, playbook, host_pattern, extra_vars):
-        os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
-        command = [
-            'ansible-playbook', 
-            '-i', inventory,
-            '-l', host_pattern,
-            playbook
-        ]
-
-        if extra_vars:
-            # Convert extra_vars dictionary to JSON string
-            extra_vars_str = json.dumps(extra_vars)
-            # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
-            command += ['--extra-vars', extra_vars_str]
-        # logging.info(command)
-        print(command)
-
-        # Use subprocess.Popen to forward output directly
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        # Print output in real-time
-        for line in iter(process.stdout.readline, ''):
-            print(line, end='')  # Print each line as it is output
-
-        # Ensure all stderr is also handled
-        for line in iter(process.stderr.readline, ''):
-            print(line, end='')
-
-        process.stdout.close()
-        process.stderr.close()
-        return_code = process.wait()
-        return return_code
 
     def get_environment(self):
         # 0) Get environment variables - assuming we're not using a configMap
@@ -92,12 +54,13 @@ class Deploy(object):
                 "output_path": playbook_output_path
                 }
             adbs_playbooks_dir = "/build/ioc_module/" # TODO: Change this once official
+            playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
             for facility in self.facilities:
                 print("== ADBS == Call deployment playbook for facility ", facility)
-                return_code = self.run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
                                             adbs_playbooks_dir + 'ioc_deploy.yml',
                                                 "S3DF", # TODO: Temp hardcode for testing
-                                                playbook_args_dict)
+                                                playbook_args)
                 # return_code = self.run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
                 #                             adbs_playbooks_dir + 'ioc_deploy.yml',
                 #                                 facility,

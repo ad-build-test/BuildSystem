@@ -2,13 +2,7 @@
 # used by both build and deployment
 import requests
 import tarfile
-"""        TODO: TEMPorary comment:
-moveed this function to its own class, so we can use it for both
-        build and deploy.
-        first test that that the start_build.py wasn't affected when using this instead
-        then work on deployment image, and to test, can make the container
-        ssh into local pc instead of lcls/facet kind of thing.
-        then use """
+
 class ArtifactApi(object):
     def __init__(self):
         self.registry_base_path = "/mnt/eed/ad-build/registry/"

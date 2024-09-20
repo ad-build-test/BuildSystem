@@ -2,6 +2,8 @@ import yaml
 import os
 import subprocess
 import requests
+import platform
+from ansible_api import run_ansible_playbook
 from artifact_api import ArtifactApi
 from start_test import Test
 
@@ -53,6 +55,7 @@ class Build(object):
             elif (value == None):
                 # Raise exception
                 raise ValueError("Missing environment variable - " + key)
+        custom_env['HOME'] = '/build/' # Needed for ansible to run as non-root
         # Copy the current environment
         self.env = os.environ.copy()
         # Update with new environment variables
@@ -111,17 +114,6 @@ class Build(object):
         # 1) Update the release site to point to the repos here
         # TODO: in the install_dependencies(), make sure it creates <component>/ dirs
         pass
-        # BASE_MODULE_VERSION=7.0.3.1-1.0
-        # EPICS_SITE_TOP=/mnt/eed/ad-build/scratch/test-ioc-main-pnispero/epics
-        # BASE_SITE_TOP=${EPICS_SITE_TOP}/base
-        # EPICS_MODULES=${EPICS_SITE_TOP}/${BASE_MODULE_VERSION}/modules
-        # IOC_SITE_TOP=${EPICS_SITE_TOP}/iocTop
-        # PACKAGE_SITE_TOP=/afs/slac/g/lcls/package
-        # MATLAB_PACKAGE_TOP=/afs/slac/g/lcls/package/matlab
-        # PSPKG_ROOT=/afs/slac/g/lcls/pkg_mgr
-        # TOOLS_SITE_TOP=/afs/slac/g/lcls/tools
-        # ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
-    
         # 1) Read the file and parse the key-value pairs
         filename = 'RELEASE_SITE'
         with open(filename, 'r') as file:
@@ -165,6 +157,32 @@ class Build(object):
             build_output_bytes = e.output
         build_output = build_output_bytes.decode("utf-8")
         print(build_output)
+
+        # Create build results
+        # TODO: if rhel7, then do python3 -m ansible playbook <playbook> or try ansible 
+        # module from python might work too, then its for rocky9 rhel8/7.
+        # test deployment again since altered ansible api, then test build this section specifically
+        patrick left off rocky9 works, rhel8 bugs out cause python too old. Look for another solution
+        Also rebuild deployment to see if still works. 
+        DONE - write to issue
+        Then work on the new comment on the gh issue
+        user_src_repo = self.source_dir
+        playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
+            "user_src_repo": "{user_src_repo}"}}'
+        adbs_playbooks_dir = "/build/ioc_module/"
+        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                adbs_playbooks_dir + 'ioc_build.yml',
+                                'S3DF',
+                                playbook_args,
+                                self.env)
+        print("Playbook execution finished with return code:", return_code)
+
+    def push_build_results(self):
+        # TODO: Add logic where if a pre-merge build is done, then push
+        # build results to the artifact storage.
+        if self.build_type == 'official': # TODO: maybe 'tagged'?
+            pass
+        
 
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed
