@@ -1,0 +1,65 @@
+# ==============================================================
+#
+#  Abs:   Semi-official configuration for every application deployment
+#
+#  Name:  deployment_config.yaml
+#
+#  Rem:   This file is read by 
+#
+#  Usage:  When done editing, save, then please run script
+#
+#  Facility: SLAC Controls (Development)
+#
+# -------------------------------------------------------------
+# Application Types:
+# IOC
+# HLA
+# TOOLS
+# MATLAB
+# PYDM
+
+# Development Environment
+development:
+  ioc:
+    - name: test-ioc
+      tag: test-ioc-1.0.2
+      iocs:
+        - name: sioc-b34-test1
+          tag: test-ioc-1.0.0
+        - name: sioc-b34-test2
+          tag: test-ioc-1.0.1
+    - name: app2
+      tag: v2.3.4
+  hla:
+    - name: app3
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0
+
+# lcls Environment
+lcls:
+  web:
+    - name: app1
+      tag: v1.0.1
+
+  services:
+    - name: app2
+      tag: v2.3.5
+
+# facet Environment
+facet:
+  web:
+    - name: app1
+      tag: v1.0.2
+
+  services:
+    - name: app3
+      tag: v1.1.1
+
