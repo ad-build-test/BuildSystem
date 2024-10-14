@@ -1,0 +1,4 @@
+This is a working example of getting a service to be externally accessible.
+Please note you have to get the external IP from the service to use, and not name of the domain.
+This is because, you have to setup an ingress controller to get a domain going. 
+AND add an entry to DNS for that domain, but have to contact s3df admins for that, so for the sake of testing, no domain was added, just used the raw external ip addresss

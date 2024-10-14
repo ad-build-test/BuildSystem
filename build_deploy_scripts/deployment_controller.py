@@ -8,6 +8,7 @@ note - this would have to run 24/7.
 import os
 import subprocess
 import time
+import ast
 import yaml
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -21,7 +22,7 @@ ANSIBLE_PLAYBOOKS_PATH = "../ansible/" # TODO: TEMP: Refer to local dir for test
 # ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/ansible_playbooks"
 
 class ConfigFileHandler(FileSystemEventHandler):
-    def __init__(self, playbook_path):
+    def __init__(self, playbook_path: str):
         self.previous_data = None
         self.playbook_path = playbook_path
 
@@ -30,34 +31,87 @@ class ConfigFileHandler(FileSystemEventHandler):
         with open(yaml_filepath, 'r') as file:
             yaml_data = yaml.safe_load(file)
         return yaml_data
-    Patrick- when back see an's message reply thread
-    but basically fix up the ipxe_config.yaml to get rid of the obsolete ones, 
-    which are the ones on the list I sent him, except keep a few he mentioned.
-    Then add in the other cpu's on his list that the ipxe_config.yaml doesnt have.
-    Then ask Jerry about ssh thing you msged him, 
-    Then go back here to the deployment controller
-    # Function to parse DeepDiff output
+    
+    def write_to_yaml(self, yaml_filepath: str, data_to_write: dict):
+        """
+        Function that writes the data from API call of CLI bs run deployment
+        to the configuration yaml (db once done prototyping)
+        """
+        # 1) Get the data of the CLI api call, varies depending on app type
+            # IOC app type:
+            # playbook_args_dict = {
+            # "initial": initial,
+            # "component_name": request.component.name,
+            # "tag": tag,
+            # "user": linux_uname,
+            # "tarball": tarball,
+            # "ioc_dict": ioc_dict,
+            # "output_path": playbook_output_path
+            # }
+
+        # 2) Make new data dictionary using self.previous_data 
+
+        # 3) Replace dictionary appropiately with new data
+
+        # 4) Call the ansible playbook 
+        # (In this case i don't think we need to parse changes, since deployment will still 
+        # be triggered manually - which simplifies this deployment_controller script)
+
+    def get_index_for_field(self, key: str, field_name: str) -> int:
+        """ Gets the index for a specific field in a complicated key format (due to deepdiff) """
+        # Clean the key to prepare for processing
+            # key ex: root['development']['ioc'][0]['tag']
+            # becomes: [development[ioc[0[tag
+        clean_key = key.replace("root", "").replace("'", "").replace("]","")
+        fields = clean_key.split('[')
+
+        found_field = False
+        for field in fields:
+            if field == field_name:
+                found_field = True
+            elif found_field and field.isdigit():  # Capture the index after the field
+                return int(field)
+
+
     def parse_diff(self, diff: dict, new_data: dict):
+        """ Parse the difference (Changes) to configuration 
+            Note - This logic can be reapplied to mongodb, since its stored in JSON documents, its
+                easily convertable to a python dict
+        """
         changes = []
         # Check for values changed in the ioc tag
         if 'values_changed' in diff:
             for key, change in diff['values_changed'].items():
-                if "['tag']" in key:  # Check if the change is in an IOC tag
-                    print(f"key: {key},\n change: {change}")
+                if "['ioc']" in key: # Check if change to an ioc app
+                    if "['iocs']" in key: # Check if change to an ioc within the ioc app
+                        if "['tag']" in key: # Check if change to an ioc tag
+                            print(f"key: {key},\n change: {change}")
 
-                    # Extract the index directly from the key
-                    index_start = key.index("['ioc']") + len("['ioc'][")
-                    index_end = key.index(']', index_start)
-                    ioc_index = int(key[index_start:index_end])  # Get the index as an integer
+                            ioc_app_index = self.get_index_for_field(key, 'ioc')
+                            ioc_index = self.get_index_for_field(key, 'iocs')
+                            
+                            ioc_app = self.previous_data['development']['ioc'][ioc_app_index]
+                            ioc = self.previous_data['development']['ioc'][ioc_app_index]['iocs'][ioc_index]
+                            changes.append({
+                                'type': 'ioc_tag_within_app_changed',
+                                'ioc_app_name': ioc_app['name'],
+                                'ioc_name': ioc['name'],
+                                'old_tag': change['old_value'],
+                                'new_tag': change['new_value']
+                            })
+                    elif "['tag']" in key:  # Check if change to an ioc app tag
+                        print(f"key: {key},\n change: {change}")
+
+                        ioc_app_index = self.get_index_for_field(key, 'ioc')
+                        
+                        ioc_app = self.previous_data['development']['ioc'][ioc_app_index]
+                        changes.append({
+                            'type': 'ioc_app_tag_changed',
+                            'ioc_name': ioc_app['name'],
+                            'old_tag': change['old_value'],
+                            'new_tag': change['new_value']
+                        })
                     
-                    print(self.previous_data['development']['ioc'])
-                    parent_ioc = self.previous_data['development']['ioc'][ioc_index]
-                    changes.append({
-                        'type': 'ioc_tag_changed',
-                        'ioc_name': parent_ioc['name'],
-                        'old_tag': change['old_value'],
-                        'new_tag': change['new_value']
-                    })
 
         # Check for added or removed IOCs
         if 'dictionary_item_added' in diff:
@@ -80,7 +134,7 @@ class ConfigFileHandler(FileSystemEventHandler):
                         'ioc_name': removed_ioc['name'],
                         'tag': removed_ioc['tag']
                     })
-        print(changes)
+        print(f"All changes since previous version: {changes}")
 
 
     def compare_configs(self, new_data: dict):

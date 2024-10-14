@@ -22,11 +22,11 @@
 development:
   ioc:
     - name: test-ioc
-      tag: test-ioc-1.0.2
+      tag: test-ioc-1.0.1
       iocs:
         - name: sioc-b34-test1
-          tag: test-ioc-1.0.0
-        - name: sioc-b34-test2
+          tag: test-ioc-1.0.1
+        - name: sioc-b34-test3
           tag: test-ioc-1.0.1
     - name: app2
       tag: v2.3.4
@@ -45,21 +45,41 @@ development:
 
 # lcls Environment
 lcls:
-  web:
+  ioc:
     - name: app1
-      tag: v1.0.1
-
-  services:
+      tag: v1.2.3
     - name: app2
-      tag: v2.3.5
+      tag: v2.3.4
+  hla:
+    - name: app3
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0
 
 # facet Environment
 facet:
-  web:
+  ioc:
     - name: app1
-      tag: v1.0.2
-
-  services:
+      tag: v1.2.3
+    - name: app2
+      tag: v2.3.4
+  hla:
     - name: app3
-      tag: v1.1.1
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0
 
