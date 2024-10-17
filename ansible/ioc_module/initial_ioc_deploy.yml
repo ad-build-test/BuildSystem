@@ -68,7 +68,7 @@
         msg: == ADBS == UNFINSHED. Please do this step manually.
       loop: "{{ ioc_list }}"
       loop_control:
-        label: '== ADBS == {{ item.key }}'
+        label: '== ADBS == {{ item }}'
     rescue:
     - name: == ADBS == Continue despite previous error
       ansible.builtin.debug:

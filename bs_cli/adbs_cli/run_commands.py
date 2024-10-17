@@ -179,7 +179,7 @@ def test(component: str, branch: str):
 @click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). Put 'ALL' for all iocs. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2")
 @click.argument("tag")
-@click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment")
+@click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (Creates multiple directories in $IOC_DATA, $IOC_TOP)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 def deployment(component: str, branch: str, facility: str, type: str,
                 ioc: str, tag: str, initial: bool, override: bool):
@@ -200,16 +200,18 @@ def deployment(component: str, branch: str, facility: str, type: str,
     #             message="Specify type of ioc",
     #             choices=["SIOC", "HIOC", "VIOC"])]
     # ioc_type = inquirer.prompt(question)['ioc_type']
-    question = [inquirer.List(
-                "initial",
-                message="Initial deployment?",
-                choices=[True, False])]
-    if (not initial):
-        initial = inquirer.prompt(question)['initial']
-    question = [inquirer.List(
-                "override",
-                message="Point deployment to your user-space repo?",
-                choices=[True, False])]
+    # Unnecessary to prompt for this
+    # question = [inquirer.List(
+    #             "initial",
+    #             message="Initial deployment?",
+    #             choices=[True, False])]
+    # if (not initial):
+    #     initial = inquirer.prompt(question)['initial']
+    # Unnecessary to prompt for this
+    # question = [inquirer.List(
+    #             "override",
+    #             message="Point deployment to your user-space repo?",
+    #             choices=[True, False])]
     # if (not override):
     #     override = inquirer.prompt(question)['override']
     question = [inquirer.Checkbox(
@@ -250,6 +252,7 @@ def deployment(component: str, branch: str, facility: str, type: str,
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
     for facility in facilities:
+        print(f"== ADBS == Deploying to facility: {facility}\n")
         playbook_args_dict['facility'] = facility
     # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
         if ('S3DF' in facilities):
@@ -280,3 +283,5 @@ def deployment(component: str, branch: str, facility: str, type: str,
             request.set_endpoint('ioc/deployment')
             request.add_dict_to_payload(playbook_args_dict)
             request.get_request(log=True)
+        if (initial):
+            print("== ADBS == Please create startup.cmd manually!")
