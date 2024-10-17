@@ -23,7 +23,7 @@
     when: user_src_repo == None # If user didn't want to point to user-space repo
     loop: "{{ ioc_list }}"
     loop_control:
-      label: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease -> {{ ioc_release_folder }}/{{ component_name }}/{{ item.value }}'
+      label: '{{ ioc_link_folder }}/{{ item }}/iocSpecificRelease -> {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
 
   - name: 'Override {{ ioc_link_folder }}/<ioc>/iocSpecificRelease to point to {{ user_src_repo }}'
     ansible.builtin.file:
