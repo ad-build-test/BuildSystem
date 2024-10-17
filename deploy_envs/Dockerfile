@@ -2,7 +2,7 @@
 # base image
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/deploy-env:latest -f deploy_envs/Dockerfile .
+# 2) docker build --tag pnispero/deployment-controller:latest -f deploy_envs/Dockerfile .
 FROM quay.io/ansible/ansible-runner:stable-2.11-latest
 
 # # update
@@ -18,8 +18,8 @@ FROM quay.io/ansible/ansible-runner:stable-2.11-latest
 # RUN yum install -y vim && yum install -y python3 && yum install -y pip
 
 # install pyyaml, requests
-RUN pip install pyyaml \
-    && pip install requests
+# RUN pip install pyyaml \
+#     && pip install requests
 
 # # install ansible
 # RUN pip install ansible
@@ -27,11 +27,15 @@ RUN pip install pyyaml \
 # # install git
 # RUN yum install -y git
 
-# Add build and deploy scripts to /build
-ADD build_deploy_scripts /build/
+# Add build and deploy scripts to /app
+RUN mkdir /app
+ADD build_deploy_scripts /app/
+
+# install requirements.txt
+RUN pip install -r /app/requirements.txt
 
 # Add playbooks to /build
-ADD ansible /build/
+ADD ansible /app/
 
-# Make /build open to 'adbuild' user
-# RUN chown -R 46487:1006 /build/
+# Command to run the app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]

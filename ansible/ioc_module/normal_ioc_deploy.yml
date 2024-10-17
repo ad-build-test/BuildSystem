@@ -15,22 +15,22 @@
   #     msg: "Key: {{ item.key }}, Value: {{ item.value }}"
   #   with_dict: "{{ ioc_dict }}"
 
-  - name: 'Update sym link {{ ioc_link_folder }}/<ioc>/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/<tag>'
+  - name: 'Update sym link {{ ioc_link_folder }}/<ioc>/iocSpecificRelease to point to {{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
     ansible.builtin.file:
-      src: '{{ ioc_release_folder }}/{{ component_name }}/{{ item.value }}'
-      dest: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease'
+      src: '{{ ioc_release_folder }}/{{ component_name }}/{{ tag }}'
+      dest: '{{ ioc_link_folder }}/{{ item }}/iocSpecificRelease'
       state: link
     when: user_src_repo == None # If user didn't want to point to user-space repo
-    with_dict: "{{ ioc_dict }}"
+    loop: "{{ ioc_list }}"
     loop_control:
       label: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease -> {{ ioc_release_folder }}/{{ component_name }}/{{ item.value }}'
 
   - name: 'Override {{ ioc_link_folder }}/<ioc>/iocSpecificRelease to point to {{ user_src_repo }}'
     ansible.builtin.file:
       src: '{{ user_src_repo }}'
-      dest: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease'
+      dest: '{{ ioc_link_folder }}/{{ item }}/iocSpecificRelease'
       state: link
     when: user_src_repo != None # Assuming this is the DEV server
-    with_dict: "{{ ioc_dict }}"
+    loop: "{{ ioc_list }}"
     loop_control:
-      label: '{{ ioc_link_folder }}/{{ item.key }}/iocSpecificRelease -> {{ user_src_repo }}'
+      label: '{{ ioc_link_folder }}/{{ item }}/iocSpecificRelease -> {{ user_src_repo }}'

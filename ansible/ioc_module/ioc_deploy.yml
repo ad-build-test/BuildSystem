@@ -16,7 +16,7 @@
     component_name: '{{ component_name }}' # From CLI
     tag: '{{ tag }}' # From CLI
     user: '{{ user }}' # From CLI
-    ioc_dict: '{{ ioc_dict }}' # From CLI - <ioc>:<tag>
+    ioc_list: '{{ ioc_list }}' # From CLI
     tarball: '{{ tarball }}' # From CLI - full filepath to build results tarball
 
   # Instead of tasks, just call the other 'regular' ioc deployment playbook

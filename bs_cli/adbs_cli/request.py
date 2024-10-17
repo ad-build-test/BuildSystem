@@ -1,12 +1,15 @@
-from adbs_cli.cli_configuration import cli_configuration
+from adbs_cli.cli_configuration import cli_configuration, Api
 from adbs_cli.component import Component
 import logging
 import requests
 
 
 class Request(object):
-    def __init__(self, component: Component):
-        self.url = cli_configuration["server_url"]
+    def __init__(self, component: Component, api: str=Api.BACKEND):
+        if (api == Api.BACKEND):
+            self.url = cli_configuration["server_url"]
+        elif (api == Api.DEPLOYMENT):
+            self.url = cli_configuration["deployment_controller_url"]
         self.linux_uname = cli_configuration["linux_uname"]
         self.github_uname = cli_configuration["github_uname"]
         self.headers = {"linux_username": self.linux_uname,
@@ -47,6 +50,11 @@ class Request(object):
     
     def put_request(self, log: bool=False):
         response = requests.put(self.url, headers=self.headers, json=self.payload)
+        if (log):
+            self.log_api_response(response)
+
+    def get_request(self, log: bool=False):
+        response = requests.get(self.url, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
             
