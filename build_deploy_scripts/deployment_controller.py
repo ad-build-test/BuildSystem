@@ -27,7 +27,7 @@ logging.basicConfig(
     level=logging.INFO, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-CONFIG_FILE_PATH = "./deployment_config.yaml" # TODO: TEMP: Refer to local directory for testing
+CONFIG_FILE_PATH = "./deployment_versions.yaml" # TODO: TEMP: Refer to local directory for testing
 # CONFIG_FILE_PATH = "/mnt/eed/ad-build/deployment_config.yaml"
 ANSIBLE_PLAYBOOKS_PATH = "../ansible/" # TODO: TEMP: Refer to local dir for testing
 # ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/ansible_playbooks"
@@ -40,23 +40,59 @@ class IocDict(BaseModel):
     ioc_list: list
     user: str
 
+def parse_yaml(filename: str) -> dict:
+    with open(filename, 'r') as file:
+        yaml_data = yaml.safe_load(file)
+    return yaml_data
+
 def write_to_config_yaml(data_to_write: dict):
     """
     Function that writes the data from API call of CLI bs run deployment
     to the configuration yaml (db once done prototyping)
     """
+    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    logging.info(config_dict)
     logging.info("unfinished function")
     pass
 
 @app.get("/")
 def read_root():
-    return {"Status": "Empty endpoint - somethings wrong with your api call."}
+    return {"status": "Empty endpoint - somethings wrong with your api call."}
 
-@app.get("/ioc/deployment")
+@app.get("/ioc/info")
+async def get_ioc_app_info(name: str, facility: str):
+    """
+    Return information on an IOC app
+    """
+    # 1) Return dictionary of information for an App
+    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    facility = facility.upper()
+    error_msg = "== ADBS == ERROR - ioc not found, name or facility is wrong or missing."
+    try:
+        found_ioc = False
+        for ioc in config_dict[facility]["ioc"]:
+            if name == ioc['name']:
+                app_info = ioc
+                found_ioc = True
+                break
+        if (not found_ioc):
+            return {"status": 404,
+                    "msg": error_msg} # 404 - Not found
+    except Exception as e:
+        error_msg = error_msg + str(e)
+        logging.info(error_msg)
+        return {"status": 404,
+                "msg": error_msg} # 404 - Not found
+    
+    return {"status": 200, # 200 - successful
+            "info": app_info}
+
+@app.put("/ioc/deployment")
 async def deploy_ioc(data_to_write: IocDict):
     """
     Function that writes the data from API call of CLI bs run deployment
-    to the configuration yaml (db once done prototyping)
+    to the configuration yaml (db once done prototyping), then calls playbook
+    assuming gatekeeping logic is met (scheduled on PAMM day)
     """
     logging.info(f"data: {data_to_write}")
     # 1) Get the data of the CLI api call, varies depending on app type
@@ -80,7 +116,7 @@ async def deploy_ioc(data_to_write: IocDict):
     # be triggered manually - which simplifies this deployment_controller script)
 
     # 5) Return ansible playbook output to user
-    return {"Status": 200,
+    return {"status": 200,
             "Values sent": data_to_write}
 
 if __name__ == "__main__":

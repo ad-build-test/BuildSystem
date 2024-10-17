@@ -5,13 +5,14 @@ import requests
 
 
 class Request(object):
-    def __init__(self, component: Component, api: str=Api.BACKEND):
+    def __init__(self, component: Component=None, api: str=Api.BACKEND):
         if (api == Api.BACKEND):
             self.url = cli_configuration["server_url"]
         elif (api == Api.DEPLOYMENT):
             self.url = cli_configuration["deployment_controller_url"]
         self.linux_uname = cli_configuration["linux_uname"]
         self.github_uname = cli_configuration["github_uname"]
+        self.params = {}
         self.headers = {"linux_username": self.linux_uname,
                             "github_username": self.github_uname }
         self.payload = {}
@@ -25,6 +26,9 @@ class Request(object):
 
     def add_dict_to_payload(self, values: dict):
         self.payload.update(values)
+
+    def add_to_params(self, key: str, value: str):
+        self.params[key] = value
 
     def set_component_fields(self):
         self.set_component_name()
@@ -43,20 +47,21 @@ class Request(object):
         logging.info(response.request.body)
         logging.info(response.request.headers)
 
-    def post_request(self, log: bool=False):
-        response = requests.post(self.url, headers=self.headers, json=self.payload)
+    def post_request(self, log: bool=False)-> requests.Response:
+        response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
     
-    def put_request(self, log: bool=False):
-        response = requests.put(self.url, headers=self.headers, json=self.payload)
+    def put_request(self, log: bool=False)-> requests.Response:
+        response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
 
-    def get_request(self, log: bool=False):
-        response = requests.get(self.url, headers=self.headers, json=self.payload)
+    def get_request(self, log: bool=False) -> requests.Response:
+        response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
+        return response
             
     # Return component payload
     def get_component_from_db(self) -> dict:

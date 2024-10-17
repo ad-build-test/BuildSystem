@@ -19,15 +19,15 @@
 # PYDM
 
 # Development Environment
-development:
+S3DF:
   ioc:
     - name: test-ioc
-      tag: test-ioc-1.0.1
+      tag: test-ioc-1.0.0
       iocs:
         - name: sioc-b34-test1
-          tag: test-ioc-1.0.1
-        - name: sioc-b34-test3
-          tag: test-ioc-1.0.1
+          tag: test-ioc-1.0.0
+        - name: sioc-b34-test2
+          tag: test-ioc-1.0.0
     - name: app2
       tag: v2.3.4
   hla:
@@ -44,7 +44,7 @@ development:
       tag: v1.1.0
 
 # lcls Environment
-lcls:
+LCLS:
   ioc:
     - name: app1
       tag: v1.2.3
@@ -64,7 +64,27 @@ lcls:
       tag: v1.1.0
 
 # facet Environment
-facet:
+FACET:
+  ioc:
+    - name: app1
+      tag: v1.2.3
+    - name: app2
+      tag: v2.3.4
+  hla:
+    - name: app3
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0
+
+# testfac Environment
+TESTFAC:
   ioc:
     - name: app1
       tag: v1.2.3
