@@ -3,6 +3,7 @@ import os
 import subprocess
 import requests
 import platform
+import warnings
 from ansible_api import run_ansible_playbook
 from artifact_api import ArtifactApi
 from start_test import Test
@@ -32,10 +33,6 @@ class Build(object):
         # Load YAML data from file
         with open(yaml_filepath, 'r') as file:
             yaml_data = yaml.safe_load(file)
-
-        # Print the parsed YAML data
-        print("Parsed YAML data:")
-        print(yaml_data)
         return yaml_data
 
     def get_environment(self):
@@ -45,8 +42,9 @@ class Build(object):
         self.source_dir = os.getenv('ADBS_SOURCE') # From backend - This is full filepath, like /mnt/eed/ad-build/scratch/component-a-branch1-RHEL8-66c4e8cb1dabd45f50f3112f/component-a
         self.component = os.getenv('ADBS_COMPONENT') # From CLI
         self.branch = os.getenv('ADBS_BRANCH') # From CLI
+        self.epics_host_arch = self.os_env + '-x86_64' # TODO: For now hardcode it to os x86
         custom_env = {"ADBS_OS_ENVIRONMENT": self.os_env, "ADBS_BUILD_TYPE": self.build_type, "ADBS_SOURCE": self.source_dir,
-               "ADBS_COMPONENT":  self.component, "ADBS_BRANCH": self.branch} # This env is just for sanity checking
+               "ADBS_COMPONENT":  self.component, "ADBS_BRANCH": self.branch, "EPICS_HOST_ARCH": self.epics_host_arch} # This env is just for sanity checking
         for key, value in custom_env.items():
             if (key == "ADBS_BUILD_TYPE"):
                 if (value == None): # Special case, default to 'normal'
@@ -84,10 +82,16 @@ class Build(object):
         # Search repo for the pkgs_file (like requirements.txt)
         pkgs_file = self.find_file(pkgs_file_name, self.source_dir)
         print("== ADBS == Installing python packages from " + pkgs_file_name)
-        try:
-            output_bytes = subprocess.check_output(['pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
-            output_bytes = e.output
+        if (self.os_env.lower() == 'rhel7'):
+            try:
+                output_bytes = subprocess.check_output(['python3', '-m', 'pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                output_bytes = e.output
+        else:
+            try:
+                output_bytes = subprocess.check_output(['pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                output_bytes = e.output
         output = output_bytes.decode("utf-8")
         print(output)
         return pkgs_file
@@ -103,11 +107,11 @@ class Build(object):
                         # Add epics to the LD_LIBRARY_PATH
                         # TODO: For now, just hardcode the architecture
                         self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
-                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag, self.os_env)
                     else:
                         download_dir = self.root_dir + '/' + name # Create the directory for component
                         os.mkdir(download_dir)
-                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag, self.os_env)
 
     def update_release_site(self):
         # This only applies to IOCs for REMOTE builds
@@ -148,10 +152,11 @@ class Build(object):
     def run_build(self, config_yaml: dict):
         # Run the repo-defined build-script
         build_script = './' + config_yaml['build']
+        print("== ADBS == Build environment:")
+        print("self.env=" + str(self.env))
+
         print("== ADBS == Running Build:")
         try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
-            print("os.environ=" + str(os.environ))
-            print("self.env=" + str(self.env))
             build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT, env=self.env)
         except subprocess.CalledProcessError as e:
             build_output_bytes = e.output

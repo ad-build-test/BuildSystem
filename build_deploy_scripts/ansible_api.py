@@ -2,10 +2,14 @@ import os
 import subprocess
 import sys
 
-def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_env=None):
+def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_env):
         os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
-        command = [
-            'ansible-playbook', 
+        command = []
+        if (custom_env['ADBS_OS_ENVIRONMENT'].lower() == 'rhel7'): # Special case for rhel7
+            command += ['python3', '-m', 'ansible', 'playbook']
+        else:
+             command += ['ansible-playbook']
+        command += [
             '-i', inventory,
             '-l', host_pattern,
             playbook
@@ -17,7 +21,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
             command += ['--extra-vars', extra_vars]
         # logging.info(command)
-        print(command)
+        # print(command)
 
         # Determine the appropriate arguments based on the Python version
         if sys.version_info >= (3, 7):
@@ -32,6 +36,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             }
 
         # Use subprocess.Popen to forward output directly
+        print("== ADBS == Running ansible playbook...")
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,

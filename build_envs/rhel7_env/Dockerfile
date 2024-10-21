@@ -54,3 +54,6 @@ RUN groupadd -g 1006 cd && \
 
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
+
+# Make /build open to 'adbuild' user
+RUN chown -R 46487:1006 /build/
