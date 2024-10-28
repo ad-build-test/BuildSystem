@@ -1,0 +1,28 @@
+# Build YAML
+format: 1
+# BEFORE USE: Replace all fields appropriately
+# [Required]
+repo: my_repo
+organization: my_organization
+
+# [Required]
+# Environments this app runs on
+environments:
+  - rocky9
+  - rhel7
+
+# [Optional]
+# Build Script for building the component
+# Can be a simple command like 'make'
+build: build.sh
+
+# [Optional]
+# dependencies this app needs built
+# component: tag name
+dependencies:
+  - epics-base: R7.0.8
+  - asyn: R4.39-1.0.1
+
+# [Optional]
+# Python packages list 
+python: requirements.txt

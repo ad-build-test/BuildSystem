@@ -106,7 +106,7 @@ class Build(object):
                         os.makedirs(download_dir)
                         # Add epics to the LD_LIBRARY_PATH
                         # TODO: For now, just hardcode the architecture
-                        self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
+                        # self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
                         self.artifact_api.get_component_from_registry(download_dir, name, tag, self.os_env)
                     else:
                         download_dir = self.root_dir + '/' + name # Create the directory for component
@@ -116,9 +116,7 @@ class Build(object):
     def update_release_site(self):
         # This only applies to IOCs for REMOTE builds
         # 1) Update the release site to point to the repos here
-        # TODO: in the install_dependencies(), make sure it creates <component>/ dirs
-        pass
-        # 1) Read the file and parse the key-value pairs
+        # 2) Read the file and parse the key-value pairs
         filename = 'RELEASE_SITE'
         with open(filename, 'r') as file:
             lines = file.readlines()
@@ -150,40 +148,51 @@ class Build(object):
                 file.write(f'{key}={value}\n')
 
     def run_build(self, config_yaml: dict):
-        # Run the repo-defined build-script
-        build_script = './' + config_yaml['build']
+        # TODO: Right now this is only valid for bash scripts
+        error_in_build = False
+        build_method = config_yaml['build']
         print("== ADBS == Build environment:")
         print("self.env=" + str(self.env))
-
         print("== ADBS == Running Build:")
-        try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
-            build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT, env=self.env)
-        except subprocess.CalledProcessError as e:
-            build_output_bytes = e.output
+        if build_method.endswith('.sh'): # Run the repo-defined build-script
+            build_script = './' + config_yaml['build']
+            try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
+                build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT, env=self.env)
+            except subprocess.CalledProcessError as e:
+                build_output_bytes = e.output
+                error_in_build = True
+        else: # Run the build command
+            try:
+                build_output_bytes = subprocess.check_output([build_method], stderr=subprocess.STDOUT, env=self.env)
+            except subprocess.CalledProcessError as e:
+                build_output_bytes = e.output
+                error_in_build = True
+
         build_output = build_output_bytes.decode("utf-8")
         print(build_output)
 
         # Create build results
-        # TODO: if rhel7, then do python3 -m ansible playbook <playbook> or try ansible 
         # module from python might work too, then its for rocky9 rhel8/7.
         # test deployment again since altered ansible api, then test build this section specifically
-        user_src_repo = self.source_dir
-        playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
-            "user_src_repo": "{user_src_repo}"}}'
-        adbs_playbooks_dir = "/build/ioc_module/"
-        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-                                adbs_playbooks_dir + 'ioc_build.yml',
-                                'S3DF',
-                                playbook_args,
-                                self.env)
-        print("Playbook execution finished with return code:", return_code)
+        if (error_in_build):
+            print("== ADBS == Error in the build")
+        else:
+            user_src_repo = self.source_dir
+            playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
+                "user_src_repo": "{user_src_repo}"}}'
+            adbs_playbooks_dir = "/build/ioc_module/"
+            return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                    adbs_playbooks_dir + 'ioc_build.yml',
+                                    'S3DF',
+                                    playbook_args,
+                                    self.env)
+            print("Playbook execution finished with return code:", return_code)
 
     def push_build_results(self):
         # TODO: Add logic where if a pre-merge build is done, then push
         # build results to the artifact storage.
         if self.build_type == 'official': # TODO: maybe 'tagged'?
             pass
-        
 
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed
@@ -222,7 +231,7 @@ if __name__ == "__main__":
     print("== ADBS == Current dir: " + str(os.getcwd()))
     print("== ADBS == Root dir: " + build.root_dir)
     # 2) Parse yaml
-    config_yaml = build.parse_yaml('configure/CONFIG.yaml')
+    config_yaml = build.parse_yaml('config.yaml')
     # 3) Parse dependencies
     dependencies = build.parse_dependencies(config_yaml)
     if (dependencies): # Possible an app has no dependencies
@@ -245,3 +254,9 @@ if __name__ == "__main__":
         pass
         # TODO: Don't release this yet until done with regular remote build
         # build.create_docker_file(dependencies, py_pkgs_file)
+    
+    # 8) If official build, push build results
+    build.push_build_results()
+    
+    # 9) Done
+    print("== ADBS == Remote build finished.")
