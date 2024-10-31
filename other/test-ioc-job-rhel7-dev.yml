@@ -13,13 +13,13 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: rhel7-dev
+  name: test-build-rhel7-dev
 spec:
   securityContext:
     runAsUser: 46487
     runAsGroup: 1006
   containers:
-  - name: rhel7-dev
+  - name: test-build-rhel7-dev
     image: pnispero/rhel7-env:dev
     imagePullPolicy: Always
     # start the build script
@@ -29,24 +29,21 @@ spec:
       - >-
           echo "$ cd /build/" &&
           cd /build/ && 
-          echo "$ pwd && ls" &&
-          pwd && ls &&
-          echo "$ python3 start_build.py" &&
-          python3 start_build.py &&
           echo "$ sleep to keep container alive for debug" &&
           sleep infinity
     env:
-    - name: ADBS_SOURCE # From backend
-      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc
+    - name: ADBS_SOURCE
+      value: /mnt/eed/ad-build/scratch/test-ioc
       # value: /mnt/build-scratch/ad-build/test-ioc-main
-    - name: ADBS_OS_ENVIRONMENT # From backend
+    - name: ADBS_OUTPUT
+      value: /mnt/eed/ad-build/scratch/test-ioc
+      # value: /mnt/build-scratch/ad-build/test-ioc-main/output
+    - name: ADBS_OS_ENVIRONMENT
       value: rhel7
-    - name: ADBS_COMPONENT # From CLI
+    - name: ADBS_COMPONENT
       value: test-ioc
-    - name: ADBS_BRANCH # From CLI
+    - name: ADBS_BRANCH
       value: main
-    - name: PYTHONUNBUFFERED # From backend
-      value: "1"
     volumeMounts:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt

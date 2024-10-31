@@ -6,16 +6,21 @@
 FROM rockylinux:9
 
 # update
-RUN yum -y update
+RUN dnf -y update
 
 # install glibc
-RUN yum install -y glibc
+RUN dnf install -y glibc
 
 # install gcc and make
-RUN yum install -y gcc-c++ && yum install -y make
+RUN dnf install -y gcc-c++ && dnf install -y make
+
+# install readline-devel, ncurses-devel
+RUN dnf install -y readline-devel \
+    ncurses-devel \
+    && dnf clean all
 
 # install vim and python3 and pip
-RUN yum install -y vim && yum install -y python3 && yum install -y pip
+RUN dnf install -y vim && dnf install -y python3 && dnf install -y pip
 
 # install pyyaml, requests, ansible
 RUN pip install pyyaml \
@@ -23,13 +28,13 @@ RUN pip install pyyaml \
     && pip install ansible
 
 # install perl
-RUN yum install -y perl
+RUN dnf install -y perl
 
 # install git
-RUN yum install -y git
+RUN dnf install -y git
 
 # install podman
-RUN yum install -y podman
+RUN dnf install -y podman
 
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
@@ -43,3 +48,6 @@ RUN groupadd -g 1006 cd && \
 
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/
+
+# Add env variable for python scripts to stream live
+ENV PYTHONUNBUFFERED=1

@@ -4,13 +4,20 @@
 # How to build:
 # 1) Go to top of repo
 # 2) docker build --tag pnispero/rhel7-env:latest -f build_envs/rhel7_env/Dockerfile .
+# TODO: update the install to use just one RUN command and a bunch of /'s'
 FROM registry.access.redhat.com/ubi7/ubi
 
 # update
 RUN yum -y update
 
-# install glibc
-RUN yum install -y glibc
+# install glibc, readline-devel (missing in rhel7 ubi), ncurses-devel
+RUN yum install -y glibc \
+    readline-devel \
+    ncurses-devel \
+    && yum clean all
+
+RUN ln -s /usr/lib64/libreadline.so.6 /usr/lib64/libreadline.so
+# RUN yum install -y glibc && yum install -y readline-devel && yum install -y ncurses-devel
 
 # install gcc and make
 RUN yum install -y gcc-c++ && yum install -y make
@@ -54,3 +61,9 @@ RUN groupadd -g 1006 cd && \
 
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
+
+# Make /build open to 'adbuild' user
+RUN chown -R 46487:1006 /build/
+
+# Add env variable for python scripts to stream live
+ENV PYTHONUNBUFFERED=1

@@ -9,7 +9,7 @@ import subprocess
 import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
-from adbs_cli.cli_configuration import INPUT_PREFIX
+from adbs_cli.cli_configuration import INPUT_PREFIX, Api
 
 # TODO: May make logic a single function since its the same for all 3
 # make the endpoint an argument
@@ -175,116 +175,133 @@ def test(component: str, branch: str):
 @run.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-i", "--initial", is_flag=True, required=False, help="Initial deployment")
-@click.option("-o", "--override", is_flag=True, required=False, help="Point deployment to your user-space repo")
-@click.option("-s", "--s3df", is_flag=True, required=False, help="Deploy to S3DF Dev")
-@click.option("-l", "--lcls", is_flag=True, required=False, help="Deploy to LCLS Prod")
-@click.option("-f", "--facet", is_flag=True, required=False, help="Deploy to FACET Prod")
-@click.option("-t", "--testfac", is_flag=True, required=False, help="Deploy to TestFac Prod")
-def deployment(component: str, branch: str, initial: bool, override: bool,
-               s3df: bool, lcls: bool, facet: bool, testfac: bool):
-    """Run a deployment"""
+@click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
+@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
+@click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2")
+@click.argument("tag")
+@click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
+@click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
+def deployment(component: str, branch: str, facility: str, type: str,
+                ioc: str, tag: str, initial: bool, override: bool):
+    """Run a deployment (may use args, if not then prompted for required args).
+        Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
+        Will automatically pickup app in the directory you're sitting in.
+    """
     # 1) Set fields
-    request = Request(Component(component, branch))    
-    request.set_component_fields()
+    deployment_request = Request(Component(component, branch), Api.DEPLOYMENT)    
+    deployment_request.set_component_fields()
 
-    # For now assume the user is in the repo they want to deploy
-    # TODO: Add logic for cloning repo or just the build results?
-    # # 2) If user is not in repo, clone repo
-    # clone_repo(request)
-
-    # Parse yaml if user-defined deployment script
-    # manifest_data = parse_manifest('CONFIG.yaml')
-
-    # 3) Get fields
+    # 2) Get fields
     print("== ADBS == At the moment, deployment only for IOCs is supported")
 
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     # question = [inquirer.List(
-    #             "ioc_type",
+    #             "app_type",
     #             message="Specify type of ioc",
     #             choices=["SIOC", "HIOC", "VIOC"])]
     # ioc_type = inquirer.prompt(question)['ioc_type']
-    question = [inquirer.List(
-                "initial",
-                message="Initial deployment?",
-                choices=[True, False])]
-    if (not initial):
-        initial = inquirer.prompt(question)['initial']
-    question = [inquirer.List(
-                "override",
-                message="Point deployment to your user-space repo?",
-                choices=[True, False])]
-    if (not override):
-        override = inquirer.prompt(question)['override']
+    # Unnecessary to prompt for this
+    # question = [inquirer.List(
+    #             "initial",
+    #             message="Initial deployment?",
+    #             choices=[True, False])]
+    # if (not initial):
+    #     initial = inquirer.prompt(question)['initial']
+    # Unnecessary to prompt for this
+    # question = [inquirer.List(
+    #             "override",
+    #             message="Point deployment to your user-space repo?",
+    #             choices=[True, False])]
+    # if (not override):
+    #     override = inquirer.prompt(question)['override']
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
-                choices=["S3DF", "LCLS", "FACET", "TestFac"],
+                choices=["S3DF", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]
-    # Get the different facilities from command line arguments
-    facilities = []
-    if (s3df): facilities.append("S3DF")
-    if (lcls): facilities.append("LCLS")
-    if (facet): facilities.append("FACET")
-    if (testfac): facilities.append("TestFac")
-    if (facilities == []):
-        facilities = inquirer.prompt(question)['facility']
-
-    ioc_dict = parse_manifest('deploy_config.yaml')
-
-    # 4) Get list of IOCs for user to choose to deploy on DEV
-    if ('S3DF' in facilities):
-        dev_ioc_list = list(ioc_dict.keys())
-        question = [inquirer.Checkbox(
-            "iocs",
-            message="For S3DF Dev, which IOC's do you want to deploy?",
-            choices=['ALL'] + dev_ioc_list,
-            default=[],
-            ),]
-        dev_ioc_list = inquirer.prompt(question)["iocs"]
-        if ('ALL' in dev_ioc_list):
-            dev_ioc_dict = ioc_dict
+    # 3) Get ioc list for each facility
+    ioc_list = ioc.split(',')
+    # TODO: Add logic so every facility has their own list of iocs
+    if (ioc.upper() == "ALL"):
+        # 3.1) If 'ALL' then determine which facilities for all iocs the user wants
+        if (not facility):
+            facilities = inquirer.prompt(question)['facility']
+            pass
         else:
-            dev_ioc_dict = {ioc: ioc_dict[ioc] for ioc in dev_ioc_list if ioc in ioc_dict}
+            facilities = facility.split(',')
+            print(f'facilities: {facilities}')
+        facilities = [facility.upper() for facility in facilities] # Uppercase every facility
 
-    tag = input(INPUT_PREFIX + "Specify full component tagname (ex: test-ioc-1.0.0): ")
-    playbook_output_path = os.getcwd() + "/ADBS_TMP"
+        facility_ioc_dict = {}
+        for facility in facilities: # Get list of iocs from every facility user chose for this app
+            ioc_list_request = Request(api=Api.DEPLOYMENT)
+            ioc_list_request.set_endpoint(f'ioc/info')
+            ioc_list_request.add_to_params("name", deployment_request.component.name)
+            ioc_list_request.add_to_params("facility", facility)
+            response = ioc_list_request.get_request()
+            if (response.status_code == 200):
+                ioc_list = response.json()['info']['iocs']
+                facility_ioc_dict[facility] = ioc_list
+        logging.info(f"ALL ioc's in facilities you specified: {facility_ioc_dict}")
+        pass
+    elif (ioc_list == []):
+        # 3.2) Possible user just wants to deploy app and not any ioc
+        print("== ADBS == No IOC's were specified, only deploying application")
+    else:
+        if (initial):
+            # 3.3) TODO: If initial deployment, ask user for facility they want to deploy specified ioc's
+            pass
+        else:
+            # 3.4) if not 'ALL', then figure out what ioc's specified by user belong to what facilities
+            # TODO: logic to determine what ioc belongs in which facility, if iocs are not found in any facility
+            # THEN WARN USER NOT FOUND, and ask if initial deployment or if a typo on their end
+            pass
+
+    # 4) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
-    user_src_repo = request.component.git_get_top_dir()
-    tarball_path = user_src_repo + '/build_results/'
-    tarball = str(find_tarball(tarball_path))
-    if (tarball == None):
-        print("== ADBS == No tarball found in " + tarball_path)
-
     playbook_args_dict = {
+        "facility": None, # Get's set later
         "initial": initial,
-        "component_name": request.component.name,
+        "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "tarball": tarball,
-        "ioc_dict": ioc_dict,
-        "output_path": playbook_output_path
+        "ioc_list": ioc_list
     }
 
-    # 5) Run the playbook - call deployment playbook for every facility user chose
+    # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
     for facility in facilities:
+        print(f"== ADBS == Deploying to facility: {facility}\n")
         playbook_args_dict['facility'] = facility
-        playbook_args_dict['user_src_repo'] = None
-        if (facility == 'S3DF'):
-            playbook_args_dict['ioc_dict'] = dev_ioc_dict
+            
+    # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
+        if ('S3DF' in facilities):
+            playbook_output_path = os.getcwd() + "/ADBS_TMP"
+            user_src_repo = deployment_request.component.git_get_top_dir()
+            tarball_path = user_src_repo + '/build_results/'
+            tarball = str(find_tarball(tarball_path))
+            if (tarball == None):
+                print("== ADBS == No tarball found in " + tarball_path)
+            playbook_args_dict['tarball'] = tarball
+            playbook_args_dict['user_src_repo'] = None
             if (override == True):
                 playbook_args_dict['user_src_repo'] = user_src_repo
 
-        isExist = os.path.exists(playbook_output_path)
-        if not isExist:
-            print(f"= CLI = Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
-            os.mkdir(playbook_output_path)
-        adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+            isExist = os.path.exists(playbook_output_path)
+            if not isExist:
+                print(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+                os.mkdir(playbook_output_path)
+            adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
 
-        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-                                           adbs_playbooks_dir + 'ioc_deploy.yml',
-                                            facility,
-                                            playbook_args_dict)
-        print("Playbook execution finished with return code:", return_code)
+            return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                            adbs_playbooks_dir + 'ioc_deploy.yml',
+                                                facility,
+                                                playbook_args_dict)
+            print("Playbook execution finished with return code:", return_code)
+            # TODO: API call to deployment controller to add deployment info to db
+        else: # 5.2) Otherwise deployment controller will deploy to production facilities
+            deployment_request.set_endpoint('ioc/deployment')
+            deployment_request.add_dict_to_payload(playbook_args_dict)
+            deployment_request.put_request(log=True)
+        if (initial):
+            print("== ADBS == Please create startup.cmd manually!")

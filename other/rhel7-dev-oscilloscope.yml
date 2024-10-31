@@ -13,13 +13,13 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: rhel7-dev
+  name: rhel7-dev-oscilloscope
 spec:
   securityContext:
     runAsUser: 46487
     runAsGroup: 1006
   containers:
-  - name: rhel7-dev
+  - name: rhel7-dev-oscilloscope
     image: pnispero/rhel7-env:dev
     imagePullPolicy: Always
     # start the build script
@@ -37,12 +37,11 @@ spec:
           sleep infinity
     env:
     - name: ADBS_SOURCE # From backend
-      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc
-      # value: /mnt/build-scratch/ad-build/test-ioc-main
+      value: /mnt/eed/ad-build/scratch/oscilloscope-test-pnispero/oscilloscope
     - name: ADBS_OS_ENVIRONMENT # From backend
       value: rhel7
     - name: ADBS_COMPONENT # From CLI
-      value: test-ioc
+      value: oscilloscope
     - name: ADBS_BRANCH # From CLI
       value: main
     - name: PYTHONUNBUFFERED # From backend

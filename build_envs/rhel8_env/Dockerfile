@@ -50,3 +50,5 @@ RUN groupadd -g 1006 cd && \
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/
 
+# Add env variable for python scripts to stream live
+ENV PYTHONUNBUFFERED=1
