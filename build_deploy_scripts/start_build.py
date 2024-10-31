@@ -1,11 +1,10 @@
-import json
 import yaml
 import os
-import sys
-import tarfile
 import subprocess
-import shutil
 import requests
+import platform
+from ansible_api import run_ansible_playbook
+from artifact_api import ArtifactApi
 from start_test import Test
 
 # Flow
@@ -24,10 +23,9 @@ from start_test import Test
 
 class Build(object):
     def __init__(self):
-        self.registry_base_path = "/mnt/eed/ad-build/registry/"
-        self.artifact_api_url = "http://artifact-api-service.artifact:8080/"
         self.get_environment()
         self.root_dir = None # This is the root/top directory
+        self.artifact_api = ArtifactApi()
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
 
@@ -57,6 +55,7 @@ class Build(object):
             elif (value == None):
                 # Raise exception
                 raise ValueError("Missing environment variable - " + key)
+        custom_env['HOME'] = '/build/' # Needed for ansible to run as non-root
         # Copy the current environment
         self.env = os.environ.copy()
         # Update with new environment variables
@@ -93,69 +92,28 @@ class Build(object):
         print(output)
         return pkgs_file
     
-    def download_file(self, component, tag, response, epics_base=False):
-        # Download file from api, and extract to ADBS_SOURCE
-        # Download the .tar.gz file
-        tarball_filename = tag + '.tar.gz'
-        if response.status_code == 200:
-            with open(tarball_filename, 'wb') as file:
-                file.write(response.content)
-            print('== ADBS == Tarball downloaded successfully')
-            output_dir = self.root_dir
-            if (epics_base): # Epics_base special case, path into root_dir/epics/base/<ver>
-                output_dir = output_dir + '/epics/base'
-                os.makedirs(output_dir)
-                # Add epics to the LD_LIBRARY_PATH
-                # TODO: For now, just hardcode the architecture
-                self.env['LD_LIBRARY_PATH'] = output_dir + '/' + tag + '/lib/linux-x86_64/'
-            else:
-                # Create the directory for component
-                output_dir = self.root_dir + '/' + component
-                os.mkdir(output_dir)
-            # Extract the .tar.gz file
-            with tarfile.open(tarball_filename, 'r:gz') as tar:
-                tar.extractall(path=output_dir)
-            print(f'== ADBS == {tarball_filename} extracted to {output_dir}')
-        else:
-            print('== ADBS == Failed to retrieve the file. Status code:', response.status_code)
-
-    def get_component_from_registry(self, component: str, tag: str):
-        # For now look into the /mnt/eed/ad-build/registry
-        # rest api
-        print(component, tag)     
-        payload = {"component": component, "tag": tag, "arch": self.os_env}
-        print(payload)
-        print(f"== ADBS == Get component {component},{tag} request to artifact storage...")
-        response = requests.get(url=self.artifact_api_url + 'component', json=payload)
-        if (component == 'epics-base'): # special case
-            self.download_file(component, tag, response, epics_base=True)
-        else:
-            self.download_file(component, tag, response)
-        # For now we can assume the component exists, otherwise the api builds and returns it
-
     def install_dependencies(self, dependencies: dict):
         print("== ADBS == Installing dependencies")
         print(dependencies)
         for dependency in dependencies:
             for name,tag in dependency.items():
-                    self.get_component_from_registry(name, tag)
+                    if (name == 'epics-base'): # Epics_base special case, path into root_dir/epics/base/<ver>
+                        download_dir = self.root_dir + '/epics/base' # Create the directory for component
+                        os.makedirs(download_dir)
+                        # Add epics to the LD_LIBRARY_PATH
+                        # TODO: For now, just hardcode the architecture
+                        self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
+                    else:
+                        download_dir = self.root_dir + '/' + name # Create the directory for component
+                        os.mkdir(download_dir)
+                        self.artifact_api.get_component_from_registry(download_dir, name, tag)
 
     def update_release_site(self):
         # This only applies to IOCs for REMOTE builds
         # 1) Update the release site to point to the repos here
         # TODO: in the install_dependencies(), make sure it creates <component>/ dirs
         pass
-        # BASE_MODULE_VERSION=7.0.3.1-1.0
-        # EPICS_SITE_TOP=/mnt/eed/ad-build/scratch/test-ioc-main-pnispero/epics
-        # BASE_SITE_TOP=${EPICS_SITE_TOP}/base
-        # EPICS_MODULES=${EPICS_SITE_TOP}/${BASE_MODULE_VERSION}/modules
-        # IOC_SITE_TOP=${EPICS_SITE_TOP}/iocTop
-        # PACKAGE_SITE_TOP=/afs/slac/g/lcls/package
-        # MATLAB_PACKAGE_TOP=/afs/slac/g/lcls/package/matlab
-        # PSPKG_ROOT=/afs/slac/g/lcls/pkg_mgr
-        # TOOLS_SITE_TOP=/afs/slac/g/lcls/tools
-        # ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
-    
         # 1) Read the file and parse the key-value pairs
         filename = 'RELEASE_SITE'
         with open(filename, 'r') as file:
@@ -199,6 +157,28 @@ class Build(object):
             build_output_bytes = e.output
         build_output = build_output_bytes.decode("utf-8")
         print(build_output)
+
+        # Create build results
+        # TODO: if rhel7, then do python3 -m ansible playbook <playbook> or try ansible 
+        # module from python might work too, then its for rocky9 rhel8/7.
+        # test deployment again since altered ansible api, then test build this section specifically
+        user_src_repo = self.source_dir
+        playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
+            "user_src_repo": "{user_src_repo}"}}'
+        adbs_playbooks_dir = "/build/ioc_module/"
+        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+                                adbs_playbooks_dir + 'ioc_build.yml',
+                                'S3DF',
+                                playbook_args,
+                                self.env)
+        print("Playbook execution finished with return code:", return_code)
+
+    def push_build_results(self):
+        # TODO: Add logic where if a pre-merge build is done, then push
+        # build results to the artifact storage.
+        if self.build_type == 'official': # TODO: maybe 'tagged'?
+            pass
+        
 
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed

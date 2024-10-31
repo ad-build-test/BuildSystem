@@ -1,0 +1,41 @@
+# Ansible execution environment test manifest
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ansible-execution-environment
+spec:
+  # securityContext:
+  #   runAsUser: 46487
+  #   runAsGroup: 1006
+  containers:
+  - name: ansible-execution-environment
+    image: pnispero/deploy-env:latest
+    imagePullPolicy: Always
+    # start the build script
+    command: ["/bin/sh"]
+    args:
+      - -c
+      - >-
+          echo "$ cd /build/" &&
+          cd /build/ && 
+          echo "$ pwd && ls" &&
+          pwd && ls &&
+          echo "$ python3 start_deploy.py" &&
+          python3 start_deploy.py &&
+          echo "$ sleep to keep container alive for debug" &&
+          sleep infinity
+    env:
+    - name: ADBS_FACILITIES
+      value: '["S3DF"]'
+    - name: ADBS_INITIAL
+      value: "true"
+    - name: ADBS_APP_TYPE
+      value: IOC
+    - name: ADBS_COMPONENT
+      value: test-ioc
+    - name: ADBS_TAG
+      value: test-ioc-1.0.0
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 4000m

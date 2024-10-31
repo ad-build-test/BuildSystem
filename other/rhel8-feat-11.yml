@@ -1,0 +1,52 @@
+# Same as test-ioc-job-rhel8-dev.yml except this one points the image to feat-11 tag
+# Ansible execution environment test manifest
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rhel8-feat-11
+spec:
+  securityContext:
+    runAsUser: 46487
+    runAsGroup: 1006
+  containers:
+  - name: rhel8-feat-11
+    image: pnispero/rhel8-env:feat-11
+    imagePullPolicy: Always
+    # start the build script
+    command: ["/bin/sh"]
+    args:
+      - -c
+      - >-
+          echo "$ cd /build/" &&
+          cd /build/ && 
+          echo "$ pwd && ls" &&
+          pwd && ls &&
+          echo "$ python3 start_build.py" &&
+          python3 start_build.py &&
+          echo "$ sleep to keep container alive for debug" &&
+          sleep infinity
+    env:
+    - name: ADBS_SOURCE # From backend
+      value: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc
+      # value: /mnt/build-scratch/ad-build/test-ioc-main
+    - name: ADBS_OS_ENVIRONMENT # From backend
+      value: rhel8
+    - name: ADBS_COMPONENT # From CLI
+      value: test-ioc
+    - name: ADBS_BRANCH # From CLI
+      value: main
+    volumeMounts:
+    - name: s3df-dev-container-ad-group
+      mountPath: /mnt
+    - name: podman-storage
+      mountPath: /var/lib/containers/storage  # Mount point for Podman storage
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 4000m
+  volumes:
+  - name: s3df-dev-container-ad-group
+    persistentVolumeClaim:
+      claimName: s3df-dev-container-ad-group
+  - name: podman-storage
+    emptyDir: {}  # Use an emptyDir volume for storage

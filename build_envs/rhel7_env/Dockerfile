@@ -39,10 +39,18 @@ RUN yum install -y git
 # install pyyaml, requests, and urllib3<2.0
 RUN python3 -m pip install pyyaml \
     && python3 -m pip install requests \
-    && python3 -m pip install 'urllib3<2.0' 
+    && python3 -m pip install 'urllib3<2.0' \
+    && python3 -m pip install ansible
 
 # Install rpm-build
 RUN yum install -y rpm-build
 
+# Add playbooks to /build
+ADD ansible /build/
+
+# Create adbuild with a specific UID (e.g., 46487)
+RUN groupadd -g 1006 cd && \
+    useradd -u 46487 -g cd -m adbuild
+
 # Add build scripts to /build
-ADD build_scripts /build/
+ADD build_deploy_scripts /build/
