@@ -64,3 +64,6 @@ ADD build_deploy_scripts /build/
 
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/
+
+# Add env variable for python scripts to stream live
+ENV PYTHONUNBUFFERED=1

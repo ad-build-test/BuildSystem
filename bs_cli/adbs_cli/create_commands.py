@@ -151,28 +151,31 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
         if (component_obj.git_push(full_branch_name)):
             click.echo('Successfully created branch: ' + full_branch_name)
 
-
-
 @create.command()
-def issue(): 
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-i", "--id", required=True, help="CATER ID")
+def issue(component: str, id: str):
+    """Create a new issue based off CATER ID"""
     # BLOCKED: CATER does not have an API, but will have it once the NEW CATER 
-    # Claudio is working on is finished
-    # TODO: 
-    # 1) get link to CATER, or see if CATER has API
-    # 2) Then use that to generate the issue.
-    # 3) May use gh api instead of gh issue so we can avoid prompting user each field
-    """Create a new issue"""
-    click.echo('Create new issue based off cater')
-    cater_id = click.prompt('What is the cater ID?')
-    type = click.prompt('Which system do you want your issue in? [Github | Jira]').lower()
-    print(type)
-    full_url = cli_configuration["server_url"] + 'component'
-    send_payload = {"component": component_name,
-                    "branch": branch_name,
-                    "issueTracker": type,
-                    "linux_username": cli_configuration["linux_uname"],
-                    "github_username": cli_configuration["github_uname"] }
-    response = requests.post(full_url, send_payload)
-    print(response)
+    # 1) Set fields
+    logging.info("THIS COMMAND IS ONLY used for demo purposes for now")
+    request = Request(Component(component))
+    request.set_component_name()
+
+    # 2) Make call to cater
+    # TODO: Since CATER doesn't have API as of this comment written,
+    # just put in placeholder info for demo
+    issue_title = "CATER 170777 - add EPICS control for oscilloscope scop-li20-ex04"
+    issue_body = "CATER: [170777](https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3)"
+
+
+    # 3) Add to payload
+    request.add_to_payload("issueTitle", issue_title)
+    request.add_to_payload("issueBody", issue_body)
+
+    # 4) Send request to backend
+    endpoint = 'component/' + request.component.name + '/issue'
+    request.set_endpoint(endpoint)
+    request.post_request(log=True)
 
     
