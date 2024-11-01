@@ -2,11 +2,10 @@ import yaml
 import os
 import subprocess
 import requests
-import platform
-import warnings
 from ansible_api import run_ansible_playbook
 from artifact_api import ArtifactApi
 from start_test import Test
+from logger_setup import setup_logger
 
 # Flow
 # 1) Parse the contents of /config/build_config.json
@@ -83,7 +82,7 @@ class Build(object):
             return None
         # Search repo for the pkgs_file (like requirements.txt)
         pkgs_file = self.find_file(pkgs_file_name, self.source_dir)
-        print("== ADBS == Installing python packages from " + pkgs_file_name)
+        logger.info("Installing python packages from " + pkgs_file_name)
         if (self.os_env.lower() == 'rhel7'):
             try:
                 output_bytes = subprocess.check_output(['python3', '-m', 'pip', 'install', '-r', pkgs_file], stderr=subprocess.STDOUT)
@@ -95,12 +94,12 @@ class Build(object):
             except subprocess.CalledProcessError as e:
                 output_bytes = e.output
         output = output_bytes.decode("utf-8")
-        print(output)
+        logger.info(output)
         return pkgs_file
     
     def install_dependencies(self, dependencies: dict):
-        print("== ADBS == Installing dependencies")
-        print(dependencies)
+        logger.info("Installing dependencies")
+        logger.info(dependencies)
         for dependency in dependencies:
             for name,tag in dependency.items():
                     if (name == 'epics-base'): # Epics_base special case, path into root_dir/epics/base/<ver>
@@ -174,12 +173,11 @@ class Build(object):
             file.writelines(lines)
 
     def run_build(self, config_yaml: dict):
-        # TODO: Right now this is only valid for bash scripts
         error_in_build = False
         build_method = config_yaml['build']
-        print("== ADBS == Build environment:")
-        print("self.env=" + str(self.env))
-        print("== ADBS == Running Build:")
+        logger.info("Build environment:")
+        logger.debug("self.env=" + str(self.env))
+        logger.info("Running Build:")
         if build_method.endswith('.sh'): # Run the repo-defined build-script
             build_script = './' + config_yaml['build']
             try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
@@ -195,13 +193,13 @@ class Build(object):
                 error_in_build = True
 
         build_output = build_output_bytes.decode("utf-8")
-        print(build_output)
+        logger.info(build_output)
 
         # Create build results
         # module from python might work too, then its for rocky9 rhel8/7.
         # test deployment again since altered ansible api, then test build this section specifically
         if (error_in_build):
-            print("== ADBS == Error in the build")
+            logger.info("Error in the build")
         else:
             user_src_repo = self.source_dir
             playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
@@ -212,7 +210,7 @@ class Build(object):
                                     'S3DF',
                                     playbook_args,
                                     self.env)
-            print("Playbook execution finished with return code:", return_code)
+            logger.info(f"Playbook execution finished with return code: {return_code}")
 
     def push_build_results(self):
         # TODO: Add logic where if a pre-merge build is done, then push
@@ -241,21 +239,21 @@ class Build(object):
             # File closed automatically
         # Send api request to build
         payload = {"dockerfile": dockerfile_name, "arch": self.os_env}
-        print(payload)
-        print("== ADBS == Send image build request to artifact storage...")
+        logger.info(payload)
+        logger.info("Send image build request to artifact storage...")
         response = requests.post(url=self.artifact_api_url + 'image', json=payload)
-        print(response.status_code)
-        print(response.json())
+        logger.info(response.status_code)
+        logger.info(response.json())
 
 if __name__ == "__main__":
-    print("Dev Version")
     build = Build()
     # 1) Enter build directory
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
     os.chdir(build.source_dir)
     build.root_dir = os.path.dirname(build.source_dir)
-    print("== ADBS == Current dir: " + str(os.getcwd()))
-    print("== ADBS == Root dir: " + build.root_dir)
+    logger = setup_logger(build.source_dir + '/build.log')
+    logger.info("Current dir: " + str(os.getcwd()))
+    logger.info("Root dir: " + build.root_dir)
     # 2) Parse yaml
     config_yaml = build.parse_yaml('config.yaml')
     # 3) Parse dependencies
@@ -286,4 +284,4 @@ if __name__ == "__main__":
     build.push_build_results()
     
     # 10)  Done
-    print("== ADBS == Remote build finished.")
+    logger.info("Remote build finished.")

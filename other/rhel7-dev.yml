@@ -45,8 +45,6 @@ spec:
       value: test-ioc
     - name: ADBS_BRANCH # From CLI
       value: main
-    - name: PYTHONUNBUFFERED # From backend
-      value: "1"
     volumeMounts:
     - name: s3df-dev-container-ad-group
       mountPath: /mnt
