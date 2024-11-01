@@ -1,6 +1,9 @@
 import os
 import subprocess
 import sys
+import logging
+
+logger = logging.getLogger('my_logger')
 
 def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_env):
         os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
@@ -20,8 +23,6 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             # extra_vars_str = json.dumps(extra_vars)
             # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
             command += ['--extra-vars', extra_vars]
-        # logging.info(command)
-        # print(command)
 
         # Determine the appropriate arguments based on the Python version
         if sys.version_info >= (3, 7):
@@ -36,7 +37,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             }
 
         # Use subprocess.Popen to forward output directly
-        print("== ADBS == Running ansible playbook...")
+        logger.info("Running ansible playbook...")
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
@@ -45,13 +46,13 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             env=custom_env
         )
 
-        # Print output in real-time
+        # logger.info output in real-time
         for line in iter(process.stdout.readline, ''):
-            print(line, end='')  # Print each line as it is output
+            logger.debug(line.strip())  # Print each line as it is output
 
         # Ensure all stderr is also handled
         for line in iter(process.stderr.readline, ''):
-            print(line, end='')
+            logger.debug(line.strip())
 
         process.stdout.close()
         process.stderr.close()

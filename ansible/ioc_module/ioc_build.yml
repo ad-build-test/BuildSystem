@@ -30,6 +30,8 @@
       - '{{ user_src_repo }}/db'
       - '{{ user_src_repo }}/dbd'
       - '{{ user_src_repo }}/iocBoot'
+      - '{{ user_src_repo }}/build.log'
+    ignore_errors: yes # In place in case build.log is missing for local builds
     # no '/' on directories, otherwise it won't copy the directory itself just the contents
 
   - name: Package app with tarball

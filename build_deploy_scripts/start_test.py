@@ -1,6 +1,8 @@
 import os
 import subprocess
+import logging
 
+logger = logging.getLogger('my_logger')
 # Scripts to run unit tests and integration tests
 class Test(object):
     def __init__(self):
@@ -8,23 +10,23 @@ class Test(object):
         self.artifact_api_url = "http://artifact-api-service:8080/"
 
     def run_python_script(self, script: str):
-        print("== ADBS == Running python script test " + script)
+        logger.info("Running python script test " + script)
         try:
             output_bytes = subprocess.check_output(['python3', script], stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             output_bytes = e.output
         output = output_bytes.decode("utf-8")
-        print(output)
+        logger.info(output)
 
     def run_bash_script(self, script: str):
-        print("== ADBS == Running bash script test " + script)
+        logger.info("Running bash script test " + script)
         script = './' + script
         try:
             output_bytes = subprocess.check_output([script], stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             output_bytes = e.output
         output = output_bytes.decode("utf-8")
-        print(output)
+        logger.info(output)
 
     def run_unit_tests(self, source_dir: str):
         """
@@ -33,13 +35,13 @@ class Test(object):
         Possible to add unit testing information to the test-ioc/configure/CONFIG.yaml at main
         · ad-build-test/test-ioc (github.com), with a field specifying which test files to run
         """
-        print("== ADBS == Running unit tests")
+        logger.info("Running unit tests")
         # 1) Enter build directory
         test_dir = source_dir + "/unit_tests"
         try:
             os.chdir(test_dir)
         except FileNotFoundError:
-            print("== ADBS == Unit tests do not exist for this repo")
+            logger.info("Unit tests do not exist for this repo")
             return
             
         # 2) Run the bash/python scripts in the directory

@@ -3,6 +3,9 @@
 import requests
 import tarfile
 import os
+import logging
+
+logger = logging.getLogger('my_logger')
 
 class ArtifactApi(object):
     def __init__(self):
@@ -20,21 +23,21 @@ class ArtifactApi(object):
                 for chunk in response.iter_content(chunk_size=stream_size): 
                     if (chunk):
                         file.write(chunk)
-            print('== ADBS == Tarball downloaded successfully')
+            logger.info('Tarball downloaded successfully')
             # Extract the .tar.gz file
-            print('== ADBS == Extracting tarball...')
+            logger.info('Extracting tarball...')
             with tarfile.open(tarball_filepath, 'r:gz') as tar:
                 tar.extractall(path=download_dir)
-            print(f'== ADBS == {tarball_filepath} extracted to {download_dir}')
+            logger.info(f'{tarball_filepath} extracted to {download_dir}')
             # Delete tarball after extracting
             os.remove(tarball_filepath)
         else:
-            print('== ADBS == Failed to retrieve the file. Status code:', response.status_code)
+            logger.info('Failed to retrieve the file. Status code:', response.status_code)
 
 
     def get_component_from_registry(self, download_dir: str, component: str, tag: str, os_env: str):   
         payload = {"component": component, "tag": tag, "arch": os_env}
-        print(f"== ADBS == Get component {component},{tag} request to artifact storage...")
+        logger.info(f"Get component {component},{tag} request to artifact storage...")
         # stream=True in case it's a large tarball
         response = requests.get(url=self.artifact_api_url + 'component', json=payload, stream=True) 
         self.download_file_response(download_dir, tag, response)
