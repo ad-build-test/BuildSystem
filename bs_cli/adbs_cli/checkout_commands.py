@@ -3,14 +3,16 @@ import requests
 from adbs_cli.auto_complete import AutoComplete
 from adbs_cli.request import Request
 from adbs_cli.component import Component
+from adbs_cli.cli_configuration import under_development
 
 @click.group()
 def checkout():
-    """checkout an existing [ component/branch ]"""
+    """Checkout an existing [ component/branch ]"""
 
 @checkout.command()
 def component(): # TODO We may not need this (may just use git clone) so leave for now
     """Checkout an existing component/branch"""
+    under_development() # TODO:
 
     # TODO:
     # 0) Do we need the branch if were using git to checkout existing branch?

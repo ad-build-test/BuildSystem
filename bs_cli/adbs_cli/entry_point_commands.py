@@ -9,14 +9,7 @@ import subprocess
 import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
-from adbs_cli.cli_configuration import INPUT_PREFIX, Api
-
-# TODO: May make logic a single function since its the same for all 3
-# make the endpoint an argument
-@click.group()
-def run():
-    """Run a [ build | deployment | test ]"""
-    pass
+from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development
 
 def clone_repo(request: Request):
     ## Helper function
@@ -85,14 +78,33 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     return_code = process.wait()
     return return_code
 
-@run.command()
+@click.command()
+def configure():
+    """Configure to authorize commands"""
+    linux_uname = os.environ.get('USER')
+    # get github name from environment as well, if not then prompt user
+    github_uname = os.environ.get('AD_BUILD_GH_USER')
+    if (github_uname): 
+        click.echo('CLI already configured.')
+    else:
+        github_uname = input('What is your github username? ')
+        # TODO: Either write to bashrc from here, or have them put it themselves
+        write_env = "\n\n# Build System CLI Configuration\
+                    \nexport AD_BUILD_GH_USER=" + github_uname
+        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
+            # 'a' stands for "append"  
+            outfile.write(write_env)
+        click.echo("** Successfully added to .bashrc **\n" + \
+                    "Please 'source ~" + linux_uname + "/.bashrc' or reload shell")
+
+@click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-l", "--local", is_flag=True, required=False, help="Local build")
 @click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
 @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
 def build(component: str, branch: str, local: bool, remote: bool, container: bool):
-    """Trigger a build (local | remote | container)"""
+    """Trigger a build [local | remote | container]"""
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
@@ -154,13 +166,14 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         
     ## Container build
     elif (build_type == "CONTAINER"): # (NOTE - this feature will be long-term goal and is not priority atm)
-        print("== ADBS == ** Container build is not ready, under development **")
+        under_development() # TODO
 
-@run.command()
+@click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 def test(component: str, branch: str):
     """Trigger a test"""
+    under_development() # TODO
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
@@ -172,19 +185,18 @@ def test(component: str, branch: str):
     request.set_endpoint(endpoint)
     request.post_request(log=True)
 
-@run.command()
+@click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
-@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
+@click.option("-t", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2")
 @click.argument("tag")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
-def deployment(component: str, branch: str, facility: str, type: str,
+def deploy(component: str, branch: str, facility: str, type: str,
                 ioc: str, tag: str, initial: bool, override: bool):
-    """Run a deployment (may use args, if not then prompted for required args).
-        Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
+    """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
     # 1) Set fields

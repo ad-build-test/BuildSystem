@@ -2,6 +2,7 @@ import click
 import subprocess
 import readline
 from adbs_cli.auto_complete import AutoComplete
+from adbs_cli.cli_configuration import under_development
 
 @click.group()
 def tag():
@@ -16,6 +17,7 @@ def tag():
 # @click.option("--name", required=False, prompt="Your name", help="The person to greet.")
 def create(): # TODO
     """Create a new tag"""
+    under_development() # TODO
     # args: (May make most of these prompted to user)
     # organization, template repo name, new repo owner (should be automatic),
     # name of repo, description, include_all_branches, private
@@ -29,6 +31,7 @@ def create(): # TODO
 @tag.command()
 def edit():
     """Edit an existing tag"""
+    under_development() # TODO
     click.echo('edit tag')
     tag_name = input('What is the tag name? (<tab> for list): ')
     subprocess.run(['gh', 'release', 'edit', tag_name])
@@ -41,7 +44,7 @@ def edit():
 @tag.command()
 def delete(): 
     """Delete an existing tag"""
-
+    under_development() # TODO
     click.echo('delete tag')
     tag_name = input('What is the tag name? (<tab> for list): ')
     subprocess.run(['gh', 'release', 'delete', tag_name])
