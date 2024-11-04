@@ -1,8 +1,3 @@
-# How to Run 
-# If deploying to multiple facilities, run this playbook multiple times, one for each facility
-# ansible-playbook --extra-vars "user=$USER ioc_name=sioc-123-123 executable_path=/afs/slac.stanford.edu/u/cd/pnispero/mps/central_node_ioc/" ./initial_ioc_deploy.yml
-# This is for dev, and doesn't include using 'cram' and deploying a component to a 
-# deployment location ($APP or $PHYSICS_TOP or $TOOLS/script or $PYDYM etc.)
 # Process in detail: https://confluence.slac.stanford.edu/display/LCLSControls/CD+-+Deployment+Stage
 
 - name: IOC package build
@@ -21,10 +16,11 @@
       state: directory
       mode: '775' # drwxrwxr-x
 
-  - name: 'Copy bin/ db/ dbd/ iocBoot/ to build_results/{{ component }}-{{ branch }} directory'
-    ansible.builtin.copy:
+  - name: 'Push bin/ db/ dbd/ iocBoot/ to build_results/{{ component }}-{{ branch }} directory'
+    ansible.posix.synchronize:
       src: '{{ item }}'
       dest: '{{ build_results }}/{{ component }}-{{ branch }}'
+      mode: push
     loop:
       - '{{ user_src_repo }}/bin'
       - '{{ user_src_repo }}/db'
