@@ -49,7 +49,7 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
     if (url): request.add_to_payload("url", url)
     request.post_request(log=True)
 
-    # TODO: Create another put request but to enable permissions for backend to receive events
+    # Create another put request but to enable permissions for backend to receive events
     enable_envents_endpoint = 'component/' + request.component.name + '/event/true'
     request = Request(Component(component))
     request.set_endpoint(enable_envents_endpoint)
