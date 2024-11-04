@@ -153,6 +153,8 @@ class Build(object):
         # 1) Update the config site to set CHECK_RELEASE = NO
         file_path = 'configure/CONFIG_SITE'
         # Read the current contents of the config file
+        if not os.path.exists(file_path):
+            return  # Exit the function if the file doesn't exist (not an IOC)
         with open(file_path, 'r') as file:
             lines = file.readlines()
 
