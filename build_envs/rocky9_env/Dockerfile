@@ -8,33 +8,29 @@ FROM rockylinux:9
 # update
 RUN dnf -y update
 
-# install glibc
-RUN dnf install -y glibc
-
-# install gcc and make
-RUN dnf install -y gcc-c++ && dnf install -y make
-
 # install readline-devel, ncurses-devel
+# install glibc, gcc, make
+# install vim and python3 and pip
+# install perl, git, podman
 RUN dnf install -y readline-devel \
     ncurses-devel \
+    glibc \ 
+    gcc-c++ \
+    make \
+    vim \
+    python3 \
+    pip \
+    perl \
+    git \
+    podman \
     && dnf clean all
 
-# install vim and python3 and pip
 RUN dnf install -y vim && dnf install -y python3 && dnf install -y pip
 
 # install pyyaml, requests, ansible
 RUN pip install pyyaml \
     && pip install requests \
     && pip install ansible
-
-# install perl
-RUN dnf install -y perl
-
-# install git
-RUN dnf install -y git
-
-# install podman
-RUN dnf install -y podman
 
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
