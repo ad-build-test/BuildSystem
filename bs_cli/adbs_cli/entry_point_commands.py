@@ -129,7 +129,9 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         # 1) Clone repo if doesn't exist in user space
         clone_repo(request)
         # 2) Parse manifest
-        manifest_data = parse_manifest()
+        user_src_repo = request.component.git_get_top_dir()
+        manifest_filepath = user_src_repo + '/config.yaml'
+        manifest_data = parse_manifest(manifest_filepath)
         # 3) Run the script or build command
         # Assuming the script exists at the $TOP of the repo
         print("== ADBS == Running Build:")

@@ -1,5 +1,7 @@
 import click
 import requests
+import os
+import git
 from adbs_cli.auto_complete import AutoComplete
 from adbs_cli.request import Request
 from adbs_cli.component import Component
@@ -10,41 +12,42 @@ def checkout():
     """Checkout an existing [ component/branch ]"""
 
 @checkout.command()
-def component(): # TODO We may not need this (may just use git clone) so leave for now
+@click.argument("component")
+@click.option("-b", "--branch", required=False, help="Branch Name")
+def component(component: str, branch: str="main"):
     """Checkout an existing component/branch"""
-    under_development() # TODO:
 
-    # TODO:
-    # 0) Do we need the branch if were using git to checkout existing branch?
-    # 1) Maybe we can just use existing 'eco' function
-    # OR
-    # 1) Grab the list of components
-    # 2) Make them all lower-case
-    # 3) Then prompt the user for component name
-        # 3.1) Should be tab autocomplete
-    # 4) like 'eco' we should generate the configuration RELEASE_SITE file
-    
-    # 1) Prompt user for component/branch
-    branches = component_obj.git_get_branches()
-    # TODO: can clone first, then use cwd? Works if you think about it because you checkout 
-    # on a spot where you want it
-    AutoComplete.set_auto_complete_vals("component")
-    component_name = input('What is the component name? (<tab> for list)')
-    AutoComplete.set_auto_complete_vals("branch")
-    branch_name = input('What is the branch name? (<tab> for list)')
+    # 1) Set fields
+    request = Request()
+    # request.set_component_fields()
 
-    request = Request(Component(component_name, branch_name))
-    # Send a request to get the url to the repo
-    # then do a git clone if we are doing url, or otherwise copy from filepath
+    # 2) Request for all components
+    endpoint = 'component'
+    request.set_endpoint(endpoint)
+    response = request.get_request(log=True)
 
-    # Pass in component and branch
-    full_url = cli_configuration["server_url"] + 'component'
-    send_payload = {"component": component_name,
-                    "branch": branch_name,
-                    "linux_username": cli_configuration["linux_uname"],
-                    "github_username": cli_configuration["github_uname"] }
-    response = requests.post(full_url, send_payload)
-    print(response)
+    component_list = response.json()['payload']
+    print(f'Component_list: {component_list}')
 
-    # 3) Clone the repo/branch here
+    # 3) Check for a match on component name, then get URL
+    # Define the key you are searching for
+    search_key = 'name'
+
+    # Iterate over the list of dictionaries and check for the key
+    found = False
+    for item in component_list:
+        if search_key in item:
+            if item[search_key] == component:
+                found = True
+                component_url = item["url"]
+                print(component_url)
+                break  # If you only want the first match, use 'break'
+            
+    if not found:
+        print(f"Value '{component}' not found in any of the dictionaries.")
+
+    # 4) Git clone the URL
+    dir_path = os.path.join(os.getcwd(), component)
+    git.Repo.clone_from(component_url, dir_path, branch=branch)
+
     
