@@ -35,10 +35,11 @@ class AutoComplete(object):
             pass
         elif (type == "component"):
             # Send a GET request to component db to get list of components
-            component_list = requests.get(cli_configuration["server_url"] + 'component')
-            component_dict = component_list.json()
-            payload = component_dict['payload']
-            auto_complete_vals = []
-            for component in payload:
-                auto_complete_vals.append(component['name'])
+            if (auto_complete_vals == None):
+                component_list = requests.get(cli_configuration["server_url"] + 'component')
+                component_dict = component_list.json()
+                payload = component_dict['payload']
+                auto_complete_vals = []
+                for component in payload:
+                    auto_complete_vals.append(component['name'])
         readline.set_completer(AutoComplete(auto_complete_vals).complete)
