@@ -190,7 +190,7 @@ def test(component: str, branch: str):
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
 @click.option("-t", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
-@click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2")
+@click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
 @click.argument("tag")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
@@ -233,42 +233,54 @@ def deploy(component: str, branch: str, facility: str, type: str,
                 default=[],
                 ),]
     # 3) Get ioc list for each facility
-    ioc_list = ioc.split(',')
-    # TODO: Add logic so every facility has their own list of iocs
-    if (ioc.upper() == "ALL"):
-        # 3.1) If 'ALL' then determine which facilities for all iocs the user wants
-        if (not facility):
-            facilities = inquirer.prompt(question)['facility']
-            pass
-        else:
-            facilities = facility.split(',')
-            print(f'facilities: {facilities}')
-        facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+    if (ioc):
+        ioc_list = ioc.split(',')
 
-        facility_ioc_dict = {}
-        for facility in facilities: # Get list of iocs from every facility user chose for this app
-            ioc_list_request = Request(api=Api.DEPLOYMENT)
-            ioc_list_request.set_endpoint(f'ioc/info')
-            ioc_list_request.add_to_params("name", deployment_request.component.name)
-            ioc_list_request.add_to_params("facility", facility)
-            response = ioc_list_request.get_request()
-            if (response.status_code == 200):
-                ioc_list = response.json()['info']['iocs']
-                facility_ioc_dict[facility] = ioc_list
-        logging.info(f"ALL ioc's in facilities you specified: {facility_ioc_dict}")
-        pass
-    elif (ioc_list == []):
-        # 3.2) Possible user just wants to deploy app and not any ioc
-        print("== ADBS == No IOC's were specified, only deploying application")
+    # TODO: Temporarily commented out for demo
+    # # TODO: Add logic so every facility has their own list of iocs
+    # if (ioc.upper() == "ALL"):
+    #     # 3.1) If 'ALL' then determine which facilities for all iocs the user wants
+    #     if (not facility):
+    #         facilities = inquirer.prompt(question)['facility']
+    #         pass
+    #     else:
+    #         facilities = facility.split(',')
+    #         print(f'facilities: {facilities}')
+    #     facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+
+    #     facility_ioc_dict = {}
+    #     for facility in facilities: # Get list of iocs from every facility user chose for this app
+    #         ioc_list_request = Request(api=Api.DEPLOYMENT)
+    #         ioc_list_request.set_endpoint(f'ioc/info')
+    #         ioc_list_request.add_to_params("name", deployment_request.component.name)
+    #         ioc_list_request.add_to_params("facility", facility)
+    #         response = ioc_list_request.get_request()
+    #         if (response.status_code == 200):
+    #             ioc_list = response.json()['info']['iocs']
+    #             facility_ioc_dict[facility] = ioc_list
+    #     logging.info(f"ALL ioc's in facilities you specified: {facility_ioc_dict}")
+    #     pass
+    # elif (ioc_list == []):
+    #     # 3.2) Possible user just wants to deploy app and not any ioc
+    #     print("== ADBS == No IOC's were specified, only deploying application")
+    # else:
+    #     if (initial):
+    #         # 3.3) TODO: If initial deployment, ask user for facility they want to deploy specified ioc's
+    #         pass
+    #     else:
+    #         # 3.4) if not 'ALL', then figure out what ioc's specified by user belong to what facilities
+    #         # TODO: logic to determine what ioc belongs in which facility, if iocs are not found in any facility
+    #         # THEN WARN USER NOT FOUND, and ask if initial deployment or if a typo on their end
+    #         pass
+
+    # <<<<<<<< TODO: Temporary placeholder code for a basic local deployment
+    if (not facility):
+        facilities = inquirer.prompt(question)['facility']
     else:
-        if (initial):
-            # 3.3) TODO: If initial deployment, ask user for facility they want to deploy specified ioc's
-            pass
-        else:
-            # 3.4) if not 'ALL', then figure out what ioc's specified by user belong to what facilities
-            # TODO: logic to determine what ioc belongs in which facility, if iocs are not found in any facility
-            # THEN WARN USER NOT FOUND, and ask if initial deployment or if a typo on their end
-            pass
+        facilities = facility.split(',')
+        print(f'facilities: {facilities}')
+    facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     # 4) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')

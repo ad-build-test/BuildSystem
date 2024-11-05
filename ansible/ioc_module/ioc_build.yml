@@ -31,5 +31,5 @@
     # no '/' on directories, otherwise it won't copy the directory itself just the contents
 
   - name: Package app with tarball
-    ansible.builtin.shell: tar czf {{ build_results }}/{{ component }}-{{ branch }}.tar.gz {{ build_results}}/{{ component }}-{{ branch }}
+    ansible.builtin.shell: tar czf {{ build_results }}/{{ component }}-{{ branch }}.tar.gz -C {{ build_results}} {{ component }}-{{ branch }}
 
