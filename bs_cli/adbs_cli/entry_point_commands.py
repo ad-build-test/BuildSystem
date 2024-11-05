@@ -1,6 +1,7 @@
 import click
 import yaml
 import os
+import git
 import ansible_runner # TODO: Move to its own module once done testing
 import inquirer
 import json
@@ -10,6 +11,7 @@ import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
 from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development
+from adbs_cli.auto_complete import AutoComplete
 
 def clone_repo(request: Request):
     ## Helper function
@@ -96,6 +98,52 @@ def configure():
             outfile.write(write_env)
         click.echo("** Successfully added to .bashrc **\n" + \
                     "Please 'source ~" + linux_uname + "/.bashrc' or reload shell")
+
+@click.command()
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=False, help="Branch Name")
+def clone(component: str, branch: str="main"):
+    """Clone an existing component/branch"""
+
+    # 1) Set fields
+    request = Request()
+    # request.set_component_fields()
+
+    # 2) Request for all components
+    endpoint = 'component'
+    request.set_endpoint(endpoint)
+    response = request.get_request(log=False)
+
+    component_list_payload = response.json()['payload']
+
+    # 3) Check for a match on component name, then get URL
+    # Define the key you are searching for
+    search_key = 'name'
+
+    # 4) Prompt user if component not given, set autocomplete
+    if (not component): 
+    # Iterate over the list of dictionaries and get their names
+        component_name_list = []
+        for item in component_list_payload:
+            if search_key in item:
+                component_name_list.append(item[search_key])
+
+        AutoComplete.set_auto_complete_vals('component', component_name_list)
+        component = input("Specify name of component (tab-complete): ")
+    
+    if (component):
+    # 5) Get component URL and clone
+        # Using list comprehension to filter dictionaries where the key matches the value
+        component_dict = next((d for d in component_list_payload if d.get('name') == component), None)
+        if (component_dict): # Found a match
+            component_url = component_dict["url"]
+            dir_path = os.path.join(os.getcwd(), component)
+            git.Repo.clone_from(component_url, dir_path, branch=branch)
+            print("Successfully cloned component " + component_url)
+        else: # No match
+            print(f"Value '{component}' not found in any of the dictionaries.")
+        
+
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
