@@ -172,7 +172,8 @@ def issue(component: str, id: str):
     # TODO: Since CATER doesn't have API as of this comment written,
     # just put in placeholder info for demo
     issue_title = "CATER 170777 - add EPICS control for oscilloscope scop-li20-ex04"
-    issue_body = "CATER: [170777](https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3)"
+    issue_body = "Created to address CATER: [170777](https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3) \
+    by @" + request.github_uname
 
 
     # 3) Add to payload
