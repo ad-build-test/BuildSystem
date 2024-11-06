@@ -79,12 +79,20 @@ if __name__ == "__main__":
 
     # Deserialize the JSON string back into a dictionary
     manifest_data = sys.argv[1]
+
+    # Print raw argument for debugging (repr() shows invisible characters)
+    print(f"Raw manifest_data: {repr(manifest_data)}")
+    
+    # Strip leading and trailing whitespace
+    manifest_data = manifest_data.strip()
+    print(manifest_data)
+    
     try:
         manifest_data = json.loads(manifest_data)  # Deserialize JSON into a Python dictionary
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
         sys.exit(1)
-        
+
     user_src_repo = sys.argv[2]
     component = sys.argv[3]
     branch = sys.argv[4]
