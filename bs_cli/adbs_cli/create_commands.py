@@ -121,13 +121,16 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     # 3) See if fix, feat, or dev option filled out, or prompt user
     if (fix): 
         branch_type = 'fix'
-        branch_type_value = fix
+        branch_type_value = str(fix)
+        full_branch_name = branch_type + '-' + branch_type_value
     elif (feat):
         branch_type = 'feat'
-        branch_type_value = feat
+        branch_type_value = str(feat)
+        full_branch_name = branch_type + '-' + branch_type_value
     elif (dev):
         branch_type = 'dev'
-        branch_type_value = dev
+        branch_type_value = str(dev)
+        full_branch_name = branch_type + '-' + branch_type_value
     else:
         # If adding existing branch, skip asking type of branch to create
         if (add):
