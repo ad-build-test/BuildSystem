@@ -77,7 +77,7 @@ def local_build(manifest_data: dict, user_src_repo: str, component: str, branch:
     print("Playbook execution finished with return code:", return_code)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:  # Ensure 4 arguments are passed
+    if len(sys.argv) != 6:  # Ensure 5 arguments are passed
         print("Usage: python local_build.py <manifest_data> <user_src_repo> <component> <branch>")
         sys.exit(1)
 
