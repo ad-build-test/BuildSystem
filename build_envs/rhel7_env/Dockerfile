@@ -54,6 +54,9 @@ RUN groupadd -g 1006 cd && \
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
 
+# Add local_build.py to /build
+ADD bs_cli/adbs_cli/local_build.py /build/
+
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/
 
