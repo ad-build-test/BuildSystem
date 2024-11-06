@@ -62,3 +62,6 @@ RUN chown -R 46487:1006 /build/
 
 # Add env variable for python scripts to stream live
 ENV PYTHONUNBUFFERED=1
+
+# Add EPICS_HOST_ARCH variable for ioc builds
+ENV EPICS_HOST_ARCH=rhel7-x86_64

@@ -84,7 +84,7 @@ if __name__ == "__main__":
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
         sys.exit(1)
-
+        
     user_src_repo = sys.argv[2]
     component = sys.argv[3]
     branch = sys.argv[4]
