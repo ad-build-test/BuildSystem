@@ -51,7 +51,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, build_os
     return_code = process.wait()
     return return_code
 
-def local_build(manifest_data: dict, user_src_repo: str, component: str, branch: str):
+def local_build(manifest_data: dict, user_src_repo: str, component: str, branch: str, build_os: str):
     # Assuming the script exists at the $TOP of the repo
     print("== ADBS == Running Build:")
     if (manifest_data['build'].endswith('.sh')):
@@ -69,11 +69,12 @@ def local_build(manifest_data: dict, user_src_repo: str, component: str, branch:
         "user_src_repo": "{user_src_repo}"}}'
     # Convert the JSON-formatted string to a dictionary
     playbook_args_dict = json.loads(playbook_args)
-    adbs_playbooks_dir = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/" # TODO: Change this once official
+    adbs_playbooks_dir = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
     return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
                             adbs_playbooks_dir + 'ioc_build.yml',
                             'S3DF',
-                            playbook_args_dict)
+                            playbook_args_dict,
+                            build_os)
     print("Playbook execution finished with return code:", return_code)
 
 if __name__ == "__main__":
