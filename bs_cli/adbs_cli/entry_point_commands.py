@@ -192,8 +192,9 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         # manifest_data = f"'{manifest_data}'"
         user_src_repo_bind = user_src_repo + ":" + user_src_repo
         dependencies_bind = "/sdf/sw/:/sdf/sw/"
+        build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
         # build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py {manifest_data} {user_src_repo} {request.component.name} {request.component.branch_name}"
-        build_command = ["apptainer", "exec", "--bind", user_src_repo_bind, "--bind", 
+        build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
                          dependencies_bind, build_img, "python3", "/build/local_build.py",
                          manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
         run_process_real_time(build_command)
