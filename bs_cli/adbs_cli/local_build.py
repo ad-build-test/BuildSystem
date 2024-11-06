@@ -30,7 +30,7 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
 
     # Print output in real-time
     for line in iter(process.stdout.readline, ''):
-        if sys.version_info >= (3, 6):  # Python 3.6 or later
+        if sys.version_info >= (3, 6): # Python 3.6 or later
             print(line, end='')
         else:  # For Python 3.5 or earlier
             sys.stdout.write(line)  # Use sys.stdout.write to avoid newline
