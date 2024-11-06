@@ -187,7 +187,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         # 3) #TODO: Shell into the build environment, and run local_build() in there
         # # TODO: For now just run the build on rhel7, can ask later what OS to use, or maybe both?
         build_img = cli_configuration["build_images_filepath"] + 'rhel7-env/rhel7-env_latest.sif'
-        build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py {manifest_data} {user_src_repo} {request.component.name} {request.component.branch_name}"
+        build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py '{manifest_data}' {user_src_repo} {request.component.name} {request.component.branch_name}"
         run_process_real_time(build_command)
 
     ## Remote build
