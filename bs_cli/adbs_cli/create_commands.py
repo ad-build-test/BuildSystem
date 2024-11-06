@@ -122,15 +122,12 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     if (fix): 
         branch_type = 'fix'
         branch_type_value = str(fix)
-        full_branch_name = branch_type + '-' + branch_type_value
     elif (feat):
         branch_type = 'feat'
         branch_type_value = str(feat)
-        full_branch_name = branch_type + '-' + branch_type_value
     elif (dev):
         branch_type = 'dev'
         branch_type_value = str(dev)
-        full_branch_name = branch_type + '-' + branch_type_value
     else:
         # If adding existing branch, skip asking type of branch to create
         if (add):
@@ -143,7 +140,8 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
                         choices=["fix", "feat", "dev"])]
             branch_type = inquirer.prompt(question)['branch_type']
             branch_type_value = input("Specify name of issue number (or dev name): ")
-            full_branch_name = branch_type + '-' + branch_type_value
+
+    full_branch_name = branch_type + '-' + branch_type_value
 
     # 4) Write to database
     endpoint = 'component/' + component_obj.name + '/branch'
