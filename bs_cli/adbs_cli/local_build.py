@@ -4,10 +4,14 @@ import json
 import os 
 import sys
 
-def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
+def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, build_os):
     os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
-    command = [
-        'ansible-playbook', 
+    command = []
+    if (build_os.lower() == 'rhel7'): # Special case for rhel7
+        command += ['python3', '-m', 'ansible', 'playbook']
+    else:
+        command += ['ansible-playbook']
+    command += [
         '-i', inventory,
         '-l', host_pattern,
         playbook
@@ -86,7 +90,7 @@ if __name__ == "__main__":
     # Strip leading and trailing whitespace
     manifest_data = manifest_data.strip()
     print(manifest_data)
-    
+
     try:
         manifest_data = json.loads(manifest_data)  # Deserialize JSON into a Python dictionary
     except json.JSONDecodeError as e:
@@ -96,4 +100,5 @@ if __name__ == "__main__":
     user_src_repo = sys.argv[2]
     component = sys.argv[3]
     branch = sys.argv[4]
-    local_build(manifest_data, user_src_repo, component, branch)
+    build_os = sys.argv[5]
+    local_build(manifest_data, user_src_repo, component, branch, build_os)
