@@ -108,6 +108,7 @@ if __name__ == "__main__":
     logger = setup_logger(user_src_repo + '/build.log')
     
     # 2) Run local build
+    logger.info("Running Build:")
     local_build(manifest_data, user_src_repo, component, branch, build_os)
 
     # 3) Run unit tests
