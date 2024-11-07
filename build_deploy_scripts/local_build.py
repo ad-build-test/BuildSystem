@@ -3,6 +3,8 @@ import subprocess
 import json
 import os 
 import sys
+from start_test import Test
+from logger_setup import setup_logger
 
 def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, build_os):
     os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
@@ -102,4 +104,12 @@ if __name__ == "__main__":
     component = sys.argv[3]
     branch = sys.argv[4]
     build_os = sys.argv[5]
+    # 1) Setup logger
+    logger = setup_logger(user_src_repo + '/build.log')
+    
+    # 2) Run local build
     local_build(manifest_data, user_src_repo, component, branch, build_os)
+
+    # 3) Run unit tests
+    test = Test()
+    test.run_unit_tests(user_src_repo)
