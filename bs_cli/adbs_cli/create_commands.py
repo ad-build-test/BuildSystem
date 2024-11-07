@@ -119,6 +119,7 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
         branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
     # 3) See if fix, feat, or dev option filled out, or prompt user
+    full_branch_name = None
     if (fix): 
         branch_type = 'fix'
         branch_type_value = str(fix)
@@ -140,8 +141,8 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
                         choices=["fix", "feat", "dev"])]
             branch_type = inquirer.prompt(question)['branch_type']
             branch_type_value = input("Specify name of issue number (or dev name): ")
-
-    full_branch_name = branch_type + '-' + branch_type_value
+    if (full_branch_name == None):
+        full_branch_name = branch_type + '-' + branch_type_value
 
     # 4) Write to database
     endpoint = 'component/' + component_obj.name + '/branch'
