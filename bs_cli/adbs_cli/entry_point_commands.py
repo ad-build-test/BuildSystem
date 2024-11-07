@@ -184,20 +184,21 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         user_src_repo = request.component.git_get_top_dir()
         manifest_filepath = user_src_repo + '/config.yaml'
         manifest_data = parse_manifest(manifest_filepath)
+        build_os_list = manifest_data["environments"]
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
-        # 3) #TODO: Shell into the build environment, and run local_build() in there
-        # # TODO: For now just run the build on rhel7, can ask later what OS to use, or maybe both?
-        build_os = "rhel7"
-        build_img = cli_configuration["build_images_filepath"] + 'rhel7-env/rhel7-env_latest.sif'
-        # manifest_data = f"'{manifest_data}'"
-        user_src_repo_bind = user_src_repo + ":" + user_src_repo
-        dependencies_bind = "/sdf/sw/:/sdf/sw/"
-        build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
-        # build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py {manifest_data} {user_src_repo} {request.component.name} {request.component.branch_name}"
-        build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
-                         dependencies_bind, build_img, "python3", "/build/local_build.py",
-                         manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
-        run_process_real_time(build_command)
+        # 3) shell into the build environment, and run local_build() in there
+        for build_os in build_os_list:
+            if (build_os == "rocky9"):
+                build_os == "rhel9"
+            build_img = cli_configuration["build_images_filepath"] + build_os + '-env/' + build_os + '-env_latest.sif'
+            # manifest_data = f"'{manifest_data}'"
+            user_src_repo_bind = user_src_repo + ":" + user_src_repo
+            dependencies_bind = "/sdf/sw/:/sdf/sw/"
+            build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
+            build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
+                            dependencies_bind, build_img, "python3", "/build/local_build.py",
+                            manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
+            run_process_real_time(build_command)
 
     ## Remote build
     elif (build_type == "REMOTE"):
@@ -214,9 +215,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-q", "--quick", is_flag=True, required=False, help="Quick tests")
-@click.option("-m", "--main", is_flag=True, required=False, help="Main tests")
-def test(component: str, branch: str, quick: bool, main: bool):
+def test(component: str, branch: str):
     """Trigger a test"""
     under_development() # TODO
     # 1) Set fields
@@ -234,21 +233,16 @@ def test(component: str, branch: str, quick: bool, main: bool):
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
-@click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
-@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
+@click.option("-t", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
 @click.argument("tag")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
-def deploy(component: str, branch: str, facility: str, type: str, test: bool,
+def deploy(component: str, branch: str, facility: str, type: str,
                 ioc: str, tag: str, initial: bool, override: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
-    # TODO: Temporarily here
-    if (test):
-        under_development()
-
     # 1) Set fields
     deployment_request = Request(Component(component, branch), Api.DEPLOYMENT)    
     deployment_request.set_component_fields()
@@ -379,21 +373,3 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
             deployment_request.put_request(log=True)
         if (initial):
             print("== ADBS == Please create startup.cmd manually!")
-
-@click.command()
-@click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-cl", "--clear", is_flag=True, required=False, help="Clear branch readiness status")
-def mark(component: str, branch: str):
-    """Mark a branch as ready for review/complete"""
-    under_development() # TODO
-    # 1) Set fields
-    request = Request(Component(component, branch))
-    request.set_component_fields()
-    request.add_to_payload("ADBS_COMPONENT", request.component.name)
-    request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
-
-    # 2) Send request to backend
-    endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
-    request.set_endpoint(endpoint)
-    request.post_request(log=True)
