@@ -10,7 +10,7 @@ import subprocess
 import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
-from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development
+from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development, cli_configuration
 from adbs_cli.auto_complete import AutoComplete
 
 def clone_repo(request: Request):
@@ -43,23 +43,9 @@ def find_tarball(base_path):
     
     return None
 
-def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
-    os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
-    command = [
-        'ansible-playbook', 
-        '-i', inventory,
-        '-l', host_pattern,
-        playbook
-    ]
-
-    if extra_vars:
-        # Convert extra_vars dictionary to JSON string
-        extra_vars_str = json.dumps(extra_vars)
-        # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
-        command += ['--extra-vars', extra_vars_str]
-    logging.info(command)
-
+def run_process_real_time(command):
     # Use subprocess.Popen to forward output directly
+    print(command)
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -79,6 +65,24 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     process.stderr.close()
     return_code = process.wait()
     return return_code
+
+def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
+    os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
+    command = [
+        'ansible-playbook', 
+        '-i', inventory,
+        '-l', host_pattern,
+        playbook
+    ]
+
+    if extra_vars:
+        # Convert extra_vars dictionary to JSON string
+        extra_vars_str = json.dumps(extra_vars)
+        # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
+        command += ['--extra-vars', extra_vars_str]
+    logging.info(command)
+
+    return run_process_real_time(command)
 
 @click.command()
 def configure():
@@ -180,31 +184,20 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         user_src_repo = request.component.git_get_top_dir()
         manifest_filepath = user_src_repo + '/config.yaml'
         manifest_data = parse_manifest(manifest_filepath)
-        # 3) Run the script or build command
-        # Assuming the script exists at the $TOP of the repo
-        print("== ADBS == Running Build:")
-        if (manifest_data['build'].endswith('.sh')):
-            build_script = './' + manifest_data['build']
-            result = subprocess.run(['bash', build_script], capture_output=True, text=True)
-        elif (manifest_data['build'].endswith('.py')):
-            build_script = manifest_data['build']
-            result = subprocess.run(['python', build_script], capture_output=True, text=True)
-        else: # Run the command directly
-            build_command = manifest_data['build']
-            result = subprocess.run([build_command], capture_output=True, text=True)
-        print('== ADBS == output:', result.stdout)
-        print('== ADBS == errors:', result.stderr)
-        user_src_repo = request.component.git_get_top_dir()
-        playbook_args = f'{{"component": "{request.component.name}", "branch": "{request.component.branch_name}", \
-            "user_src_repo": "{user_src_repo}"}}'
-        # Convert the JSON-formatted string to a dictionary
-        playbook_args_dict = json.loads(playbook_args)
-        adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
-        return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-                                adbs_playbooks_dir + 'ioc_build.yml',
-                                'S3DF',
-                                playbook_args_dict)
-        print("Playbook execution finished with return code:", return_code)
+        manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
+        # 3) #TODO: Shell into the build environment, and run local_build() in there
+        # # TODO: For now just run the build on rhel7, can ask later what OS to use, or maybe both?
+        build_os = "rhel7"
+        build_img = cli_configuration["build_images_filepath"] + 'rhel7-env/rhel7-env_latest.sif'
+        # manifest_data = f"'{manifest_data}'"
+        user_src_repo_bind = user_src_repo + ":" + user_src_repo
+        dependencies_bind = "/sdf/sw/:/sdf/sw/"
+        build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
+        # build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py {manifest_data} {user_src_repo} {request.component.name} {request.component.branch_name}"
+        build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
+                         dependencies_bind, build_img, "python3", "/build/local_build.py",
+                         manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
+        run_process_real_time(build_command)
 
     ## Remote build
     elif (build_type == "REMOTE"):
@@ -365,7 +358,7 @@ def deploy(component: str, branch: str, facility: str, type: str,
             if not isExist:
                 print(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
                 os.mkdir(playbook_output_path)
-            adbs_playbooks_dir = "/sdf/home/p/pnispero/BuildSystem/ansible/ioc_module/" # TODO: Change this once official
+            adbs_playbooks_dir = cli_configuration["build_system_filepath"] + "ansible/ioc_module/" # TODO: Change this once official
 
             return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
                                             adbs_playbooks_dir + 'ioc_deploy.yml',
