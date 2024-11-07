@@ -16,7 +16,7 @@ from adbs_cli.cli_configuration import cli_configuration
 
 import adbs_cli.create_commands as create_group
 import adbs_cli.tag_commands as tag_group
-from adbs_cli.entry_point_commands import configure, clone, build, test, deploy
+from adbs_cli.entry_point_commands import configure, clone, build, test, deploy, mark
 
 # TODO: When done, add exception handling to all possible break points
 # like [requests, environment vars, ]
@@ -31,7 +31,7 @@ class OrderedGroup(click.Group):
 
 @click.group(context_settings=CONTEXT_SETTINGS, cls=OrderedGroup)
 def entry_point():
-    """ Build System CLI\n
+    """ Build System (Software Factory) CLI\n
         For first-time usage, please 'bs configure'
     """
     linux_uname = os.environ.get('USER')
@@ -48,6 +48,7 @@ def main():
     entry_point.add_command(build)
     entry_point.add_command(deploy)
     entry_point.add_command(test)
+    entry_point.add_command(mark)
     entry_point.add_command(tag_group.tag)
     # Use the tab key for completion
     readline.parse_and_bind('tab: complete')

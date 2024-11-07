@@ -214,7 +214,9 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-def test(component: str, branch: str):
+@click.option("-q", "--quick", is_flag=True, required=False, help="Quick tests")
+@click.option("-m", "--main", is_flag=True, required=False, help="Main tests")
+def test(component: str, branch: str, quick: bool, main: bool):
     """Trigger a test"""
     under_development() # TODO
     # 1) Set fields
@@ -232,16 +234,21 @@ def test(component: str, branch: str):
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
-@click.option("-t", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
+@click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
+@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
 @click.argument("tag")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
-def deploy(component: str, branch: str, facility: str, type: str,
+def deploy(component: str, branch: str, facility: str, type: str, test: bool,
                 ioc: str, tag: str, initial: bool, override: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
+    # TODO: Temporarily here
+    if (test):
+        under_development()
+
     # 1) Set fields
     deployment_request = Request(Component(component, branch), Api.DEPLOYMENT)    
     deployment_request.set_component_fields()
@@ -372,3 +379,21 @@ def deploy(component: str, branch: str, facility: str, type: str,
             deployment_request.put_request(log=True)
         if (initial):
             print("== ADBS == Please create startup.cmd manually!")
+
+@click.command()
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=False, help="Branch Name")
+@click.option("-cl", "--clear", is_flag=True, required=False, help="Clear branch readiness status")
+def mark(component: str, branch: str):
+    """Mark a branch as ready for review/complete"""
+    under_development() # TODO
+    # 1) Set fields
+    request = Request(Component(component, branch))
+    request.set_component_fields()
+    request.add_to_payload("ADBS_COMPONENT", request.component.name)
+    request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
+
+    # 2) Send request to backend
+    endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
+    request.set_endpoint(endpoint)
+    request.post_request(log=True)
