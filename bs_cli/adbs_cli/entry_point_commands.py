@@ -184,20 +184,22 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         user_src_repo = request.component.git_get_top_dir()
         manifest_filepath = user_src_repo + '/config.yaml'
         manifest_data = parse_manifest(manifest_filepath)
+        build_os_list = manifest_data["environments"]
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
-        # 3) #TODO: Shell into the build environment, and run local_build() in there
-        # # TODO: For now just run the build on rhel7, can ask later what OS to use, or maybe both?
-        build_os = "rhel7"
-        build_img = cli_configuration["build_images_filepath"] + 'rhel7-env/rhel7-env_latest.sif'
-        # manifest_data = f"'{manifest_data}'"
-        user_src_repo_bind = user_src_repo + ":" + user_src_repo
-        dependencies_bind = "/sdf/sw/:/sdf/sw/"
-        build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
-        # build_command = f"apptainer exec --bind {user_src_repo}:{user_src_repo} --bind /sdf/sw/:/sdf/sw/ {build_img} python3 /build/local_build.py {manifest_data} {user_src_repo} {request.component.name} {request.component.branch_name}"
-        build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
-                         dependencies_bind, build_img, "python3", "/build/local_build.py",
-                         manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
-        run_process_real_time(build_command)
+        # 3) shell into the build environment, and run local_build() in there
+        for build_os in build_os_list:
+            print(f"== ADBS == Building for architecture: {build_os}")
+            if (build_os == "rocky9"):
+                build_os == "rhel9"
+            build_img = cli_configuration["build_images_filepath"] + build_os + '-env/' + build_os + '-env_latest.sif'
+            # manifest_data = f"'{manifest_data}'"
+            user_src_repo_bind = user_src_repo + ":" + user_src_repo
+            dependencies_bind = "/sdf/sw/:/sdf/sw/"
+            build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
+            build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
+                            dependencies_bind, build_img, "python3", "/build/local_build.py",
+                            manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
+            run_process_real_time(build_command)
 
     ## Remote build
     elif (build_type == "REMOTE"):
