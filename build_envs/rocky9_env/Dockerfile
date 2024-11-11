@@ -9,12 +9,12 @@ FROM rockylinux:9
 RUN dnf -y update
 
 # install readline-devel, ncurses-devel
-# install glibc, gcc, make
+# install glibc-devel, gcc, make
 # install vim and python3 and pip
 # install perl, git, podman
 RUN dnf install -y readline-devel \
     ncurses-devel \
-    glibc \ 
+    glibc-devel \ 
     gcc-c++ \
     make \
     vim \

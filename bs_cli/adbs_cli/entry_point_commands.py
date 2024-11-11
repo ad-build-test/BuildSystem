@@ -188,6 +188,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
         # 3) shell into the build environment, and run local_build() in there
         for build_os in build_os_list:
+            print(f"== ADBS == Building for architecture: {build_os}")
             if (build_os == "rocky9"):
                 build_os == "rhel9"
             build_img = cli_configuration["build_images_filepath"] + build_os + '-env/' + build_os + '-env_latest.sif'
