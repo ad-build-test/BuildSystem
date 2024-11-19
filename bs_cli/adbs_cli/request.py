@@ -51,11 +51,13 @@ class Request(object):
         response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
+        return response
     
     def put_request(self, log: bool=False)-> requests.Response:
         response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
         if (log):
             self.log_api_response(response)
+        return response
 
     def get_request(self, log: bool=False) -> requests.Response:
         response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
@@ -68,9 +70,7 @@ class Request(object):
         component_list = requests.get(cli_configuration["server_url"] + 'component')
         component_dict = component_list.json()
         payload = component_dict['payload']
-        print(payload)
         for component in payload:
-            print(component)
             if (component['name'] == self.component.name):
                 response = requests.get(cli_configuration["server_url"] + 'component/' + component['id'])
                 return response.json()['payload']

@@ -18,8 +18,10 @@ def create():
 @click.option("-t", "--testing-criteria", required=False, help="Testing Criteria", prompt=INPUT_PREFIX + "Specify testing criteria")
 @click.option("-a", "--approval-rule", required=False, help="Approval Rule", prompt=INPUT_PREFIX + "Specify approval rule")
 @click.option("-d", "--desc", required=False, help="Description", prompt=INPUT_PREFIX + "Specify component description")
+@click.option("-i", "--issue-tracker", required=False, help="Issue tracking system", prompt=INPUT_PREFIX + "Specify issue tracking system [github | jira]")
+@click.option("-j", "--jira-project-key", required=False, help="Jira project key")
 @click.option("-u", "--url", required=False, help="Add existing component to build system")
-def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, url: str):
+def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, url: str):
     """Create a new repo"""
     request = Request(Component(component))
     # args: (May make most of these prompted to user)
@@ -33,6 +35,12 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
     request.add_to_payload("testingCriteria", testing_criteria)
     request.add_to_payload("approvalRule", approval_rule)
     request.add_to_payload("organization", organization)
+    issue_tracker = issue_tracker.lower()
+    request.add_to_payload("issueTracker", issue_tracker)
+    if (issue_tracker == 'jira'):
+        if (jira_project_key == None):
+            jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
+        request.add_to_payload("jiraProjectKey", jira_project_key)
     # TODO: Ask user to specify build os - This should be automatic assuming 
     # the build os(s) are specified in the config manifest
     question = [
@@ -161,30 +169,46 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
 
 @create.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-i", "--id", required=True, help="CATER ID")
-def issue(component: str, id: str):
+@click.option("-ci", "--cater-id", required=True, help="CATER ID")
+def issue(component: str, cater_id: int):
     """Create a new issue based off CATER ID"""
-    # BLOCKED: CATER does not have an API, but will have it once the NEW CATER 
+    # TODO: CATER does not have an API, but will have it once the NEW CATER 
+
     # 1) Set fields
     logging.info("THIS COMMAND IS ONLY used for demo purposes for now")
     request = Request(Component(component))
     request.set_component_name()
+    component_info = request.get_component_from_db()
+    issue_tracker = component_info['issueTracker']
+
+    # 1.1) If Jira, add project key to request
+    if (issue_tracker == 'jira'):
+        request.add_to_payload("projectKey", component_info['jiraProjectKey'])
 
     # 2) Make call to cater
     # TODO: Since CATER doesn't have API as of this comment written,
     # just put in placeholder info for demo
-    issue_title = "CATER 170777 - add EPICS control for oscilloscope scop-li20-ex04"
-    issue_body = "Created to address CATER: [170777](https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3) \
-    by @" + request.github_uname
-
+    cater_link = "https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3"
+    cater_title = "add EPICS control for oscilloscope scop-li20-ex04"
+    issue_title = f"CATER {cater_id} - {cater_title}"
+    if (issue_tracker == 'github'): # Different link formatting for both issue trackers
+        cater_link = f"[{cater_id}]({cater_link})"
+    elif (issue_tracker == 'jira'):
+        cater_link = f"[{cater_id}|{cater_link}]"
+    issue_body = f"Created to address CATER: {cater_link} by @{request.github_uname}"
 
     # 3) Add to payload
     request.add_to_payload("issueTitle", issue_title)
     request.add_to_payload("issueBody", issue_body)
 
     # 4) Send request to backend
-    endpoint = 'component/' + request.component.name + '/issue'
+    endpoint = 'component/' + request.component.name + '/issue/' + issue_tracker
     request.set_endpoint(endpoint)
-    request.post_request(log=True)
+    response = request.post_request(log=True)
+    # 5) print issue url
+    if (response.status_code == 201):
+        print(f"== ADBS == Successfully created issue - {response.json()['payload']}")
+
+
 
     
