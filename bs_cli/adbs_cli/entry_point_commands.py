@@ -386,16 +386,23 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-cl", "--clear", is_flag=True, required=False, help="Clear branch readiness status")
-def mark(component: str, branch: str):
+def mark(component: str, branch: str, clear: bool):
     """Mark a branch as ready for review/complete"""
-    under_development() # TODO
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
-    request.add_to_payload("ADBS_COMPONENT", request.component.name)
-    request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
 
     # 2) Send request to backend
-    endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
+    endpoint = 'component/' + request.component.name + '/branch/' + request.component.branch_name + '/ready/'
+    if (clear):
+        endpoint += 'false'
+    else:
+        endpoint += 'true'
     request.set_endpoint(endpoint)
-    request.post_request(log=True)
+    response = request.put_request(log=True)
+    
+    # 3) Print status
+    if (response.status_code == 200):
+        print("== ADBS == Sucessfully marked branch")
+    else:
+        print("== ADBS == Error marking branch")
