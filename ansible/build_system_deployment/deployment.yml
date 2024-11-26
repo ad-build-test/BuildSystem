@@ -8,6 +8,8 @@
 # https://docs.ansible.com/ansible/latest/collections/kubernetes/core/k8s_module.html#ansible-collections-kubernetes-core-k8s-module
 - name: Build System Deployment
   hosts: localhost
+  vars:
+    k8s_namespace: 'core-build-system'
   tasks:
 # TODO:
 # 0) ansible-galaxy collection install kubernetes.core
@@ -26,28 +28,28 @@
       state: directory
       suffix: temp_deployment
     register: temp_directory
-  # - name: Git checkout mongodb deployment
-  #   ansible.builtin.git:
-  #     repo: 'https://github.com/eed-web-application/eed-accel-webapp-clusters-wide-setup.git'
-  #     dest: '{{ temp_directory.path }}/eed-accel-webapp-clusters-wide-setup'
-  #     version: main
-  # - name: Git checkout core-build-system deployment
-  #   ansible.builtin.git:
-  #     repo: 'https://github.com/eed-web-application/core-build-system-deployment.git'
-  #     dest: '{{ temp_directory.path }}/core-build-system-deployment'
-  #     version: ad-build-dev
+  - name: Git checkout mongodb deployment
+    ansible.builtin.git:
+      repo: 'https://github.com/eed-web-application/eed-accel-webapp-clusters-wide-setup.git'
+      dest: '{{ temp_directory.path }}/eed-accel-webapp-clusters-wide-setup'
+      version: main
+  - name: Git checkout core-build-system deployment
+    ansible.builtin.git:
+      repo: 'https://github.com/eed-web-application/core-build-system-deployment.git'
+      dest: '{{ temp_directory.path }}/core-build-system-deployment'
+      version: ad-build-dev
   - name: Git checkout BuildSystem deployment
     ansible.builtin.git:
       repo: 'https://github.com/ad-build-test/BuildSystem.git'
       dest: '{{ temp_directory.path }}/BuildSystem'
       version: main
   # 2.2) apply server side mongodb resources
-  # - name: Apply server side mongodb resources
-  #   kubernetes.core.k8s:
-  #     namespace: core-build-system
-  #     state: present
-  #     src: '{{ temp_directory.path }}/eed-accel-webapp-clusters-wide-setup/test/mongodb-operator/crd-1.16.2.yaml'
-  #     apply: yes 
+  - name: Apply server side mongodb resources
+    kubernetes.core.k8s:
+      namespace: '{{ k8s_namespace }}'
+      state: present
+      src: '{{ temp_directory.path }}/eed-accel-webapp-clusters-wide-setup/test/mongodb-operator/crd-1.16.2.yaml'
+      apply: yes 
   # 2.3) apply core-build-system-deployment
   - name: Find all core-build-system-deployment YAML files
     ansible.builtin.find:
@@ -55,10 +57,9 @@
       patterns: "*.yaml,*.yml"
       excludes: "kustomization.yaml"
     register: yaml_files
-
   - name: Apply core-build-system backend service
     kubernetes.core.k8s:
-      namespace: core-build-system
+      namespace: '{{ k8s_namespace }}'
       state: present
       src: "{{ item.path }}"
     loop: "{{ yaml_files.files }}"
@@ -70,14 +71,13 @@
       patterns: "*.yaml,*.yml"
       excludes: "kustomization*"
     register: yaml_files
-
   - name: Apply artifact storage api service
     kubernetes.core.k8s:
-      namespace: core-build-system
+      namespace: '{{ k8s_namespace }}'
       state: present
       src: "{{ item.path }}"
     loop: "{{ yaml_files.files }}"
   # 3.2) apply deployment controller (TBD)
 
-# 4) Delete temp dir, inspect the cluster make sure everything looks good
+# 4) Inspect the cluster make sure everything looks good
   # 4.1) Run sample curl request to backend to see if its working
