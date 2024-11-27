@@ -21,7 +21,8 @@ def create():
 @click.option("-i", "--issue-tracker", required=False, help="Issue tracking system", prompt=INPUT_PREFIX + "Specify issue tracking system [github | jira]")
 @click.option("-j", "--jira-project-key", required=False, help="Jira project key")
 @click.option("-u", "--url", required=False, help="Add existing component to build system")
-def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, url: str):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, url: str, verbose: bool=False):
     """Create a new repo"""
     request = Request(Component(component))
     # args: (May make most of these prompted to user)
@@ -52,16 +53,16 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
         ),
     ]
     build_os_list = inquirer.prompt(question)
-    print(build_os_list)
+    click.echo(build_os_list)
     request.add_dict_to_payload(build_os_list)
     if (url): request.add_to_payload("url", url)
-    request.post_request(log=True)
+    request.post_request(verbose)
 
     # Create another put request but to enable permissions for backend to receive events
     enable_envents_endpoint = 'component/' + request.component.name + '/event/true'
     request = Request(Component(component))
     request.set_endpoint(enable_envents_endpoint)
-    request.put_request(log=True)
+    request.put_request(log=verbose, msg="Add repo to component database")
 
 
 @create.command()
@@ -72,7 +73,8 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
 @click.option("-t", "--tag", required=False, help="Specify which tag to branch from")
 @click.option("-ct", "--commit", required=False, help="Specify which commit to branch from")
 @click.option("-a", "--add", is_flag=True, required=False, help="Add an EXISTING branch to database")
-def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, add: bool):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
     """Create a new branch"""
     component_obj = Component()
     request = Request(component_obj)
@@ -158,7 +160,7 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)
     request.add_to_payload("branchName", full_branch_name)
-    request.put_request(log=True)
+    request.put_request(log=verbose, msg="Add branch to component database")
 
     # 5) Create the branch using git and push
     if (not add): # Dont create branch if user just wants to add to database
@@ -170,12 +172,13 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
 @create.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-ci", "--cater-id", required=True, help="CATER ID")
-def issue(component: str, cater_id: int):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def issue(component: str, cater_id: int, verbose: bool=False):
     """Create a new issue based off CATER ID"""
     # TODO: CATER does not have an API, but will have it once the NEW CATER 
 
     # 1) Set fields
-    logging.info("THIS COMMAND IS ONLY used for demo purposes for now")
+    click.echo("THIS COMMAND IS ONLY used for demo purposes for now (New CATER under development)")
     request = Request(Component(component))
     request.set_component_name()
     component_info = request.get_component_from_db()
@@ -204,11 +207,6 @@ def issue(component: str, cater_id: int):
     # 4) Send request to backend
     endpoint = 'component/' + request.component.name + '/issue/' + issue_tracker
     request.set_endpoint(endpoint)
-    response = request.post_request(log=True)
-    # 5) print issue url
-    if (response.status_code == 201):
-        print(f"== ADBS == Successfully created issue - {response.json()['payload']}")
-
-
+    request.post_request(log=verbose, msg="Create issue")
 
     

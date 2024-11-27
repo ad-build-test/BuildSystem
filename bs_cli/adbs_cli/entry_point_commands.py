@@ -45,7 +45,7 @@ def find_tarball(base_path):
 
 def run_process_real_time(command):
     # Use subprocess.Popen to forward output directly
-    print(command)
+    click.echo(command)
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -55,11 +55,11 @@ def run_process_real_time(command):
 
     # Print output in real-time
     for line in iter(process.stdout.readline, ''):
-        print(line, end='')  # Print each line as it is output
+        click.echo(line, end='')  # Print each line as it is output
 
     # Ensure all stderr is also handled
     for line in iter(process.stderr.readline, ''):
-        print(line, end='')
+        click.echo(line, end='')
 
     process.stdout.close()
     process.stderr.close()
@@ -106,7 +106,8 @@ def configure():
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-def clone(component: str, branch: str="main"):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def clone(component: str, branch: str="main", verbose: bool=False):
     """Clone an existing component/branch"""
 
     # 1) Set fields
@@ -116,7 +117,7 @@ def clone(component: str, branch: str="main"):
     # 2) Request for all components
     endpoint = 'component'
     request.set_endpoint(endpoint)
-    response = request.get_request(log=False)
+    response = request.get_request(log=verbose)
 
     component_list_payload = response.json()['payload']
 
@@ -143,9 +144,9 @@ def clone(component: str, branch: str="main"):
             component_url = component_dict["url"]
             dir_path = os.path.join(os.getcwd(), component)
             git.Repo.clone_from(component_url, dir_path, branch=branch)
-            print("Successfully cloned component " + component_url)
+            click.echo("Successfully cloned component " + component_url)
         else: # No match
-            print(f"Value '{component}' not found in any of the dictionaries.")
+            click.echo(f"Value '{component}' not found in any of the dictionaries.")
         
 
 
@@ -155,7 +156,8 @@ def clone(component: str, branch: str="main"):
 @click.option("-l", "--local", is_flag=True, required=False, help="Local build")
 @click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
 @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
-def build(component: str, branch: str, local: bool, remote: bool, container: bool):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def build(component: str, branch: str, local: bool, remote: bool, container: bool, verbose: bool=False):
     """Trigger a build [local | remote | container]"""
     # 1) Set fields
     request = Request(Component(component, branch))
@@ -188,7 +190,7 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
         # 3) shell into the build environment, and run local_build() in there
         for build_os in build_os_list:
-            print(f"== ADBS == Building for architecture: {build_os}")
+            click.echo(f"== ADBS == Building for architecture: {build_os}")
             if (build_os == "rocky9"):
                 build_os == "rhel9"
             build_img = cli_configuration["build_images_filepath"] + build_os + '-env/' + build_os + '-env_latest.sif'
@@ -207,8 +209,8 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
         request.set_endpoint(endpoint)
         request.add_to_payload("ADBS_BUILD_TYPE", "normal")
-        request.post_request(log=True)
-        
+        request.post_request(log=verbose, msg="Start remote build")
+
     ## Container build
     elif (build_type == "CONTAINER"): # (NOTE - this feature will be long-term goal and is not priority atm)
         under_development() # TODO
@@ -218,7 +220,8 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-q", "--quick", is_flag=True, required=False, help="Quick tests")
 @click.option("-m", "--main", is_flag=True, required=False, help="Main tests")
-def test(component: str, branch: str, quick: bool, main: bool):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=True):
     """Trigger a test"""
     under_development() # TODO
     # 1) Set fields
@@ -230,7 +233,7 @@ def test(component: str, branch: str, quick: bool, main: bool):
     # 2) Send request to backend
     endpoint = 'test/component/' + request.component.name + '/branch/' + request.component.branch_name
     request.set_endpoint(endpoint)
-    request.post_request(log=True)
+    request.post_request(log=verbose, msg="Test")
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
@@ -242,8 +245,9 @@ def test(component: str, branch: str, quick: bool, main: bool):
 @click.argument("tag")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, branch: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, initial: bool, override: bool):
+                ioc: str, tag: str, initial: bool, override: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -256,7 +260,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     deployment_request.set_component_fields()
 
     # 2) Get fields
-    print("== ADBS == At the moment, deployment only for IOCs is supported")
+    click.echo("== ADBS == At the moment, deployment only for IOCs is supported")
 
     # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
     # question = [inquirer.List(
@@ -297,7 +301,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     #         pass
     #     else:
     #         facilities = facility.split(',')
-    #         print(f'facilities: {facilities}')
+    #         click.echo(f'facilities: {facilities}')
     #     facilities = [facility.upper() for facility in facilities] # Uppercase every facility
 
     #     facility_ioc_dict = {}
@@ -314,7 +318,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     #     pass
     # elif (ioc_list == []):
     #     # 3.2) Possible user just wants to deploy app and not any ioc
-    #     print("== ADBS == No IOC's were specified, only deploying application")
+    #     click.echo("== ADBS == No IOC's were specified, only deploying application")
     # else:
     #     if (initial):
     #         # 3.3) TODO: If initial deployment, ask user for facility they want to deploy specified ioc's
@@ -330,7 +334,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         facilities = inquirer.prompt(question)['facility']
     else:
         facilities = facility.split(',')
-        print(f'facilities: {facilities}')
+        click.echo(f'facilities: {facilities}')
     facilities = [facility.upper() for facility in facilities] # Uppercase every facility
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -347,7 +351,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
     for facility in facilities:
-        print(f"== ADBS == Deploying to facility: {facility}\n")
+        click.echo(f"== ADBS == Deploying to facility: {facility}\n")
         playbook_args_dict['facility'] = facility
             
     # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
@@ -357,7 +361,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
             tarball_path = user_src_repo + '/build_results/'
             tarball = str(find_tarball(tarball_path))
             if (tarball == None):
-                print("== ADBS == No tarball found in " + tarball_path)
+                click.echo("== ADBS == No tarball found in " + tarball_path)
             playbook_args_dict['tarball'] = tarball
             playbook_args_dict['user_src_repo'] = None
             if (override == True):
@@ -365,7 +369,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
 
             isExist = os.path.exists(playbook_output_path)
             if not isExist:
-                print(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+                click.echo(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
                 os.mkdir(playbook_output_path)
             adbs_playbooks_dir = cli_configuration["build_system_filepath"] + "ansible/ioc_module/" # TODO: Change this once official
 
@@ -373,20 +377,21 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
                                             adbs_playbooks_dir + 'ioc_deploy.yml',
                                                 facility,
                                                 playbook_args_dict)
-            print("Playbook execution finished with return code:", return_code)
+            click.echo("Playbook execution finished with return code:", return_code)
             # TODO: API call to deployment controller to add deployment info to db
         else: # 5.2) Otherwise deployment controller will deploy to production facilities
             deployment_request.set_endpoint('ioc/deployment')
             deployment_request.add_dict_to_payload(playbook_args_dict)
-            deployment_request.put_request(log=True)
+            deployment_request.put_request(log=verbose, msg="Remote deployment")
         if (initial):
-            print("== ADBS == Please create startup.cmd manually!")
+            click.echo("== ADBS == Please create startup.cmd manually!")
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-cl", "--clear", is_flag=True, required=False, help="Clear branch readiness status")
-def mark(component: str, branch: str, clear: bool):
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def mark(component: str, branch: str, clear: bool, verbose: bool=False):
     """Mark a branch as ready for review/complete"""
     # 1) Set fields
     request = Request(Component(component, branch))
@@ -399,10 +404,7 @@ def mark(component: str, branch: str, clear: bool):
     else:
         endpoint += 'true'
     request.set_endpoint(endpoint)
-    response = request.put_request(log=True)
-    
-    # 3) Print status
-    if (response.status_code == 200):
-        print("== ADBS == Sucessfully marked branch")
+    if (clear):
+        request.put_request(log=verbose, msg="Mark branch clear")
     else:
-        print("== ADBS == Error marking branch")
+        request.put_request(log=verbose, msg="Mark branch")

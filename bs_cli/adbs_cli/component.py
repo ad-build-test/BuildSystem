@@ -63,7 +63,6 @@ class Component(object):
         return commit_names
 
     def set_cur_dir_component(self):
-        print("Checking current directory if a component...")
         # Safe to assume that if the current directory is a git repo 
         # then that repo is a component in the component db
         if (self.git_repo == None):

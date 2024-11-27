@@ -17,6 +17,7 @@ class Request(object):
                             "github_username": self.github_uname }
         self.payload = {}
         self.component = component
+        self.response = {}
 
     def set_endpoint(self, endpoint: str):
         self.url += endpoint
@@ -40,30 +41,33 @@ class Request(object):
     def set_component_branch_name(self):
         self.component.set_component_field_logic("branch")
 
-    def log_api_response(self, response):
-        logging.info(response.status_code)
-        logging.info(response.json())
-        logging.info(response.request.url)
-        logging.info(response.request.body)
-        logging.info(response.request.headers)
+    def log_request_response(self):
+        logging.info(self.response.status_code)
+        logging.info(self.response.json())
+        logging.info(self.response.request.url)
+        logging.info(self.response.request.body)
+        logging.info(self.response.request.headers)
 
-    def post_request(self, log: bool=False)-> requests.Response:
-        response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
-        if (log):
-            self.log_api_response(response)
-        return response
+    def post_request(self, log: bool, msg: str)-> requests.Response:
+        self.response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
+        self.log_request(log, msg)
+        return self.response
     
-    def put_request(self, log: bool=False)-> requests.Response:
-        response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
-        if (log):
-            self.log_api_response(response)
-        return response
+    def put_request(self, log: bool, msg: str=None)-> requests.Response:
+        self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
+        self.log_request(log, msg)
+        return self.response
 
-    def get_request(self, log: bool=False) -> requests.Response:
-        response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
+    def get_request(self, log: bool, msg: str=None) -> requests.Response:
+        self.response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
+        self.log_request(log, msg)
+        return self.response
+    
+    def log_request(self, log: bool, msg: str):
         if (log):
-            self.log_api_response(response)
-        return response
+            self.log_request_response()
+        if (msg):
+            self.log_request_status(msg)
             
     # Return component payload
     def get_component_from_db(self) -> dict:
@@ -74,6 +78,12 @@ class Request(object):
             if (component['name'] == self.component.name):
                 response = requests.get(cli_configuration["server_url"] + 'component/' + component['id'])
                 return response.json()['payload']
+            
+    def log_request_status(self, msg: str):
+        if (self.response.ok):
+            print(f"== ADBS == SUCCESS: {msg} - {self.response.json()['payload']}")
+        else:
+            print(f"== ADBS == FAIL: {msg} - {self.response.json()}")
 
                 
 
