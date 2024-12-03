@@ -49,19 +49,39 @@ class Request(object):
         logging.info(self.response.request.headers)
 
     def post_request(self, log: bool, msg: str)-> requests.Response:
-        self.response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
-        self.log_request(log, msg)
-        return self.response
+        return self.send_request("POST", log, msg)
     
     def put_request(self, log: bool, msg: str=None)-> requests.Response:
-        self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
-        self.log_request(log, msg)
-        return self.response
+        return self.send_request("PUT", log, msg)
 
     def get_request(self, log: bool, msg: str=None) -> requests.Response:
-        self.response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
-        self.log_request(log, msg)
-        return self.response
+        return self.send_request("GET", log, msg)
+    
+    def send_request(self, request_type: str, log: bool, msg) -> requests.Response:
+        """Generalized function for GET, POST, and PUT requests."""
+        try:
+            # Determine the request method and send the corresponding request
+            if request_type == 'GET':
+                self.response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
+            elif request_type == 'POST':
+                self.response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
+            elif request_type == 'PUT':
+                self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
+
+            # Check for any response errors (e.g., 404, 500)
+            self.response.raise_for_status()
+            self.log_request(log, msg)
+            return self.response
+
+        except requests.exceptions.ConnectionError:
+            print("== ADBS == FAIL: The backend server could not be reached.")
+        except requests.exceptions.MissingSchema:
+            print("== ADBS == FAIL: The URL is incorrectly formatted.")
+        except requests.exceptions.HTTPError as err:
+            print(f"== ADBS == FAIL: HTTP Error occurred: {err}")
+        except requests.exceptions.RequestException as e:
+            print(f"== ADBS == FAIL: General error occurred: {e}")
+        return None
     
     def log_request(self, log: bool, msg: str):
         if (log):
