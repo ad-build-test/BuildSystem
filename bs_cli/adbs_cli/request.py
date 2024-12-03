@@ -81,6 +81,7 @@ class Request(object):
             print(f"== ADBS == FAIL: HTTP Error occurred: {err}")
         except requests.exceptions.RequestException as e:
             print(f"== ADBS == FAIL: General error occurred: {e}")
+        if (msg): print(f"== ADBS == FAIL: {msg}")
         return None
     
     def log_request(self, log: bool, msg: str):
