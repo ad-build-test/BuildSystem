@@ -39,3 +39,13 @@ def setup_logger(filepath: str):
     logger.addHandler(file_handler)
 
     return logger
+
+def switch_log_file(filepath: str):
+    logger = logging.getLogger('my_logger')
+
+    # Remove existing handler(s)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # Setup new logger
+    setup_logger(filepath)

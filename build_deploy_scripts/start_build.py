@@ -5,7 +5,7 @@ import requests
 from ansible_api import run_ansible_playbook
 from artifact_api import ArtifactApi
 from start_test import Test
-from logger_setup import setup_logger
+from logger_setup import setup_logger, switch_log_file
 
 # Flow
 # 1) Parse the contents of /config/build_config.json
@@ -104,7 +104,7 @@ class Build(object):
             for name,tag in dependency.items():
                     if (name == 'epics-base'): # Epics_base special case, path into root_dir/epics/base/<ver>
                         download_dir = self.root_dir + '/epics/base' # Create the directory for component
-                        os.makedirs(download_dir)
+                        os.makedirs(download_dir, exist_ok=True)
                         # Add epics to the LD_LIBRARY_PATH
                         # TODO: For now, just hardcode the architecture
                         # self.env['LD_LIBRARY_PATH'] = download_dir + '/' + tag + '/lib/linux-x86_64/'
@@ -273,6 +273,7 @@ if __name__ == "__main__":
     # 6) Run repo build script
     build.run_build(config_yaml)
     # 7) Run unit_tests
+    switch_log_file(build.source_dir + '/tests.log')
     test = Test()
     test.run_unit_tests(build.source_dir)
 
@@ -286,4 +287,4 @@ if __name__ == "__main__":
     build.push_build_results()
     
     # 10)  Done
-    logger.info("Remote build finished.")
+    # logger.info("Remote build finished.")
