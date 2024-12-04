@@ -68,19 +68,11 @@ class Request(object):
             elif request_type == 'PUT':
                 self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
 
-            # Check for any response errors (e.g., 404, 500)
-            self.response.raise_for_status()
             self.log_request(log, msg)
             return self.response
 
         except requests.exceptions.ConnectionError:
             print("== ADBS == FAIL: The backend server could not be reached.")
-        except requests.exceptions.MissingSchema:
-            print("== ADBS == FAIL: The URL is incorrectly formatted.")
-        except requests.exceptions.HTTPError as err:
-            print(f"== ADBS == FAIL: HTTP Error occurred: {err}")
-        except requests.exceptions.RequestException as e:
-            print(f"== ADBS == FAIL: General error occurred: {e}")
         if (msg): print(f"== ADBS == FAIL: {msg}")
         return None
     
