@@ -10,7 +10,7 @@ logger = logging.getLogger('my_logger')
 class ArtifactApi(object):
     def __init__(self):
         self.registry_base_path = "/mnt/eed/ad-build/registry/"
-        self.artifact_api_url = "http://artifact-api-service.artifact:8080/"
+        self.artifact_api_url = "http://artifact-api-service.core-build-system:8080/"
 
     def download_file_response(self, download_dir: str, tag: str, response: requests.Response):
         # Download file from api, and extract to download_dir
