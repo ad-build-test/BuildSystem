@@ -48,7 +48,7 @@ class Request(object):
         logging.info(self.response.request.body)
         logging.info(self.response.request.headers)
 
-    def post_request(self, log: bool, msg: str)-> requests.Response:
+    def post_request(self, log: bool, msg: str=None)-> requests.Response:
         return self.send_request("POST", log, msg)
     
     def put_request(self, log: bool, msg: str=None)-> requests.Response:
