@@ -35,7 +35,7 @@ class ArtifactApi(object):
             logger.info('Failed to retrieve the file. Status code:', response.status_code)
 
 
-    def get_component_from_registry(self, download_dir: str, component: str, tag: str, os_env: str):   
+    def get_component_from_registry(self, download_dir: str, component: str, tag: str, os_env: str = None):   
         payload = {"component": component, "tag": tag, "arch": os_env}
         logger.info(f"Get component {component},{tag} request to artifact storage...")
         # stream=True in case it's a large tarball

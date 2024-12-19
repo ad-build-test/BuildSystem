@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: deployment-controller-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/whitelist-source-range: 134.79.0.0/16,172.16.0.0/12
+  labels:
+    name: deployment-controller-ingress
+spec:
+  rules:
+  - host: "ad-build-dev.slac.stanford.edu"
+    http:
+      paths:
+      - pathType: Prefix
+        path: /api/deployment(/|$)(.*)
+        backend:
+          service:
+            name: deployment-controller-service
+            port: 
+              number: 80

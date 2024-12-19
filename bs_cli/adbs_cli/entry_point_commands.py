@@ -8,6 +8,9 @@ import json
 import logging
 import subprocess
 import pathlib
+from pprint import pprint
+import rich
+from rich.json import JSON
 from adbs_cli.component import Component
 from adbs_cli.request import Request
 from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development, cli_configuration
@@ -242,46 +245,40 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
-@click.argument("tag")
+@click.option("-tg", "--tag", required=False, help="Component tag to deploy")
+@click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, branch: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, initial: bool, override: bool, verbose: bool):
+                ioc: str, tag: str, list: bool, initial: bool, override: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
-    # TODO: Temporarily here
-    if (test):
-        under_development()
-
     # 1) Set fields
     deployment_request = Request(Component(component, branch), Api.DEPLOYMENT)    
     deployment_request.set_component_fields()
 
+    # 1.1) Option - test
+    if (test):
+        under_development()
+
+    # 1.2) Option - list
+    if (list):
+        # TODO: If list then just list every facility its available in
+        deployment_request.add_to_payload("component_name", deployment_request.component.name)
+        deployment_request.set_endpoint('/ioc/info')
+        response = deployment_request.get_request(log=verbose)
+        # Pretty print the json
+        payload = response.json()['payload']
+        pretty_print = yaml.dump(payload, indent=1)
+        pprint(payload, sort_dicts=False, indent=1)
+        click.echo("Active releases: \n" + pretty_print)
+        # TODO: Can use deeper keys [facility][iocs] to clear out the clutter
+        return
+
     # 2) Get fields
     click.echo("== ADBS == At the moment, deployment only for IOCs is supported")
-
-    # TODO: Add logic for figuring out what type of deployment this is, maybe in config.yaml / database
-    # question = [inquirer.List(
-    #             "app_type",
-    #             message="Specify type of ioc",
-    #             choices=["SIOC", "HIOC", "VIOC"])]
-    # ioc_type = inquirer.prompt(question)['ioc_type']
-    # Unnecessary to prompt for this
-    # question = [inquirer.List(
-    #             "initial",
-    #             message="Initial deployment?",
-    #             choices=[True, False])]
-    # if (not initial):
-    #     initial = inquirer.prompt(question)['initial']
-    # Unnecessary to prompt for this
-    # question = [inquirer.List(
-    #             "override",
-    #             message="Point deployment to your user-space repo?",
-    #             choices=[True, False])]
-    # if (not override):
-    #     override = inquirer.prompt(question)['override']
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
@@ -291,6 +288,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     # 3) Get ioc list for each facility
     if (ioc):
         ioc_list = ioc.split(',')
+    # TODO: Add logic if 'ALL', then facility(s) must be specified
 
     # TODO: Temporarily commented out for demo
     # # TODO: Add logic so every facility has their own list of iocs
@@ -382,6 +380,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         else: # 5.2) Otherwise deployment controller will deploy to production facilities
             deployment_request.set_endpoint('ioc/deployment')
             deployment_request.add_dict_to_payload(playbook_args_dict)
+            click.echo("== ADBS == Deploying to " + facility + "...")
             deployment_request.put_request(log=verbose, msg="Remote deployment")
         if (initial):
             click.echo("== ADBS == Please create startup.cmd manually!")

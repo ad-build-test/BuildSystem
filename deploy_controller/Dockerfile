@@ -2,7 +2,7 @@
 # base image
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/deployment-controller:latest -f deploy_envs/Dockerfile .
+# 2) docker build --tag pnispero/deployment-controller:latest -f deploy_controller/Dockerfile .
 FROM quay.io/ansible/ansible-runner:stable-2.11-latest
 
 # # update

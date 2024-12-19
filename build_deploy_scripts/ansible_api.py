@@ -5,7 +5,8 @@ import logging
 
 logger = logging.getLogger('my_logger')
 
-def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_env):
+def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
+                          extra_vars: str, custom_env: dict = None, return_output: bool = False):
         os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
         command = []
         if (custom_env['ADBS_OS_ENVIRONMENT'].lower() == 'rhel7'): # Special case for rhel7
@@ -45,6 +46,11 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars, custom_e
             **text,
             env=custom_env
         )
+
+        if (return_output):
+            # Capture the output and error streams
+            stdout, stderr = process.communicate()
+            return stdout, stderr, process.returncode
 
         # logger.info output in real-time
         for line in iter(process.stdout.readline, ''):

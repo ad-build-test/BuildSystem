@@ -9,7 +9,7 @@ class Api(str, Enum):
 
 cli_configuration = {
     "server_url": "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/",
-    "deployment_controller_url": "http://172.24.8.139/", # TODO: Temporarily hard ip address, since havent got domain name added to DNS from s3df admins
+    "deployment_controller_url": "https://ad-build-dev.slac.stanford.edu/api/deployment/",
     "build_system_filepath": "/sdf/group/ad/eed/ad-build/registry/BuildSystem/", # TODO: Temporarily spot
     "build_images_filepath": "/sdf/group/ad/eed/ad-build/registry/"
 }
