@@ -37,14 +37,6 @@ LCLS:
               tag: test-ioc-1.0.1
           date: 12-17-2024-16:05:20
           user: pnispero
-        - tag: test-ioc-1.0.0
-          iocs:
-            - name: sioc-b34-test1
-              tag: test-ioc-1.0.0
-            - name: sioc-b34-test3
-              tag: test-ioc-1.0.0
-          date: 12-13-2024-16:05:20
-          user: pnispero
     - name: app2
       tag: v2.3.4
   hla:
@@ -86,9 +78,9 @@ S3DF:
     - name: test-ioc
       tag: test-ioc-1.0.1
       iocs:
-        - name: sioc-b34-test1
+        - name: sioc-b91-test1
           tag: test-ioc-1.0.1
-        - name: sioc-b34-test3
+        - name: sioc-b91-test3
           tag: test-ioc-1.0.1
       history:
         - tag: test-ioc-1.0.0

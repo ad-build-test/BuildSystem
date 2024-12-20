@@ -328,14 +328,18 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     #         pass
 
     # <<<<<<<< TODO: Temporary placeholder code for a basic local deployment
-    if (not facility):
+    if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
         facilities = inquirer.prompt(question)['facility']
     else:
         facilities = facility.split(',')
         click.echo(f'facilities: {facilities}')
     facilities = [facility.upper() for facility in facilities] # Uppercase every facility
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
+    the only issue with looping through facilities, if they specify iocs, the deployment controller
+    has the logic of figuring out which iocs belong to what failities.
+    SOLVED - Lets get rid of the loop on the cli end. And all deployment logic should be in the
+    controller as it should be. For local deployments of local directories we can worry about it later
+    But change the facility to be a list to send to the backend
     # 4) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
