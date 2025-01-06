@@ -185,7 +185,7 @@ def ioc_deployment_logic(ioc_to_deploy: IocDict):
     generate_ioc_deployment_summary()
     # 7) Cleanup - delete downloaded tarball
     os.remove(tarball_filepath)
-    return somthing
+    # return somthing
 
 @app.get("/")
 def read_root():
@@ -275,7 +275,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         # "tarball": tarball,
         # "ioc_list": ioc_list,
         # }
-
+Patrick - almost ready to test, ask jerry to create a directory in ad-build for the playbooks (he owns dir)
     # 2) Call to artifact api for component/tag
     ArtifactApi.get_component_from_registry('/build', ioc_to_deploy.component_name, ioc_to_deploy.tag)
     # 3) Logic for special cases
@@ -345,5 +345,5 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=80)
+    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080)
     # deployment_controller refers to file, and app is the app=fastapi()

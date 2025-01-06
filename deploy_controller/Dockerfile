@@ -34,8 +34,5 @@ ADD build_deploy_scripts /app/
 # install requirements.txt
 RUN pip install -r /app/requirements.txt
 
-# Add playbooks to /build
-ADD ansible /app/
-
-# Command to run the app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+# Command to run the app - already set in the deployment yaml
+# CMD ["uvicorn", "deployment_controller:app", "--host", "0.0.0.0", "--port", "8080"]
