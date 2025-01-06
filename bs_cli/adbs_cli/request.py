@@ -43,7 +43,10 @@ class Request(object):
 
     def log_request_response(self):
         logging.info(self.response.status_code)
-        logging.info(self.response.json())
+        try:
+            logging.info(self.response.json())
+        except Exception as e:
+            logging.info("response json not available")
         logging.info(self.response.request.url)
         logging.info(self.response.request.body)
         logging.info(self.response.request.headers)

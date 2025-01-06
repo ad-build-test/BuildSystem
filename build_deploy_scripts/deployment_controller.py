@@ -38,7 +38,7 @@ yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
 
 class IocDict(BaseModel):
-    facility: list = None # Optional
+    facilities: list = None # Optional
     initial: bool
     component_name: str
     tag: str
@@ -111,6 +111,82 @@ def get_facilities_list() -> list:
     config_dict = parse_yaml(CONFIG_FILE_PATH)
     return config_dict.keys()
 
+def extract_date(entry) -> datetime:
+    return datetime.fromisoformat(entry['date'])
+
+def generate_ioc_deployment_summary(component_name: str, tag: str, user: str, timestamp: str,
+                                     deployment_report_file: str, facilities_ioc_dict: dict, deployment_output: str, status: int) -> int:
+    summary = \
+    f"""#### Deployment report for {component_name} - {tag}####
+    \n#### Date: {timestamp}
+    \n#### User: {user}
+    \n#### IOCs deployed: {facilities_ioc_dict}"""
+
+    if (status == 200): # 200 means success
+        # 6.2) Write summary of deployment to report at the top
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Success\n\n" + deployment_output
+            report_file.write(summary)
+    else: # Failure
+        # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
+        status = 400
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
+            report_file.write(summary)
+    return status
+
+def ioc_deployment_logic(ioc_to_deploy: IocDict):
+    """ Main logic for deploying an ioc(s) - used for both regular deployment and revert """
+    # 2) Call to artifact api for component/tag
+    ArtifactApi.get_component_from_registry('/build', ioc_to_deploy.component_name, ioc_to_deploy.tag)
+    # 3) Logic for special cases
+    facilities = ioc_to_deploy.facilities
+    facilities_ioc_dict = dict.fromkeys(facilities)
+    # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
+    for ioc in ioc_to_deploy.ioc_list:
+        facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+        if (facility == None): # Means ioc doesnt exist (typo on user end)
+            return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+        facilities_ioc_dict[facility] += ioc
+
+    # 4) Call the appropriate ansible playbook for each applicable facility 
+    playbook_args_dict = ioc_to_deploy.model_dump()
+    tarball_filepath = '/build/' + ioc_to_deploy.tag
+    playbook_args_dict['tarball'] = tarball_filepath
+    status = 200
+    deployment_report_file = '/build/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    
+    for facility in facilities:
+        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
+            continue
+        if (ioc_to_deploy.ioc_list[0] == 'ALL'):
+            # 3.2) If ioc = 'ALL' then create list of iocs based on facility
+            component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
+            facilities_ioc_dict[facility] += [ioc['name'] for ioc in component_info['iocs']]
+
+        playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
+    # TODO: - may want to do a dry run first to see if there would be any fails.
+        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ANSIBLE_PLAYBOOKS_PATH + 'ioc_module/ioc_deploy.yml',
+                                        facility, playbook_args, return_output=True)
+        # 5.1) Combine output
+        deployment_output = "== Deployment output for " + facility + '==\n\n' + stdout
+        if (return_code != 0):
+            status = 400 # Deployment failed
+            if (stderr != ''):
+                deployment_output += "\n== Errors ==\n\n" + stderr
+    
+        # 6) Write new configuration to deployment db for each facility
+        timestamp = datetime.now().isoformat()
+        update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
+                                     ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
+    # 6) Generate summary for report
+    generate_ioc_deployment_summary()
+    # 7) Cleanup - delete downloaded tarball
+    os.remove(tarball_filepath)
+    return somthing
+
 @app.get("/")
 def read_root():
     return {"status": "Empty endpoint - somethings wrong with your api call."}
@@ -146,24 +222,42 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     return JSONResponse(content=response_msg, status_code=200)
 
 @app.put("/ioc/deployment/revert")
-async def revert_ioc_deployment(data_to_write: IocDict):
+async def revert_ioc_deployment(ioc_to_deploy: IocDict):
     # TODO:
     # This would require a log or some history data of the previous deployments,
     # we can store this in the deployment yaml for now.
 
-    # 1) Return dictionary of information for an App
-    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    # 1) Figure out the previous component, tag, and the iocs and their tags.
+    find_component_in_facility(ioc_to_deploy.facilities)
+    # Previous component = most recent + 1, or always the second item in history. Better to sort the history by date just in case 
+    # its not in order
+    # 1.1) Get the history, and sort by date 
+    # Define a function to extract and convert the date
+
+    # Sort the history by the date field in descending order
+    # sorted_history = sorted(['history'], key=extract_date, reverse=True)
+    # Get the second item in history
+    # TODO: need to alter ioc_deployment_logic to revert all iocs to the tags in the history item
+
+# Steps 2-5 can be abstracted to its own function since regular deploy_ioc() will be the same logic
+    # ioc_deployment_logic(ioc_to_deploy)
+    # TODO: add extra logic in there, for revert only, call normal_ioc_deploy.yml, as many times as needed, 
+    # but group the iocs by tag, ex: if have 3 iocs at tag 1.1, and 2 iocs at tag 1.2. Call playbook only twice,
+    # instead of one for each. and we dont need all logic in ioc deployment_logic, 
+
+    # perhaps split it up into more functions and only use the ones that are needed, then the regular deployment can call 
+    # all of them, while revert only calls some of them.
+
+
+    # todo: alter deploy_ioc to use ioc_deplyoment_logic
     # 2) Using the component and ioc info
     # Either request the artifact from artifact storage, or mount the artifact storage directly
 
-# Steps 3-5 can be abstracted to its own function since regular deploy_ioc() will be the same logic
     # 3) Call the appropriate playbook
     
     # 4) Update the deployment config
 
     # 5) Return status and log of the playbook in action
-    pass
-
 @app.put("/ioc/deployment")
 async def deploy_ioc(ioc_to_deploy: IocDict):
     """
@@ -185,7 +279,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 2) Call to artifact api for component/tag
     ArtifactApi.get_component_from_registry('/build', ioc_to_deploy.component_name, ioc_to_deploy.tag)
     # 3) Logic for special cases
-    facilities = get_facilities_list()
+    facilities = ioc_to_deploy.facilities
     facilities_ioc_dict = dict.fromkeys(facilities)
     # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
     for ioc in ioc_to_deploy.ioc_list:
@@ -193,12 +287,14 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         if (facility == None): # Means ioc doesnt exist (typo on user end)
             return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
         facilities_ioc_dict[facility] += ioc
+
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     tarball_filepath = '/build/' + ioc_to_deploy.tag
     playbook_args_dict['tarball'] = tarball_filepath
     status = 200
     deployment_report_file = '/build/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    
     for facility in facilities:
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
         if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
@@ -206,13 +302,13 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         if (ioc_to_deploy.ioc_list[0] == 'ALL'):
             # 3.2) If ioc = 'ALL' then create list of iocs based on facility
             component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
-            facilities_ioc_dict[facility] += component_info['iocs'] Patrick - change this, this adds a dict, not a list of ioc names
+            facilities_ioc_dict[facility] += [ioc['name'] for ioc in component_info['iocs']]
 
         playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ANSIBLE_PLAYBOOKS_PATH + 'ioc_module/ioc_deploy.yml',
-                                        ioc_to_deploy.facility, playbook_args, return_output=True)
+                                        facility, playbook_args, return_output=True)
         # 5.1) Combine output
         deployment_output = "== Deployment output for " + facility + '==\n\n' + stdout
         if (return_code != 0):
@@ -226,7 +322,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                                      ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
 
     # 6) Generate summary for report
-    summary = f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag}####
+    summary = \
+    f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag}####
     \n#### Date: {timestamp}
     \n#### User: {ioc_to_deploy.user}
     \n#### IOCs deployed: {facilities_ioc_dict}"""

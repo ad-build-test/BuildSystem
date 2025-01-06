@@ -248,10 +248,12 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-tg", "--tag", required=False, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
-@click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
+@click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
+@click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
+# @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, branch: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, list: bool, initial: bool, override: bool, verbose: bool):
+                ioc: str, tag: str, list: bool, initial: bool, local: bool, revert: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -265,7 +267,6 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
 
     # 1.2) Option - list
     if (list):
-        # TODO: If list then just list every facility its available in
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
         deployment_request.set_endpoint('/ioc/info')
         response = deployment_request.get_request(log=verbose)
@@ -285,65 +286,24 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
                 choices=["S3DF", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]
-    # 3) Get ioc list for each facility
+    # 3) Get ioc list (if applicable)
     if (ioc):
         ioc_list = ioc.split(',')
-    # TODO: Add logic if 'ALL', then facility(s) must be specified
 
-    # TODO: Temporarily commented out for demo
-    # # TODO: Add logic so every facility has their own list of iocs
-    # if (ioc.upper() == "ALL"):
-    #     # 3.1) If 'ALL' then determine which facilities for all iocs the user wants
-    #     if (not facility):
-    #         facilities = inquirer.prompt(question)['facility']
-    #         pass
-    #     else:
-    #         facilities = facility.split(',')
-    #         click.echo(f'facilities: {facilities}')
-    #     facilities = [facility.upper() for facility in facilities] # Uppercase every facility
-
-    #     facility_ioc_dict = {}
-    #     for facility in facilities: # Get list of iocs from every facility user chose for this app
-    #         ioc_list_request = Request(api=Api.DEPLOYMENT)
-    #         ioc_list_request.set_endpoint(f'ioc/info')
-    #         ioc_list_request.add_to_params("name", deployment_request.component.name)
-    #         ioc_list_request.add_to_params("facility", facility)
-    #         response = ioc_list_request.get_request()
-    #         if (response.status_code == 200):
-    #             ioc_list = response.json()['info']['iocs']
-    #             facility_ioc_dict[facility] = ioc_list
-    #     logging.info(f"ALL ioc's in facilities you specified: {facility_ioc_dict}")
-    #     pass
-    # elif (ioc_list == []):
-    #     # 3.2) Possible user just wants to deploy app and not any ioc
-    #     click.echo("== ADBS == No IOC's were specified, only deploying application")
-    # else:
-    #     if (initial):
-    #         # 3.3) TODO: If initial deployment, ask user for facility they want to deploy specified ioc's
-    #         pass
-    #     else:
-    #         # 3.4) if not 'ALL', then figure out what ioc's specified by user belong to what facilities
-    #         # TODO: logic to determine what ioc belongs in which facility, if iocs are not found in any facility
-    #         # THEN WARN USER NOT FOUND, and ask if initial deployment or if a typo on their end
-    #         pass
-
-    # <<<<<<<< TODO: Temporary placeholder code for a basic local deployment
+    # 3.1) Get facilities (if applicable)
+    facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
         facilities = inquirer.prompt(question)['facility']
-    else:
+    elif (facility):
         facilities = facility.split(',')
         click.echo(f'facilities: {facilities}')
-    facilities = [facility.upper() for facility in facilities] # Uppercase every facility
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    the only issue with looping through facilities, if they specify iocs, the deployment controller
-    has the logic of figuring out which iocs belong to what failities.
-    SOLVED - Lets get rid of the loop on the cli end. And all deployment logic should be in the
-    controller as it should be. For local deployments of local directories we can worry about it later
-    But change the facility to be a list to send to the backend
+    if (facilities):
+        facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+
     # 4) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
-        "facility": None, # Get's set later
+        "facility": facilities,
         "initial": initial,
         "component_name": deployment_request.component.name,
         "tag": tag,
@@ -351,43 +311,76 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         "ioc_list": ioc_list
     }
 
+    # 5) If revert then send deployment revert request to deployment controller
+    if (revert):
+        TODO: Revert endpoint
+        deployment_request.set_endpoint('ioc/deployment/revert')
+    else:
+        # 5) Send deployment request to deployment controller
+        deployment_request.set_endpoint('ioc/deployment')
+    deployment_request.add_dict_to_payload(playbook_args_dict)
+    click.echo("== ADBS == Deploying to " + facilities + "...")
+    response = deployment_request.put_request(log=verbose)
+    # 5.1) Prompt user if they want to download and view the report
+    # Get the file content from the response
+    file_content = response.content.decode('utf-8')
+    file_path = f"~/deployment-report-{deployment_request.component.name}-{tag}"
+    click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
+    new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
+    if (new_file_path):
+        file_path = new_file_path
+    with open(file_path, "w") as report_file:
+        report_file.write(file_content)
+        # Read out the head of the report
+        summary = [report_file.readline() for _ in range(5)]
+    click.echo("Report downloaded successfully to " + file_path)
+    for line in summary:
+        click.echo(line, end="")
+    if (initial):
+        click.echo("== ADBS == Please create startup.cmd manually!")
+
+
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
-    for facility in facilities:
-        click.echo(f"== ADBS == Deploying to facility: {facility}\n")
-        playbook_args_dict['facility'] = facility
+    # TODO: Local deployment - if want local deployment, then user must follow the steps to ensure ansible can ssh from s3df to prod. 
+    # The steps are outlined in Jira issue EEDSWCM-69. but if its local deployment, then its essentially cram.
+    # if (local):
+    # for facility in facilities:
+    #     click.echo(f"== ADBS == Deploying to facility: {facility}\n")
+    #     playbook_args_dict['facility'] = facility
             
-    # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
-        if ('S3DF' in facilities):
-            playbook_output_path = os.getcwd() + "/ADBS_TMP"
-            user_src_repo = deployment_request.component.git_get_top_dir()
-            tarball_path = user_src_repo + '/build_results/'
-            tarball = str(find_tarball(tarball_path))
-            if (tarball == None):
-                click.echo("== ADBS == No tarball found in " + tarball_path)
-            playbook_args_dict['tarball'] = tarball
-            playbook_args_dict['user_src_repo'] = None
-            if (override == True):
-                playbook_args_dict['user_src_repo'] = user_src_repo
+    # TODO: Come back to this logic here for local directory deployments
+    # # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
+    #     if ('S3DF' in facilities):
+    #         playbook_output_path = os.getcwd() + "/ADBS_TMP"
+    #         user_src_repo = deployment_request.component.git_get_top_dir()
+    #         tarball_path = user_src_repo + '/build_results/'
+    #         tarball = str(find_tarball(tarball_path))
+    #         if (tarball == None):
+    #             click.echo("== ADBS == No tarball found in " + tarball_path)
+    #         playbook_args_dict['tarball'] = tarball
+    #         playbook_args_dict['user_src_repo'] = None
+    #         if (override == True):
+    #             playbook_args_dict['user_src_repo'] = user_src_repo
 
-            isExist = os.path.exists(playbook_output_path)
-            if not isExist:
-                click.echo(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
-                os.mkdir(playbook_output_path)
-            adbs_playbooks_dir = cli_configuration["build_system_filepath"] + "ansible/ioc_module/" # TODO: Change this once official
+    #         isExist = os.path.exists(playbook_output_path)
+    #         if not isExist:
+    #             click.echo(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
+    #             os.mkdir(playbook_output_path)
+    #         adbs_playbooks_dir = cli_configuration["build_system_filepath"] + "ansible/ioc_module/" # TODO: Change this once official
 
-            return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-                                            adbs_playbooks_dir + 'ioc_deploy.yml',
-                                                facility,
-                                                playbook_args_dict)
-            click.echo("Playbook execution finished with return code:", return_code)
-            # TODO: API call to deployment controller to add deployment info to db
-        else: # 5.2) Otherwise deployment controller will deploy to production facilities
-            deployment_request.set_endpoint('ioc/deployment')
-            deployment_request.add_dict_to_payload(playbook_args_dict)
-            click.echo("== ADBS == Deploying to " + facility + "...")
-            deployment_request.put_request(log=verbose, msg="Remote deployment")
-        if (initial):
-            click.echo("== ADBS == Please create startup.cmd manually!")
+    #         return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
+    #                                         adbs_playbooks_dir + 'ioc_deploy.yml',
+    #                                             facility,
+    #                                             playbook_args_dict)
+    #         click.echo("Playbook execution finished with return code:", return_code)
+    #         # TODO: API call to deployment controller to add deployment info to db
+    #     else: # 5.2) Otherwise deployment controller will deploy to production facilities
+    #         deployment_request.set_endpoint('ioc/deployment')
+    #         deployment_request.add_dict_to_payload(playbook_args_dict)
+    #         click.echo("== ADBS == Deploying to " + facility + "...")
+    #         deployment_request.put_request(log=verbose, msg="Remote deployment")
+    #     if (initial):
+    #         click.echo("== ADBS == Please create startup.cmd manually!")
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")

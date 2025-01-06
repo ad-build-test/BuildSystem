@@ -34,6 +34,12 @@ def main_tests():
     # test 3
 
 class TestDeploymentController(unittest.TestCase):
+    def test_deploy_all(self):
+        component_info = deployment_controller.find_component_in_facility('LCLS', 'ioc', 'test-ioc')
+        results = [ioc['name'] for ioc in component_info['iocs']]
+        print(results)
+        self.assertIsNotNone(results)
+
     def test_find_component_in_facility(self):
         self.assertIsNotNone(deployment_controller.find_component_in_facility(facility='LCLS', app_type='ioc', component_to_find='test-ioc'),
                               msg="find_component_in_facility(facility='LCLS', app_type='ioc', component_to_find='test-ioc')")
@@ -49,6 +55,22 @@ class TestDeploymentController(unittest.TestCase):
         print("Updates test_deployment_destinations.yaml")
 
 def test():
+
+    # Data structure with 'apps' key containing a list of dictionaries
+    data = {
+        'apps': [
+            {'name': 'app1', 'tag': 'app1.0'},
+            {'name': 'app2', 'tag': 'app1.0'}
+        ]
+    }
+
+    # Extract the 'name' from each dictionary in the list
+    app_names = [app['name'] for app in data['apps']]
+
+    # Output the result
+    print(app_names)
+    print(data['apps'])
+
     # List of dictionaries
     list_of_dicts = [
         {'facility': 'Facility1', 'app': 'App1'},
