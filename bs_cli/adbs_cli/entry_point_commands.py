@@ -334,7 +334,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         report_file.write(file_content)
         # Read out the head of the report
     with open(file_path, "r") as report_file:
-        summary = [report_file.readline() for _ in range(5)]
+        summary = [report_file.readline() for _ in range(7)]
     click.echo("Report downloaded successfully to " + file_path)
     for line in summary:
         click.echo(line, nl=False)
