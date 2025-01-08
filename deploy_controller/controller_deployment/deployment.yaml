@@ -46,13 +46,20 @@ spec:
         - containerPort: 8080  
         resources:
           limits:
-            memory: 1Gi
-            cpu: "1000m"
+            memory: 2Gi
+            cpu: "2000m"
         volumeMounts:
         - name: s3df-dev-container-ad-group
           mountPath: /mnt
+        - name: s3df-ssh-key-volume
+          mountPath: /home/adbuild/.ssh/deployment_controller_s3df
+          subPath: s3df-key
+          readOnly: true
       volumes:
       - name: s3df-dev-container-ad-group
         persistentVolumeClaim:
           claimName: s3df-dev-container-ad-group
+      - name: s3df-ssh-key-volume
+        secret:
+          secretName: deployment-controller-ssh-keys
 

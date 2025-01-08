@@ -296,14 +296,13 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         facilities = inquirer.prompt(question)['facility']
     elif (facility):
         facilities = facility.split(',')
-        click.echo(f'facilities: {facilities}')
     if (facilities):
         facilities = [facility.upper() for facility in facilities] # Uppercase every facility
 
     # 4) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
-        "facility": facilities,
+        "facilities": facilities,
         "initial": initial,
         "component_name": deployment_request.component.name,
         "tag": tag,
@@ -313,18 +312,20 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
 
     # 5) If revert then send deployment revert request to deployment controller
     if (revert):
-        TODO: Revert endpoint
+        # TODO: Revert endpoint
         deployment_request.set_endpoint('ioc/deployment/revert')
     else:
         # 5) Send deployment request to deployment controller
         deployment_request.set_endpoint('ioc/deployment')
     deployment_request.add_dict_to_payload(playbook_args_dict)
-    click.echo("== ADBS == Deploying to " + facilities + "...")
+    click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
     # 5.1) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')
-    file_path = f"~/deployment-report-{deployment_request.component.name}-{tag}"
+    # Get the home directory of the current user
+    home_directory = os.path.expanduser("~")
+    file_path = f"{home_directory}/deployment-report-{deployment_request.component.name}-{tag}"
     click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
     new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
     if (new_file_path):
@@ -332,10 +333,11 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     with open(file_path, "w") as report_file:
         report_file.write(file_content)
         # Read out the head of the report
+    with open(file_path, "r") as report_file:
         summary = [report_file.readline() for _ in range(5)]
     click.echo("Report downloaded successfully to " + file_path)
     for line in summary:
-        click.echo(line, end="")
+        click.echo(line, nl=False)
     if (initial):
         click.echo("== ADBS == Please create startup.cmd manually!")
 

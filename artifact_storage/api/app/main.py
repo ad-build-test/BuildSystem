@@ -44,7 +44,7 @@ But green light, fill in these endpoints for now.
 class GetComponent(BaseModel):
     component: str
     tag: str
-    arch: str
+    arch: str = None # Optional
 class BuildImage(BaseModel):
     dockerfile: str
     arch: str

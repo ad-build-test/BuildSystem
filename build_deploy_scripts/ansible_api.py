@@ -6,13 +6,13 @@ import logging
 logger = logging.getLogger('my_logger')
 
 def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
-                          extra_vars: str, custom_env: dict = None, return_output: bool = False):
-        os.environ['ANSIBLE_FORCE_COLOR'] = 'true'
-        command = []
-        if (custom_env['ADBS_OS_ENVIRONMENT'].lower() == 'rhel7'): # Special case for rhel7
-            command += ['python3', '-m', 'ansible', 'playbook']
-        else:
-             command += ['ansible-playbook']
+                          extra_vars: str, custom_env: dict = None, return_output: bool = False, no_color: bool = False):
+        if (no_color):
+            os.environ['ANSIBLE_NOCOLOR'] = 'True'
+        command = ['ansible-playbook']
+        if (custom_env):
+            if (custom_env['ADBS_OS_ENVIRONMENT'].lower() == 'rhel7'): # Special case for rhel7
+                command = ['python3', '-m', 'ansible', 'playbook']
         command += [
             '-i', inventory,
             '-l', host_pattern,
@@ -38,7 +38,7 @@ def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
             }
 
         # Use subprocess.Popen to forward output directly
-        logger.info("Running ansible playbook...")
+        logger.info(f"Running ansible playbook...\n{command}")
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,

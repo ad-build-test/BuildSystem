@@ -3,33 +3,36 @@
 # How to build:
 # 1) Go to top of repo
 # 2) docker build --tag pnispero/deployment-controller:latest -f deploy_controller/Dockerfile .
-FROM quay.io/ansible/ansible-runner:stable-2.11-latest
+FROM rockylinux:9
 
-# # update
-# RUN yum -y update
+# update
+RUN dnf -y update
 
-# # install glibc
-# RUN yum install -y glibc
+# install vim and python3 and pip
+# install perl, git, podman
+RUN dnf install -y vim \
+    python3 \
+    pip \
+    perl \
+    git \
+    dos2unix \
+    && dnf clean all
 
-# # install gcc and make
-# RUN yum install -y gcc-c++ && yum install -y make
+# install ansible
+RUN pip install ansible
 
-# # install vim and python3 and pip
-# RUN yum install -y vim && yum install -y python3 && yum install -y pip
-
-# install pyyaml, requests
-# RUN pip install pyyaml \
-#     && pip install requests
-
-# # install ansible
-# RUN pip install ansible
-
-# # install git
-# RUN yum install -y git
+# Create adbuild with a specific UID (e.g., 46487)
+RUN groupadd -g 1006 cd && \
+    useradd -u 46487 -g cd -m adbuild
 
 # Add build and deploy scripts to /app
 RUN mkdir /app
+RUN mkdir /home/adbuild/.ssh
 ADD build_deploy_scripts /app/
+ADD deploy_controller/config /home/adbuild/.ssh
+RUN chown -R 46487:1006 /app
+RUN chown -R 46487:1006 /home
+RUN chown -R 46487:1006 /home/adbuild/.ssh
 
 # install requirements.txt
 RUN pip install -r /app/requirements.txt

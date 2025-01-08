@@ -5,6 +5,7 @@ Usage: python3 deployment_controller.py
 note - this would have to run 24/7 as a service
 """
 import os
+import shutil
 import subprocess
 from ruamel.yaml import YAML # Using ruamel instead of pyyaml because it keeps the comments
 import logging
@@ -29,13 +30,14 @@ logging.basicConfig(
     level=logging.INFO, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-CONFIG_FILE_PATH = "./test_deployment_destinations.yaml" # TODO: TEMP: Refer to local directory for testing
-# CONFIG_FILE_PATH = "/mnt/eed/ad-build/deployment_config.yaml"
-ANSIBLE_PLAYBOOKS_PATH = "../ansible/" # TODO: TEMP: Refer to local dir for testing
-# ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/ansible_playbooks"
-INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'global_inventory.ini'
+ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
+INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
+CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
+
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
+
+artifact_api = ArtifactApi()
 
 class IocDict(BaseModel):
     facilities: list = None # Optional
@@ -138,7 +140,7 @@ def generate_ioc_deployment_summary(component_name: str, tag: str, user: str, ti
 def ioc_deployment_logic(ioc_to_deploy: IocDict):
     """ Main logic for deploying an ioc(s) - used for both regular deployment and revert """
     # 2) Call to artifact api for component/tag
-    ArtifactApi.get_component_from_registry('/build', ioc_to_deploy.component_name, ioc_to_deploy.tag)
+    artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag)
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
     facilities_ioc_dict = dict.fromkeys(facilities)
@@ -151,10 +153,10 @@ def ioc_deployment_logic(ioc_to_deploy: IocDict):
 
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
-    tarball_filepath = '/build/' + ioc_to_deploy.tag
+    tarball_filepath = '/app/' + ioc_to_deploy.tag
     playbook_args_dict['tarball'] = tarball_filepath
     status = 200
-    deployment_report_file = '/build/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     
     for facility in facilities:
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
@@ -275,42 +277,51 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         # "tarball": tarball,
         # "ioc_list": ioc_list,
         # }
-Patrick - almost ready to test, ask jerry to create a directory in ad-build for the playbooks (he owns dir)
+
+    ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
+
     # 2) Call to artifact api for component/tag
-    ArtifactApi.get_component_from_registry('/build', ioc_to_deploy.component_name, ioc_to_deploy.tag)
+    artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
-    facilities_ioc_dict = dict.fromkeys(facilities)
+    facilities_ioc_dict = dict.fromkeys(facilities, [])
     # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
-    for ioc in ioc_to_deploy.ioc_list:
-        facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-        if (facility == None): # Means ioc doesnt exist (typo on user end)
-            return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
-        facilities_ioc_dict[facility] += ioc
+    if (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
+        for ioc in ioc_to_deploy.ioc_list:
+            facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+            if (facility == None): # Means ioc doesnt exist (typo on user end)
+                return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+            facilities_ioc_dict[facility].append(ioc)
 
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
-    tarball_filepath = '/build/' + ioc_to_deploy.tag
+    tarball_filepath = '/app/' + ioc_to_deploy.tag + '.tar.gz'
     playbook_args_dict['tarball'] = tarball_filepath
+    playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
+    playbook_args_dict['user_src_repo'] = None
     status = 200
-    deployment_report_file = '/build/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
-    
+    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_output = ""
+    logging.info(f"facilities: {facilities}")
     for facility in facilities:
+        logging.info(f"facility: {facility}")
+        logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
         if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
             continue
-        if (ioc_to_deploy.ioc_list[0] == 'ALL'):
+        if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
             # 3.2) If ioc = 'ALL' then create list of iocs based on facility
             component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
-            facilities_ioc_dict[facility] += [ioc['name'] for ioc in component_info['iocs']]
+            facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['iocs']])
 
         playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
+        playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ANSIBLE_PLAYBOOKS_PATH + 'ioc_module/ioc_deploy.yml',
-                                        facility, playbook_args, return_output=True)
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
+                                        facility, playbook_args, return_output=True, no_color=True)
         # 5.1) Combine output
-        deployment_output = "== Deployment output for " + facility + '==\n\n' + stdout
+        deployment_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
         if (return_code != 0):
             status = 400 # Deployment failed
             if (stderr != ''):
@@ -320,13 +331,13 @@ Patrick - almost ready to test, ask jerry to create a directory in ad-build for 
         timestamp = datetime.now().isoformat()
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
                                      ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
-
+    logging.info('Generating summary/report...')
     # 6) Generate summary for report
     summary = \
-    f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag}####
-    \n#### Date: {timestamp}
-    \n#### User: {ioc_to_deploy.user}
-    \n#### IOCs deployed: {facilities_ioc_dict}"""
+    f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
+#### Date: {timestamp}
+#### User: {ioc_to_deploy.user}
+\n#### IOCs deployed: {facilities_ioc_dict}"""
 
     if (status == 200): # 200 means success
         # 6.2) Write summary of deployment to report at the top
