@@ -17,7 +17,7 @@ import json
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from copy import deepcopy
 
 """
@@ -41,7 +41,6 @@ artifact_api = ArtifactApi()
 
 class IocDict(BaseModel):
     facilities: list = None # Optional
-    initial: bool
     component_name: str
     tag: str
     ioc_list: list
@@ -328,13 +327,15 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                 deployment_output += "\n== Errors ==\n\n" + stderr
     
         # 6) Write new configuration to deployment db for each facility
-        timestamp = datetime.now().isoformat()
+        timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
+        tzinfo = timezone(timedelta(hours=timezone_offset))
+        timestamp = datetime.now(tzinfo).isoformat()
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
                                      ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     summary = \
-    f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
+f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
 #### Date: {timestamp}
 #### User: {ioc_to_deploy.user}
 \n#### IOCs deployed: {facilities_ioc_dict}"""

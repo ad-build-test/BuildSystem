@@ -243,17 +243,16 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
-@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm]")
+@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm] *not in use yet")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
 @click.option("-tg", "--tag", required=False, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
-@click.option("-in", "--initial", is_flag=True, required=False, help="Initial deployment (required if never deployed app/ioc - idempotent)")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, branch: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, list: bool, initial: bool, local: bool, revert: bool, verbose: bool):
+                ioc: str, tag: str, list: bool, local: bool, revert: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -303,7 +302,6 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
         "facilities": facilities,
-        "initial": initial,
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
@@ -335,11 +333,11 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         # Read out the head of the report
     with open(file_path, "r") as report_file:
         summary = [report_file.readline() for _ in range(7)]
-    click.echo("Report downloaded successfully to " + file_path)
+    click.echo("Report head:")
     for line in summary:
         click.echo(line, nl=False)
-    if (initial):
-        click.echo("== ADBS == Please create startup.cmd manually!")
+    click.echo(f"Report downloaded successfully to {file_path}")
+    click.echo("\n== ADBS == Please create/check startup.cmd manually!")
 
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
