@@ -60,16 +60,17 @@ def tag():
     pass
 
 @tag.command()
-@click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-t", "--tag", required=True, help="Tag (ex: R1.4.2)")
 @click.option("-r", "--results", required=True, help="The build results folder (ex: oscilloscope-main-RHEL7-12345), can be grabbed from PR build comment")
-def create(component: str, branch: str, tag: str, results: str): # TODO
+def create(tag: str, results: str): # TODO
     """Create a new tagged artifact and send to artifact storage. Then add a git tag"""
     # Get user input
     # Patrick move steps 1-4 to deployment controller 
     # leave step 5 here to create the git tag 
     # TODO: Add the automatic checking of comp/branch
+    results_split = results.split('-')
+    component = results_split[0]
+    branch = results_split[1]
     scratch_filepath = "/sdf/group/ad/eed/ad-build/scratch"
     results_dir_top = os.path.join(scratch_filepath, results, component)
 
