@@ -43,3 +43,9 @@ class ArtifactApi(object):
         response = requests.get(url=self.artifact_api_url + 'component', json=payload, stream=True) 
         self.download_file_response(download_dir, tag, response, extract)
         # For now we can assume the component exists, otherwise the api builds and returns it
+
+    def put_component_to_registry(self, component: str, results_dir: str):
+        payload = {"component": component, "results_dir": results_dir}
+        logger.info(f"Put component to registry {payload} request to artifact storage ...")
+        response = requests.put(url=self.artifact_api_url + 'component', json=payload) 
+        return response.status_code

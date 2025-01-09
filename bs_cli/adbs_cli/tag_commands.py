@@ -4,11 +4,10 @@ import readline
 import os
 import tarfile
 import subprocess
+from adbs_cli.request import Request
+from adbs_cli.component import Component
 from adbs_cli.auto_complete import AutoComplete
-from adbs_cli.cli_configuration import under_development
-
-def get_user_input(prompt):
-    return input(prompt)
+from adbs_cli.cli_configuration import under_development,  Api
 
 def change_directory(path):
     try:
@@ -61,34 +60,27 @@ def tag():
 
 @tag.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
+@click.option("-b", "--branch", required=True, help="Branch Name")
 @click.option("-t", "--tag", required=True, help="Tag (ex: R1.4.2)")
 @click.option("-r", "--results", required=True, help="The build results folder (ex: oscilloscope-main-RHEL7-12345), can be grabbed from PR build comment")
-def create(component: str, branch: str, tag: str, results: str): # TODO
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def create(component: str, branch: str, tag: str, results: str, verbose: bool): # TODO
     """Create a new tagged artifact and send to artifact storage. Then add a git tag"""
-    # Get user input
-    # Patrick move steps 1-4 to deployment controller 
-    # leave step 5 here to create the git tag 
-    # TODO: Add the automatic checking of comp/branch
-    scratch_filepath = "/sdf/group/ad/eed/ad-build/scratch"
-    results_dir_top = os.path.join(scratch_filepath, results, component)
+    # 1) Create tarball, send to deployment controller
+    request = Request(Component(component), api=Api.DEPLOYMENT)
+    request.set_component_name()
+    payload = {"component_name": component,
+               "branch": branch,
+               "tag": tag,
+               "results": results
+               }
+    request.add_dict_to_payload(payload)
+    request.set_endpoint('/tag')
 
-    # 1) Change to the 'build_results' directory
-    build_results_dir = os.path.join(results_dir_top, "build_results")
-    build_results = f"{component}-{branch}"
-    change_directory(build_results_dir)
-
-    # 2) Rename the specified directory to the tag
-    build_results_full_path = os.path.join(build_results_dir, build_results)
-    rename_directory(build_results_full_path, os.path.join(build_results_dir, tag))
-
-    # 3) Create a tarball of the renamed directory
-    create_tarball(os.path.join(build_results_dir, tag), tag)
-
-    # 4) Push to artifact storage
-
-    # Step 5: Create a Git tag and push it
-    # create_and_push_git_tag(tag)
+    response = request.put_request(log=verbose)
+    # 2) Create git tag and push
+    if (response.ok):
+        create_and_push_git_tag(tag)
 
 @tag.command()
 def edit():

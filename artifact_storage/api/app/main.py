@@ -2,9 +2,10 @@ import os
 import uvicorn
 import subprocess
 import time
+import shutil
 import asyncio
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from kubernetes import client, config, utils
 from kubernetes.client.rest import ApiException
 from contextlib import asynccontextmanager
@@ -48,6 +49,10 @@ class GetComponent(BaseModel):
 class BuildImage(BaseModel):
     dockerfile: str
     arch: str
+class PutComponent(BaseModel):
+    component: str
+    results_tarball: str
+    tag: str
 
 registry_base_path = "/mnt/eed/ad-build/registry/"
 config.load_kube_config() 
@@ -156,6 +161,13 @@ async def get_component(payload: GetComponent):
 
     # 2) Return filepath to prebuilt component
 
+@app.put("/component")
+async def put_component(payload: PutComponent):
+    component_path = os.path.join(registry_base_path, payload.component)
+    full_results_path = os.path.join(component_path, payload.tag)
+    print(f"Put component request full results path - {full_results_path}")
+    shutil.copy(payload.results_tarball, full_results_path)
+    return JSONResponse(content={"payload": "Success"}, status_code=200)
 
 @app.post("/component")
 # TODO:

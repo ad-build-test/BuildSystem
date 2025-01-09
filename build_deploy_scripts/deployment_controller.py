@@ -10,6 +10,7 @@ import subprocess
 from ruamel.yaml import YAML # Using ruamel instead of pyyaml because it keeps the comments
 import logging
 import ansible_api
+import tarfile
 from artifact_api import ArtifactApi
 
 import uvicorn
@@ -33,6 +34,7 @@ logging.basicConfig(
 ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
+SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -44,6 +46,13 @@ class IocDict(BaseModel):
     component_name: str
     tag: str
     ioc_list: list
+    user: str
+
+class TagDict(BaseModel):
+    component_name: str
+    branch: str
+    results: str
+    tag: str
     user: str
 
 # TODO: Possible to just use IocDict but would have to make fields optional
@@ -114,6 +123,33 @@ def get_facilities_list() -> list:
 
 def extract_date(entry) -> datetime:
     return datetime.fromisoformat(entry['date'])
+
+def change_directory(path):
+    try:
+        os.chdir(path)
+        # print(f"Changed directory to {os.getcwd()}")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Directory {path} not found.")
+
+def rename_directory(src_dir, dest_dir):
+    try:
+        if os.path.isdir(src_dir):
+            os.rename(src_dir, dest_dir)
+            print(f"Renamed directory {src_dir} to {dest_dir}")
+        else:
+            raise ValueError(f"Directory {src_dir} not found.")
+    except Exception as e:
+        raise ValueError(f"Error renaming directory: {e}")
+
+def create_tarball(directory, tag):
+    tarball_name = f"{tag}.tar.gz"
+    try:
+        with tarfile.open(tarball_name, "w:gz") as tar:
+            tar.add(directory, arcname=os.path.basename(directory))
+        print(f"Created tarball: {tarball_name}")
+        return tarball_name
+    except Exception as e:
+        raise ValueError(f"Error creating tarball: {e}")
 
 def generate_ioc_deployment_summary(component_name: str, tag: str, user: str, timestamp: str,
                                      deployment_report_file: str, facilities_ioc_dict: dict, deployment_output: str, status: int) -> int:
@@ -221,6 +257,31 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     
     response_msg = {"payload": component_info_list} # 200 - successful
     return JSONResponse(content=response_msg, status_code=200)
+
+@app.post("/tag")
+async def post_tag_creation(tag_request: TagDict):
+    """
+    Function to create a tag and push it to artifact storage
+    """
+    results_dir_top = os.path.join(SCRATCH_FILEPATH, tag_request.results, tag_request.component_name)
+
+    # 1) Change to the 'build_results' directory
+    build_results_dir = os.path.join(results_dir_top, "build_results")
+    build_results = f"{tag_request.component_name}-{tag_request.branch}"
+    change_directory(build_results_dir)
+
+    # 2) Rename the specified directory to the tag
+    build_results_full_path = os.path.join(build_results_dir, build_results)
+    full_tarball_path = os.path.join(build_results_dir, tag_request.tag)
+    rename_directory(build_results_full_path, full_tarball_path)
+
+    # 3) Create a tarball of the renamed directory
+    tarball_name = create_tarball(full_tarball_path, tag_request.tag)
+    full_tarball_path += tarball_name
+    # 4) Push to artifact storage
+    return_code = artifact_api.put_component_to_registry(tag_request.component_name, full_tarball_path)
+    return JSONResponse(content={"payload": "Success"}, status_code=return_code)
+
 
 @app.put("/ioc/deployment/revert")
 async def revert_ioc_deployment(ioc_to_deploy: IocDict):
