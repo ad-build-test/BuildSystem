@@ -272,14 +272,14 @@ async def post_tag_creation(tag_request: TagDict):
 
     # 2) Rename the specified directory to the tag
     build_results_full_path = os.path.join(build_results_dir, build_results)
-    full_tarball_path = os.path.join(build_results_dir, tag_request.tag)
-    rename_directory(build_results_full_path, full_tarball_path)
+    tagged_dir_path = os.path.join(build_results_dir, tag_request.tag)
+    rename_directory(build_results_full_path, tagged_dir_path)
 
     # 3) Create a tarball of the renamed directory
-    tarball_name = create_tarball(full_tarball_path, tag_request.tag)
-    full_tarball_path += tarball_name
+    tarball_name = create_tarball(tagged_dir_path, tag_request.tag)
+    full_tarball_path = os.path.join(build_results_dir, tarball_name)
     # 4) Push to artifact storage
-    return_code = artifact_api.put_component_to_registry(tag_request.component_name, full_tarball_path)
+    return_code = artifact_api.put_component_to_registry(tag_request.component_name, full_tarball_path, tag_request.tag)
     return JSONResponse(content={"payload": "Success"}, status_code=return_code)
 
 

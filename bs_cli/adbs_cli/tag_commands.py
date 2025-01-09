@@ -84,6 +84,8 @@ def create(component: str, branch: str, tag: str, results: str, verbose: bool): 
     if (response.ok):
         click.echo("== ADBS == Tagged build results sent to artifact storage. Creating git tag...")
         create_and_push_git_tag(tag)
+        return
+    click.echo("== ADBS == Failure to tag")
 
 @tag.command()
 def edit():
