@@ -57,9 +57,7 @@ def create_and_push_git_tag(tag):
 def tag():
     """Tag [ create | edit | delete ]"""
     # Register our completer function for tags
-    tag_bytes = subprocess.check_output(['gh', 'release', 'list', '--json', 'tagName', '--jq', '.[].tagName'])
-    tag_list = tag_bytes.decode("utf-8").split()
-    readline.set_completer(AutoComplete(tag_list).complete)
+    pass
 
 @tag.command()
 @click.option("-c", "--component", required=False, help="Component Name")
