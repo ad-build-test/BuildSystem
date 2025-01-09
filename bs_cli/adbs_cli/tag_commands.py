@@ -69,7 +69,7 @@ def create(component: str, branch: str, tag: str, results: str, verbose: bool): 
     # 1) Create tarball, send to deployment controller
     request = Request(Component(component), api=Api.DEPLOYMENT)
     request.set_component_name()
-    payload = {"component_name": component,
+    payload = {"component_name": request.component.name,
                "branch": branch,
                "tag": tag,
                "results": results
