@@ -164,7 +164,7 @@ async def get_component(payload: GetComponent):
 @app.put("/component")
 async def put_component(payload: PutComponent):
     component_path = os.path.join(registry_base_path, payload.component)
-    full_results_path = os.path.join(component_path, payload.tag)
+    full_results_path = os.path.join(component_path, payload.tag) + '.tar.gz'
     print(f"Put component request full results path - {full_results_path}")
     shutil.copy(payload.results_tarball, full_results_path)
     return JSONResponse(content={"payload": "Success"}, status_code=200)
