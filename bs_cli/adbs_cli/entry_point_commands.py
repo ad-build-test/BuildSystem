@@ -271,9 +271,9 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         response = deployment_request.get_request(log=verbose)
         # Pretty print the json
         payload = response.json()['payload']
-        pretty_print = yaml.dump(payload, indent=1)
+        # pretty_print = yaml.dump(payload, indent=1)
         pprint(payload, sort_dicts=False, indent=1)
-        click.echo("Active releases: \n" + pretty_print)
+        # click.echo("Active releases: \n" + pretty_print)
         # TODO: Can use deeper keys [facility][iocs] to clear out the clutter
         return
 
