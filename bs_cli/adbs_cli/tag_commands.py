@@ -68,11 +68,13 @@ def create(component: str, branch: str, tag: str, results: str, verbose: bool): 
     """Create a new tagged artifact and send to artifact storage. Then add a git tag"""
     # 1) Create tarball, send to deployment controller
     request = Request(Component(component), api=Api.DEPLOYMENT)
+    linux_uname = os.environ.get('USER')
     request.set_component_name()
     payload = {"component_name": request.component.name,
                "branch": branch,
                "tag": tag,
-               "results": results
+               "results": results,
+               "user": linux_uname
                }
     request.add_dict_to_payload(payload)
     request.set_endpoint('/tag')
