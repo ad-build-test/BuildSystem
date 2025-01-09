@@ -77,9 +77,10 @@ def create(component: str, branch: str, tag: str, results: str, verbose: bool): 
     request.add_dict_to_payload(payload)
     request.set_endpoint('/tag')
 
-    response = request.put_request(log=verbose)
+    response = request.post_request(log=verbose)
     # 2) Create git tag and push
     if (response.ok):
+        click.echo("== ADBS == Tagged build results sent to artifact storage. Creating git tag...")
         create_and_push_git_tag(tag)
 
 @tag.command()
