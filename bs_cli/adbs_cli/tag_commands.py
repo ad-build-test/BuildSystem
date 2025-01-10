@@ -39,8 +39,15 @@ def create_tarball(directory, tag):
         print(f"Error creating tarball: {e}")
         exit(1)
 
-def create_and_push_git_tag(tag):
+def create_and_push_git_tag(tag, branch):
     try:
+
+        # Switch to branch
+        subprocess.run(["git", "checkout", branch], check=True)
+
+        # Pull the latest changes from branch
+        subprocess.run(["git", "pull", "origin", branch], check=True)
+
         # Create a Git tag
         subprocess.run(["git", "tag", tag], check=True)
         print(f"Created Git tag: {tag}")
@@ -83,7 +90,7 @@ def create(component: str, branch: str, tag: str, results: str, verbose: bool): 
     # 2) Create git tag and push
     if (response.ok):
         click.echo("== ADBS == Tagged build results sent to artifact storage. Creating git tag...")
-        create_and_push_git_tag(tag)
+        create_and_push_git_tag(tag, branch)
         click.echo(f"== ADBS == Tag successfully created, ready for deployment!")
         return
     click.echo("== ADBS == Failure to tag")
