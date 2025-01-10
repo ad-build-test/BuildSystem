@@ -40,9 +40,6 @@ RUN yum install -y podman
 # Add build scripts to /build
 ADD build_deploy_scripts /build/
 
-# Add playbooks to /build
-ADD ansible /build/
-
 # Create adbuild with a specific UID (e.g., 46487)
 RUN groupadd -g 1006 cd && \
     useradd -u 46487 -g cd -m adbuild
