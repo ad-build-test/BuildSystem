@@ -337,7 +337,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     for line in summary:
         click.echo(line, nl=False)
     click.echo(f"Report downloaded successfully to {file_path}")
-    click.echo("\n== ADBS == Please create/check startup.cmd manually!")
+    click.echo("\n== ADBS == If first time deploying IOC - please create startup.cmd manually!")
 
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
