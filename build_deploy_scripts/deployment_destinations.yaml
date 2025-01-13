@@ -2,11 +2,9 @@
 #
 #  Abs:   Semi-official configuration for every application deployment
 #
-#  Name:  deployment_config.yaml
+#  Name:  deployment_destinations.yaml
 #
-#  Rem:   This file is read by 
-#
-#  Usage:  When done editing, save, then please run script
+#  Usage:  This file is only meant to be edited by the deployment controller.
 #
 #  Facility: SLAC Controls (Development)
 #
@@ -18,9 +16,24 @@
 # MATLAB
 # PYDM
 
-# Development Environment
-development:
+# lcls Environment
+LCLS:
   ioc:
+    - name: oscilloscope
+      tag: R1.0.0
+      iocs:
+        - name: sioc-lgun-sc01
+          tag: R1.0.0
+        - name: sioc-lhtr-sc01
+          tag: R1.0.0
+        - name: sioc-sys0-sc01
+          tag: R1.0.0
+        - name: sioc-lgun-sc02
+          tag: R1.0.0
+      history:
+        - tag: R1.0.0
+          date: 12-19-2024-16:05:20
+          user: pnispero
     - name: test-ioc
       tag: test-ioc-1.0.1
       iocs:
@@ -28,26 +41,15 @@ development:
           tag: test-ioc-1.0.1
         - name: sioc-b34-test3
           tag: test-ioc-1.0.1
-    - name: app2
-      tag: v2.3.4
-  hla:
-    - name: app3
-      tag: v1.1.0
-  tools:
-    - name: app3
-      tag: v1.1.0
-  matlab:
-    - name: app3
-      tag: v1.1.0
-  pydm:
-    - name: app3
-      tag: v1.1.0
-
-# lcls Environment
-lcls:
-  ioc:
-    - name: app1
-      tag: v1.2.3
+      history:
+        - tag: test-ioc-1.0.1
+          iocs:
+            - name: sioc-b34-test1
+              tag: test-ioc-1.0.1
+            - name: sioc-b34-test3
+              tag: test-ioc-1.0.1
+          date: 12-17-2024-16:05:20
+          user: pnispero
     - name: app2
       tag: v2.3.4
   hla:
@@ -64,10 +66,19 @@ lcls:
       tag: v1.1.0
 
 # facet Environment
-facet:
+FACET:
   ioc:
-    - name: app1
-      tag: v1.2.3
+    - name: oscilloscope
+      tag: R1.0.0
+      iocs:
+        - name: sioc-li20-sc01
+          tag: R1.0.0
+        - name: sioc-sys1-sc01
+          tag: R1.0.0
+      history:
+        - tag: R1.0.0
+          date: 12-19-2024-16:05:20
+          user: pnispero
     - name: app2
       tag: v2.3.4
   hla:
@@ -83,3 +94,77 @@ facet:
     - name: app3
       tag: v1.1.0
 
+# facet Environment
+TESTFAC:
+  ioc:
+    - name: oscilloscope
+      tag: R1.0.0
+      iocs:
+        - name: sioc-as01-sc01
+          tag: R1.0.0
+        - name: sioc-b128-sc01
+          tag: R1.0.0
+        - name: sioc-sys6-sc01
+          tag: R1.0.0
+      history:
+        - tag: R1.0.0
+          date: 12-19-2024-16:05:20
+          user: pnispero
+    - name: app2
+      tag: v2.3.4
+  hla:
+    - name: app3
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0
+
+# Development Environment (tentative to keep it in here)
+S3DF:
+  ioc:
+    - name: oscilloscope
+      tag: R1.0.0
+      iocs:
+        - name: sioc-b15-sc01
+          tag: R1.0.0
+        - name: sioc-b34-sc01
+          tag: R1.0.0
+        - name: sioc-b34-sc02
+          tag: R1.0.0
+        - name: sioc-b34-sc04
+          tag: R1.0.0
+      history:
+        - tag: R1.0.0
+          date: 12-19-2024-16:05:20
+          user: pnispero
+    - name: test-ioc
+      tag: test-ioc-1.0.1
+      iocs:
+        - name: sioc-b91-test1
+          tag: test-ioc-1.0.1
+        - name: sioc-b91-test3
+          tag: test-ioc-1.0.1
+      history:
+        - tag: test-ioc-1.0.0
+          date: 12-13-2024-16:05:20
+          user: pnispero
+    - name: app2
+      tag: v2.3.4
+  hla:
+    - name: app3
+      tag: v1.1.0
+  tools:
+    - name: app3
+      tag: v1.1.0
+  matlab:
+    - name: app3
+      tag: v1.1.0
+  pydm:
+    - name: app3
+      tag: v1.1.0

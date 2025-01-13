@@ -14,8 +14,8 @@ apiVersion: apps/v1 # App deployment
 kind: Deployment
 metadata:
   name: artifact-api-service
-  namespace: artifact
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: artifact-api-service
@@ -51,6 +51,10 @@ spec:
             secretKeyRef:
               name: artifact-sa-token
               key: token
+        resources:
+          limits:
+            memory: 1Gi
+            cpu: "1000m"
         volumeMounts:
         - name: s3df-dev-container-ad-group
           mountPath: /mnt

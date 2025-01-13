@@ -7,7 +7,6 @@ clusters:
 contexts:
 - context:
     cluster: ad-build-dev
-    namespace: artifact
     user: artifact-sa
   name: ad-build-dev
 current-context: ad-build-dev

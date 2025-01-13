@@ -5,21 +5,25 @@ Usage: python3 deployment_controller.py
 note - this would have to run 24/7 as a service
 """
 import os
+import shutil
 import subprocess
-import time
-import yaml
+from ruamel.yaml import YAML # Using ruamel instead of pyyaml because it keeps the comments
 import logging
-from ansible_api import run_ansible_playbook
+import ansible_api
+import tarfile
 from artifact_api import ArtifactApi
 
 import uvicorn
+import json
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
+from datetime import datetime, timezone, timedelta
+from copy import deepcopy
 
 """
 Ex api request - curl -X 'GET' 'http://172.24.8.139/' -H 'accept: application/json'
-TODO: For now its the external ip since haven't got domain name added to DNS from s3df admins
+curl -X 'GET' 'https://ad-build-dev.slac.stanford.edu/api/deployment/' -H 'accept: application/json'
 """
 
 app = FastAPI(debug=False, title="Deployment_controller", version='1.0.0')
@@ -27,74 +31,302 @@ logging.basicConfig(
     level=logging.INFO, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-CONFIG_FILE_PATH = "./deployment_versions.yaml" # TODO: TEMP: Refer to local directory for testing
-# CONFIG_FILE_PATH = "/mnt/eed/ad-build/deployment_config.yaml"
-ANSIBLE_PLAYBOOKS_PATH = "../ansible/" # TODO: TEMP: Refer to local dir for testing
-# ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/ansible_playbooks"
+ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
+INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
+CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
+SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
+
+yaml = YAML()
+yaml.default_flow_style = False  # Make the output more readable
+
+artifact_api = ArtifactApi()
 
 class IocDict(BaseModel):
-    facility: str
-    initial: bool
+    facilities: list = None # Optional
     component_name: str
     tag: str
     ioc_list: list
     user: str
 
+class TagDict(BaseModel):
+    component_name: str
+    branch: str
+    results: str
+    tag: str
+    user: str
+
+# TODO: Possible to just use IocDict but would have to make fields optional
+    # And making the fields optional may not be good. 
+class BasicIoc(BaseModel):
+    component_name: str
+
 def parse_yaml(filename: str) -> dict:
     with open(filename, 'r') as file:
-        yaml_data = yaml.safe_load(file)
+        yaml_data = yaml.load(file)
     return yaml_data
 
-def write_to_config_yaml(data_to_write: dict):
+def update_yaml(filename: str, data: dict):
+    with open(filename, 'w') as file:
+        yaml.dump(data, file)
+
+def update_component_in_facility(facility: str, timestamp: str, user: str, app_type: str,
+                                  component_to_update: str, tag: str, ioc_list: list = None) -> bool:
     """
-    Function that writes the data from API call of CLI bs run deployment
-    to the configuration yaml (db once done prototyping)
+    Function to update a component in the deployment db
     """
     config_dict = parse_yaml(CONFIG_FILE_PATH)
-    logging.info(config_dict)
-    logging.info("unfinished function")
-    pass
+
+    for component in config_dict[facility][app_type]: # 1) Find the component
+        if (component_to_update in component['name']):
+            # 1) Update tag in original config dict
+            component['tag'] = tag
+
+            # 2) Update iocs (if applicable)
+            if (app_type == 'ioc'):
+                for ioc in component['iocs']:
+                    if (ioc['name'] in ioc_list):
+                        ioc['tag'] = tag
+            
+            # 3) Update the history = current component + user + date
+            history = deepcopy(component)
+            del history['name'] # remove the name from the history
+            del history['history'] # remove the history from the history
+            history['tag'] = tag
+            history['date'] = timestamp
+            history['user'] = user
+            component['history'].insert(0, history) # insert history at the front
+    update_yaml(CONFIG_FILE_PATH, config_dict)
+    return True
+
+def find_component_in_facility(facility: str, app_type: str, component_to_find: str) -> dict:
+    """ Function to return component information """
+    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    facility_config = config_dict[facility][app_type]
+    for component in facility_config:
+        if (component_to_find in component['name']):
+            return component
+    return None
+
+def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
+    """ Function to return the facility that the ioc is in """
+    for facility in get_facilities_list(): # Loop through each facility
+        component = find_component_in_facility(facility, 'ioc', component_with_ioc)
+        if (component):
+            for ioc in component['iocs']: # Loop through each ioc
+                if (ioc_to_find in ioc['name']):
+                    return facility
+    return None
+
+def get_facilities_list() -> list:
+    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    return config_dict.keys()
+
+def extract_date(entry) -> datetime:
+    return datetime.fromisoformat(entry['date'])
+
+def change_directory(path):
+    try:
+        os.chdir(path)
+        # print(f"Changed directory to {os.getcwd()}")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Directory {path} not found.")
+
+def rename_directory(src_dir, dest_dir):
+    try:
+        if os.path.isdir(src_dir):
+            os.rename(src_dir, dest_dir)
+            print(f"Renamed directory {src_dir} to {dest_dir}")
+        else:
+            raise ValueError(f"Directory {src_dir} not found.")
+    except Exception as e:
+        raise ValueError(f"Error renaming directory: {e}")
+
+def create_tarball(directory, tag):
+    tarball_name = f"{tag}.tar.gz"
+    try:
+        with tarfile.open(tarball_name, "w:gz") as tar:
+            tar.add(directory, arcname=os.path.basename(directory))
+        print(f"Created tarball: {tarball_name}")
+        return tarball_name
+    except Exception as e:
+        raise ValueError(f"Error creating tarball: {e}")
+
+def generate_ioc_deployment_summary(component_name: str, tag: str, user: str, timestamp: str,
+                                     deployment_report_file: str, facilities_ioc_dict: dict, deployment_output: str, status: int) -> int:
+    summary = \
+    f"""#### Deployment report for {component_name} - {tag}####
+    \n#### Date: {timestamp}
+    \n#### User: {user}
+    \n#### IOCs deployed: {facilities_ioc_dict}"""
+
+    if (status == 200): # 200 means success
+        # 6.2) Write summary of deployment to report at the top
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Success\n\n" + deployment_output
+            report_file.write(summary)
+    else: # Failure
+        # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
+        status = 400
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
+            report_file.write(summary)
+    return status
+
+def ioc_deployment_logic(ioc_to_deploy: IocDict):
+    """ Main logic for deploying an ioc(s) - used for both regular deployment and revert """
+    # 2) Call to artifact api for component/tag
+    artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag)
+    # 3) Logic for special cases
+    facilities = ioc_to_deploy.facilities
+    facilities_ioc_dict = dict.fromkeys(facilities)
+    # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
+    for ioc in ioc_to_deploy.ioc_list:
+        facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+        if (facility == None): # Means ioc doesnt exist (typo on user end)
+            return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+        facilities_ioc_dict[facility] += ioc
+
+    # 4) Call the appropriate ansible playbook for each applicable facility 
+    playbook_args_dict = ioc_to_deploy.model_dump()
+    tarball_filepath = '/app/' + ioc_to_deploy.tag
+    playbook_args_dict['tarball'] = tarball_filepath
+    status = 200
+    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    
+    for facility in facilities:
+        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
+            continue
+        if (ioc_to_deploy.ioc_list[0] == 'ALL'):
+            # 3.2) If ioc = 'ALL' then create list of iocs based on facility
+            component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
+            facilities_ioc_dict[facility] += [ioc['name'] for ioc in component_info['iocs']]
+
+        playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
+    # TODO: - may want to do a dry run first to see if there would be any fails.
+        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ANSIBLE_PLAYBOOKS_PATH + 'ioc_module/ioc_deploy.yml',
+                                        facility, playbook_args, return_output=True)
+        # 5.1) Combine output
+        deployment_output = "== Deployment output for " + facility + '==\n\n' + stdout
+        if (return_code != 0):
+            status = 400 # Deployment failed
+            if (stderr != ''):
+                deployment_output += "\n== Errors ==\n\n" + stderr
+    
+        # 6) Write new configuration to deployment db for each facility
+        timestamp = datetime.now().isoformat()
+        update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
+                                     ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
+    # 6) Generate summary for report
+    generate_ioc_deployment_summary()
+    # 7) Cleanup - delete downloaded tarball
+    os.remove(tarball_filepath)
+    # return somthing
 
 @app.get("/")
 def read_root():
     return {"status": "Empty endpoint - somethings wrong with your api call."}
 
 @app.get("/ioc/info")
-async def get_ioc_app_info(name: str, facility: str):
+async def get_ioc_component_info(ioc_request: BasicIoc):
     """
-    Return information on an IOC app
+    Return information on an IOC app for every facility
     """
     # 1) Return dictionary of information for an App
-    config_dict = parse_yaml(CONFIG_FILE_PATH)
-    facility = facility.upper()
+    # TODO: Change this to get every facility
     error_msg = "== ADBS == ERROR - ioc not found, name or facility is wrong or missing."
+    facilities = get_facilities_list()
+    component_info_list = []
     try:
         found_ioc = False
-        for ioc in config_dict[facility]["ioc"]:
-            if name == ioc['name']:
-                app_info = ioc
+        for facility in facilities:
+            component_info = find_component_in_facility(facility, 'ioc', ioc_request.component_name)
+            if (component_info):
+                info = {f"{facility}": component_info}
+                component_info_list.append(info)
                 found_ioc = True
-                break
-        if (not found_ioc):
-            return {"status": 404,
-                    "msg": error_msg} # 404 - Not found
+        if (not found_ioc): # 404 - Not found
+            response_msg = {"payload": error_msg}
+            return JSONResponse(content=response_msg, status_code=404)
     except Exception as e:
         error_msg = error_msg + str(e)
         logging.info(error_msg)
-        return {"status": 404,
-                "msg": error_msg} # 404 - Not found
+        response_msg = {"payload": error_msg}
+        return JSONResponse(content=response_msg, status_code=404)
     
-    return {"status": 200, # 200 - successful
-            "info": app_info}
+    response_msg = {"payload": component_info_list} # 200 - successful
+    return JSONResponse(content=response_msg, status_code=200)
 
+@app.post("/tag")
+async def post_tag_creation(tag_request: TagDict):
+    """
+    Function to create a tag and push it to artifact storage
+    """
+    results_dir_top = os.path.join(SCRATCH_FILEPATH, tag_request.results, tag_request.component_name)
+
+    # 1) Change to the 'build_results' directory
+    build_results_dir = os.path.join(results_dir_top, "build_results")
+    build_results = f"{tag_request.component_name}-{tag_request.branch}"
+    change_directory(build_results_dir)
+
+    # 2) Rename the specified directory to the tag
+    build_results_full_path = os.path.join(build_results_dir, build_results)
+    tagged_dir_path = os.path.join(build_results_dir, tag_request.tag)
+    rename_directory(build_results_full_path, tagged_dir_path)
+
+    # 3) Create a tarball of the renamed directory
+    tarball_name = create_tarball(tagged_dir_path, tag_request.tag)
+    full_tarball_path = os.path.join(build_results_dir, tarball_name)
+    # 4) Push to artifact storage
+    return_code = artifact_api.put_component_to_registry(tag_request.component_name, full_tarball_path, tag_request.tag)
+    return JSONResponse(content={"payload": "Success"}, status_code=return_code)
+
+
+@app.put("/ioc/deployment/revert")
+async def revert_ioc_deployment(ioc_to_deploy: IocDict):
+    # TODO:
+    # This would require a log or some history data of the previous deployments,
+    # we can store this in the deployment yaml for now.
+
+    # 1) Figure out the previous component, tag, and the iocs and their tags.
+    find_component_in_facility(ioc_to_deploy.facilities)
+    # Previous component = most recent + 1, or always the second item in history. Better to sort the history by date just in case 
+    # its not in order
+    # 1.1) Get the history, and sort by date 
+    # Define a function to extract and convert the date
+
+    # Sort the history by the date field in descending order
+    # sorted_history = sorted(['history'], key=extract_date, reverse=True)
+    # Get the second item in history
+    # TODO: need to alter ioc_deployment_logic to revert all iocs to the tags in the history item
+
+# Steps 2-5 can be abstracted to its own function since regular deploy_ioc() will be the same logic
+    # ioc_deployment_logic(ioc_to_deploy)
+    # TODO: add extra logic in there, for revert only, call normal_ioc_deploy.yml, as many times as needed, 
+    # but group the iocs by tag, ex: if have 3 iocs at tag 1.1, and 2 iocs at tag 1.2. Call playbook only twice,
+    # instead of one for each. and we dont need all logic in ioc deployment_logic, 
+
+    # perhaps split it up into more functions and only use the ones that are needed, then the regular deployment can call 
+    # all of them, while revert only calls some of them.
+
+
+    # todo: alter deploy_ioc to use ioc_deplyoment_logic
+    # 2) Using the component and ioc info
+    # Either request the artifact from artifact storage, or mount the artifact storage directly
+
+    # 3) Call the appropriate playbook
+    
+    # 4) Update the deployment config
+
+    # 5) Return status and log of the playbook in action
 @app.put("/ioc/deployment")
-async def deploy_ioc(data_to_write: IocDict):
+async def deploy_ioc(ioc_to_deploy: IocDict):
     """
-    Function that writes the data from API call of CLI bs run deployment
-    to the configuration yaml (db once done prototyping), then calls playbook
-    assuming gatekeeping logic is met (scheduled on PAMM day)
+    Function to deploy an ioc component
     """
-    logging.info(f"data: {data_to_write}")
+
+    logging.info(f"data: {ioc_to_deploy}")
     # 1) Get the data of the CLI api call, varies depending on app type
         # IOC app type:
         # playbook_args_dict = {
@@ -103,162 +335,89 @@ async def deploy_ioc(data_to_write: IocDict):
         # "tag": tag,
         # "user": linux_uname,
         # "tarball": tarball,
-        # "ioc_dict": ioc_dict,
-        # "output_path": playbook_output_path
+        # "ioc_list": ioc_list,
         # }
-    # 2) Call write_to_config_yaml(data_to_write)
-    write_to_config_yaml(data_to_write)
 
-    # 3) Call to artifact api for component/tag
+    ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
 
-    # 4) Call the ansible playbook 
-    # (In this case i don't think we need to parse changes, since deployment will still 
-    # be triggered manually - which simplifies this deployment_controller script)
+    # 2) Call to artifact api for component/tag
+    artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)
+    # 3) Logic for special cases
+    facilities = ioc_to_deploy.facilities
+    facilities_ioc_dict = dict.fromkeys(facilities, [])
+    # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
+    if (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
+        for ioc in ioc_to_deploy.ioc_list:
+            facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+            if (facility == None): # Means ioc doesnt exist (typo on user end)
+                return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+            facilities_ioc_dict[facility].append(ioc)
 
-    # 5) Return ansible playbook output to user
-    return {"status": 200,
-            "Values sent": data_to_write}
+    # 4) Call the appropriate ansible playbook for each applicable facility 
+    playbook_args_dict = ioc_to_deploy.model_dump()
+    tarball_filepath = '/app/' + ioc_to_deploy.tag + '.tar.gz'
+    playbook_args_dict['tarball'] = tarball_filepath
+    playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
+    playbook_args_dict['user_src_repo'] = None
+    status = 200
+    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_output = ""
+    logging.info(f"facilities: {facilities}")
+    for facility in facilities:
+        logging.info(f"facility: {facility}")
+        logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
+        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
+            continue
+        if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
+            # 3.2) If ioc = 'ALL' then create list of iocs based on facility
+            component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
+            facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['iocs']])
+
+        playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
+        playbook_args_dict['facility'] = facility
+    # TODO: - may want to do a dry run first to see if there would be any fails.
+        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
+                                        facility, playbook_args, return_output=True, no_color=True)
+        # 5.1) Combine output
+        deployment_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+        if (return_code != 0):
+            status = 400 # Deployment failed
+            if (stderr != ''):
+                deployment_output += "\n== Errors ==\n\n" + stderr
+    
+        # 6) Write new configuration to deployment db for each facility
+        timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
+        tzinfo = timezone(timedelta(hours=timezone_offset))
+        timestamp = datetime.now(tzinfo).isoformat()
+        update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
+                                     ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
+    logging.info('Generating summary/report...')
+    # 6) Generate summary for report
+    summary = \
+f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
+#### Date: {timestamp}
+#### User: {ioc_to_deploy.user}
+\n#### IOCs deployed: {facilities_ioc_dict}"""
+
+    if (status == 200): # 200 means success
+        # 6.2) Write summary of deployment to report at the top
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Success\n\n" + deployment_output
+            report_file.write(summary)
+    else: # Failure
+        # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
+        status = 400
+        with open(deployment_report_file, 'w') as report_file:
+            summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
+            report_file.write(summary)
+    # 7) Cleanup - delete downloaded tarball
+    os.remove(tarball_filepath)
+    # 8) Return ansible playbook output to user
+    return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=80)
+    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=120)
+    # timeout_keep_alive set to 120 seconds, in case deployment takes longer than usual
     # deployment_controller refers to file, and app is the app=fastapi()
-
-# PREVIOUS CODE with watchdog, DELETE ONCE DONE <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# class ConfigFileHandler(FileSystemEventHandler):
-#     def __init__(self, playbook_path: str):
-#         self.previous_data = None
-#         self.playbook_path = playbook_path
-
-#     def parse_yaml(self, yaml_filepath: str) -> dict:
-#         # Load YAML data from file
-#         with open(yaml_filepath, 'r') as file:
-#             yaml_data = yaml.safe_load(file)
-#         return yaml_data
-
-#     def get_index_for_field(self, key: str, field_name: str) -> int:
-#         """ Gets the index for a specific field in a complicated key format (due to deepdiff) """
-#         # Clean the key to prepare for processing
-#             # key ex: root['development']['ioc'][0]['tag']
-#             # becomes: [development[ioc[0[tag
-#         clean_key = key.replace("root", "").replace("'", "").replace("]","")
-#         fields = clean_key.split('[')
-
-#         found_field = False
-#         for field in fields:
-#             if field == field_name:
-#                 found_field = True
-#             elif found_field and field.isdigit():  # Capture the index after the field
-#                 return int(field)
-
-
-#     def parse_diff(self, diff: dict, new_data: dict):
-#         """ Parse the difference (Changes) to configuration 
-#             Note - This logic can be reapplied to mongodb, since its stored in JSON documents, its
-#                 easily convertable to a python dict
-#         """
-#         changes = []
-#         # Check for values changed in the ioc tag
-#         if 'values_changed' in diff:
-#             for key, change in diff['values_changed'].items():
-#                 if "['ioc']" in key: # Check if change to an ioc app
-#                     if "['iocs']" in key: # Check if change to an ioc within the ioc app
-#                         if "['tag']" in key: # Check if change to an ioc tag
-#                             print(f"key: {key},\n change: {change}")
-
-#                             ioc_app_index = self.get_index_for_field(key, 'ioc')
-#                             ioc_index = self.get_index_for_field(key, 'iocs')
-                            
-#                             ioc_app = self.previous_data['development']['ioc'][ioc_app_index]
-#                             ioc = self.previous_data['development']['ioc'][ioc_app_index]['iocs'][ioc_index]
-#                             changes.append({
-#                                 'type': 'ioc_tag_within_app_changed',
-#                                 'ioc_app_name': ioc_app['name'],
-#                                 'ioc_name': ioc['name'],
-#                                 'old_tag': change['old_value'],
-#                                 'new_tag': change['new_value']
-#                             })
-#                     elif "['tag']" in key:  # Check if change to an ioc app tag
-#                         print(f"key: {key},\n change: {change}")
-
-#                         ioc_app_index = self.get_index_for_field(key, 'ioc')
-                        
-#                         ioc_app = self.previous_data['development']['ioc'][ioc_app_index]
-#                         changes.append({
-#                             'type': 'ioc_app_tag_changed',
-#                             'ioc_name': ioc_app['name'],
-#                             'old_tag': change['old_value'],
-#                             'new_tag': change['new_value']
-#                         })
-                    
-
-#         # Check for added or removed IOCs
-#         if 'dictionary_item_added' in diff:
-#             for added_key in diff['dictionary_item_added']:
-#                 if "['ioc']" in added_key:
-#                     new_ioc = new_data['development']['ioc'][-1]  # Last added
-#                     changes.append({
-#                         'type': 'ioc_added',
-#                         'ioc_name': new_ioc['name'],
-#                         'tag': new_ioc['tag']
-#                     })
-
-#         if 'dictionary_item_removed' in diff:
-#             for removed_key in diff['dictionary_item_removed']:
-#                 if "['ioc']" in removed_key:
-#                     index = removed_key.split('[')[1].rstrip(']')
-#                     removed_ioc = self.previous_data['development']['ioc'][int(index)]
-#                     changes.append({
-#                         'type': 'ioc_removed',
-#                         'ioc_name': removed_ioc['name'],
-#                         'tag': removed_ioc['tag']
-#                     })
-#         print(f"All changes since previous version: {changes}")
-
-
-#     def compare_configs(self, new_data: dict):
-#         """Compare the previous and new configuration data."""
-#         if self.previous_data is None:
-#             self.previous_data = new_data
-#             return None
-
-#         diff = DeepDiff(self.previous_data, new_data)
-#         self.previous_data = new_data
-#         return diff
-    
-#     def on_modified(self, event):
-#         # print(event)
-#         if event.src_path == CONFIG_FILE_PATH:
-#             print(f"Configuration file changed: {event.src_path}")
-#             new_data = self.parse_yaml(CONFIG_FILE_PATH)
-#             changes = self.compare_configs(new_data)
-#             if changes:
-#                 print(f"Detected changes: {changes}")
-#                 self.parse_diff(changes, new_data)
-                
-
-#     def run_ansible_script(self):
-#         """Run the Ansible playbook."""
-#         print("Running Ansible playbook...")
-#         try:
-#             subprocess.run(['ansible-playbook', self.playbook_path], check=True)
-#             print("Ansible playbook executed successfully.")
-#         except subprocess.CalledProcessError as e:
-#             print(f"Ansible playbook failed with error: {e}")
-
-# if __name__ == "__main__":
-#     playbook_path = '/path/to/your/playbook.yml'  # Path to your Ansible playbook
-
-#     event_handler = ConfigFileHandler(playbook_path)
-#     observer = Observer()
-#     observer.schedule(event_handler, os.path.dirname("./"), recursive=False)
-
-#     print("Starting file observer...")
-#     observer.start()
-
-#     try:
-#         while True:
-#             time.sleep(1)  # Keep the script running
-#     except KeyboardInterrupt:
-#         print("Stopping file observer...")
-#         observer.stop()
-#     observer.join()

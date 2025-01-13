@@ -1,33 +1,100 @@
 import click
 import subprocess
 import readline
+import os
+import tarfile
+import subprocess
+from adbs_cli.request import Request
+from adbs_cli.component import Component
 from adbs_cli.auto_complete import AutoComplete
-from adbs_cli.cli_configuration import under_development
+from adbs_cli.cli_configuration import under_development,  Api
+
+def change_directory(path):
+    try:
+        os.chdir(path)
+        # print(f"Changed directory to {os.getcwd()}")
+    except FileNotFoundError:
+        print(f"Directory {path} not found.")
+        exit(1)
+
+def rename_directory(src_dir, dest_dir):
+    try:
+        if os.path.isdir(src_dir):
+            os.rename(src_dir, dest_dir)
+            print(f"Renamed directory {src_dir} to {dest_dir}")
+        else:
+            print(f"Directory {src_dir} not found.")
+            exit(1)
+    except Exception as e:
+        print(f"Error renaming directory: {e}")
+        exit(1)
+
+def create_tarball(directory, tag):
+    tarball_name = f"{tag}.tar.gz"
+    try:
+        with tarfile.open(tarball_name, "w:gz") as tar:
+            tar.add(directory, arcname=os.path.basename(directory))
+        print(f"Created tarball: {tarball_name}")
+    except Exception as e:
+        print(f"Error creating tarball: {e}")
+        exit(1)
+
+def create_and_push_git_tag(tag, branch):
+    try:
+
+        # Switch to branch
+        subprocess.run(["git", "checkout", branch], check=True)
+
+        # Pull the latest changes from branch
+        subprocess.run(["git", "pull", "origin", branch], check=True)
+
+        # Create a Git tag
+        subprocess.run(["git", "tag", tag], check=True)
+        print(f"Created Git tag: {tag}")
+
+        # Push the Git tag to the remote repository
+        subprocess.run(["git", "push", "origin", tag], check=True)
+        print(f"Pushed Git tag: {tag}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error with Git command: {e}")
+        exit(1)
 
 @click.group()
 def tag():
     """Tag [ create | edit | delete ]"""
     # Register our completer function for tags
-    tag_bytes = subprocess.check_output(['gh', 'release', 'list', '--json', 'tagName', '--jq', '.[].tagName'])
-    tag_list = tag_bytes.decode("utf-8").split()
-    readline.set_completer(AutoComplete(tag_list).complete)
+    pass
 
 @tag.command()
-# @click.option("--count", type=int, required=False, default=1, help="Number of greetings.")
-# @click.option("--name", required=False, prompt="Your name", help="The person to greet.")
-def create(): # TODO
-    """Create a new tag"""
-    under_development() # TODO
-    # args: (May make most of these prompted to user)
-    # organization, template repo name, new repo owner (should be automatic),
-    # name of repo, description, include_all_branches, private
-    subprocess.run(['gh', 'release', 'create'])
-    # 1) Prompt user for args above
-    # 2) tag the curl request using those args
-    # OR 
-    # 1) just call the gh cli command, if you do this route, then gh cli must be authorized
-    # This is optimal so authroize once, then we can use gh commands or gh api commands without
-    # the need for authorizing each time
+@click.option("-c", "--component", required=False, help="Component Name")
+@click.option("-b", "--branch", required=True, help="Branch Name")
+@click.option("-t", "--tag", required=True, help="Tag (ex: R1.4.2)")
+@click.option("-r", "--results", required=True, help="The build results folder (ex: oscilloscope-main-RHEL7-12345), can be grabbed from PR build comment")
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def create(component: str, branch: str, tag: str, results: str, verbose: bool): # TODO
+    """Create a new tagged artifact and send to artifact storage. Then add a git tag"""
+    # 1) Create tarball, send to deployment controller
+    request = Request(Component(component), api=Api.DEPLOYMENT)
+    linux_uname = os.environ.get('USER')
+    request.set_component_name()
+    payload = {"component_name": request.component.name,
+               "branch": branch,
+               "tag": tag,
+               "results": results,
+               "user": linux_uname
+               }
+    request.add_dict_to_payload(payload)
+    request.set_endpoint('/tag')
+
+    response = request.post_request(log=verbose)
+    # 2) Create git tag and push
+    if (response.ok):
+        click.echo("== ADBS == Tagged build results sent to artifact storage. Creating git tag...")
+        create_and_push_git_tag(tag, branch)
+        click.echo(f"== ADBS == Tag successfully created, ready for deployment!")
+        return
+    click.echo("== ADBS == Failure to tag")
+
 @tag.command()
 def edit():
     """Edit an existing tag"""
@@ -48,16 +115,3 @@ def delete():
     click.echo('delete tag')
     tag_name = input('What is the tag name? (<tab> for list): ')
     subprocess.run(['gh', 'release', 'delete', tag_name])
-
-""" gh pr list --json author --jq '.[].author.login'
-tag gh commands
-release
-create
-delete-asset
-delete
-download
-edit
-list
-upload
-view
-"""

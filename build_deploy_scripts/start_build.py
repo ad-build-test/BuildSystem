@@ -26,6 +26,7 @@ class Build(object):
         self.get_environment()
         self.root_dir = None # This is the root/top directory
         self.artifact_api = ArtifactApi()
+        self.ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks"
 
     def parse_yaml(self, yaml_filepath: str) -> dict:
 
@@ -114,37 +115,29 @@ class Build(object):
                         os.mkdir(download_dir)
                         self.artifact_api.get_component_from_registry(download_dir, name, tag, self.os_env)
 
-    def update_release_site(self):
+    def create_release_site(self, config_yaml: dict):
         # This only applies to IOCs for REMOTE builds
-        # 1) Update the release site to point to the repos here
-        # 2) Read the file and parse the key-value pairs
-        filename = 'RELEASE_SITE'
-        with open(filename, 'r') as file:
-            lines = file.readlines()
 
-        # 2) Create a dictionary to store the current key-value pairs
-        release_site_dict = {}
-        for line in lines:
-            if '=' in line:
-                key, value = line.strip().split('=', 1)
-                release_site_dict[key] = value
-
-        # 3) Update the dictionary with new values
         # TODO: Once s3df figures out other dirs, update paths after IOC_SITE_TOP
         # check if we have to emulate exactly the structure of how it looks,
         # Because we don't want to alter the RELEASE for remote builds, just a RELEASE_SITE
         # Ideally all modules including epics are on the same level, but its not in this format
-        new_release_site = {
-            'BASE_MODULE_VERSION': release_site_dict['BASE_MODULE_VERSION'], # Keep the same
+        # 1) Create release_site
+        dependencies = config_yaml['dependencies']
+        # Get the value for "epics-base"
+        for dep in dependencies:
+            if 'epics-base' in dep:
+                epics_base_version = dep['epics-base']
+                break
+        release_site_dict = {
+            'BASE_MODULE_VERSION': epics_base_version, 
             'EPICS_SITE_TOP': self.root_dir + '/epics', # Point to modules next to the where app being built
             'BASE_SITE_TOP': "${EPICS_SITE_TOP}/base",
             'EPICS_MODULES': self.root_dir,
             'IOC_SITE_TOP': "${EPICS_SITE_TOP}/iocTop"
         }
-        release_site_dict.update(new_release_site)
-
-        # 4) Write the updated key-value pairs back to the file
-        with open(filename, 'w') as file:
+        # 4) Write the dictionary in the new file
+        with open('RELEASE_SITE', 'w') as file:
             for key, value in release_site_dict.items():
                 file.write(f'{key}={value}\n')
 
@@ -206,9 +199,9 @@ class Build(object):
             user_src_repo = self.source_dir
             playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
                 "user_src_repo": "{user_src_repo}"}}'
-            adbs_playbooks_dir = "/build/ioc_module/"
-            return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-                                    adbs_playbooks_dir + 'ioc_build.yml',
+            ioc_playbooks_dir = os.path.join(self.ANSIBLE_PLAYBOOKS_PATH, 'ioc_module')
+            return_code = run_ansible_playbook(self.ANSIBLE_PLAYBOOKS_PATH + '/global_inventory.ini',
+                                    ioc_playbooks_dir + '/ioc_build.yml',
                                     'S3DF',
                                     playbook_args,
                                     self.env)
@@ -268,7 +261,7 @@ if __name__ == "__main__":
     # 5) Update RELEASE_SITE and CONFIG_SITE if EPICS IOC
     # TODO: Update logic to figure out what kind of app were building, for now focus on IOC
     if (dependencies):
-        build.update_release_site()
+        build.create_release_site(config_yaml)
     build.update_config_site()
     # 6) Run repo build script
     build.run_build(config_yaml)

@@ -1,0 +1,14 @@
+# Configuration for s3df
+Host s3dflogin.slac.stanford.edu
+    HostName s3dflogin.slac.stanford.edu
+    StrictHostKeyChecking no
+    User pnispero
+    IdentityFile ~/.ssh/deployment_controller_s3df
+
+# Configuration for s3df ad 
+Host ad
+    HostName ad
+    StrictHostKeyChecking no
+    User pnispero
+    IdentityFile ~/.ssh/deployment_controller_s3df
+    ProxyJump s3dflogin.slac.stanford.edu

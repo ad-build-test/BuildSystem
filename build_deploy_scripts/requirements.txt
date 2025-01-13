@@ -2,3 +2,4 @@ watchdog
 requests==2.31.0
 pyyaml==6.0.1
 fastapi==0.111.0
+ruamel.yaml==0.18.6
