@@ -241,11 +241,11 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [s3df, lcls, facet, testfac] Seperate iocs by comma, ex: s3df,lcls")
+@click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate iocs by comma, ex: dev,lcls")
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm] *not in use yet")
-@click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2. *Under construction - bs figure out what facility the IOC belongs to")
-@click.option("-tg", "--tag", required=False, help="Component tag to deploy")
+@click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
+@click.option("-tg", "--tag", required=True, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
@@ -282,7 +282,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
-                choices=["S3DF", "LCLS", "FACET", "TESTFAC"],
+                choices=["DEV", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]
     # 3) Get ioc list (if applicable)
@@ -337,8 +337,6 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     for line in summary:
         click.echo(line, nl=False)
     click.echo(f"Report downloaded successfully to {file_path}")
-    click.echo("\n== ADBS == If first time deploying IOC - please create startup.cmd manually!")
-
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
     # TODO: Local deployment - if want local deployment, then user must follow the steps to ensure ansible can ssh from s3df to prod. 
