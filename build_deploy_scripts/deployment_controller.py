@@ -191,7 +191,7 @@ def parse_shebang(shebang_line: str):
 def extract_ioc_cpu_shebang_info(tarball_path: str, app_dir_name: str) -> dict:
     """ Function to extract tarball and process the st.cmd files """
     # 1) Open and extract the tarball
-    extract_to_dir = './'
+    extract_to_dir = '/app'
     with tarfile.open(tarball_path, "r:gz") as tar:
         tar.extractall(path=extract_to_dir)
         print(f"Extracted tarball to {extract_to_dir}")

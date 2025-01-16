@@ -245,7 +245,7 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm] *not in use yet")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
-@click.option("-tg", "--tag", required=True, help="Component tag to deploy")
+@click.option("-tg", "--tag", required=False, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
