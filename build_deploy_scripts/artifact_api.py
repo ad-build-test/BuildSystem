@@ -36,13 +36,18 @@ class ArtifactApi(object):
             logger.info('Failed to retrieve the file. Status code:', response.status_code)
 
 
-    def get_component_from_registry(self, download_dir: str, component: str, tag: str, os_env: str = 'null', extract: bool = True):   
+    def get_component_from_registry(self, download_dir: str, component: str, tag: str, os_env: str = 'null', extract: bool = True) -> bool:   
         payload = {"component": component, "tag": tag, "arch": os_env}
         logger.info(f"Get component {component},{tag} request to artifact storage...")
         # stream=True in case it's a large tarball
-        response = requests.get(url=self.artifact_api_url + 'component', json=payload, stream=True) 
+        try:
+            response = requests.get(url=self.artifact_api_url + 'component', json=payload, stream=True) 
+        except requests.exceptions.ConnectionError:
+            logger.info("== ADBS == FAIL: The artifact api server could not be reached.")
+            return False
         self.download_file_response(download_dir, tag, response, extract)
         # For now we can assume the component exists, otherwise the api builds and returns it
+        return True
 
     def put_component_to_registry(self, component: str, results_tarball: str, tag: str):
         payload = {"component": component, "results_tarball": results_tarball, "tag": tag}

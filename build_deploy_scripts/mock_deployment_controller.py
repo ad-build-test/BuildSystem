@@ -1,5 +1,6 @@
 """
-Desc: Deployment controller, handles deployments
+Desc: MOCK - Deployment controller, handles deployments. Purely used for testing
+This should be an exact copy of deployment_controller.py but with changes for testing you can add
 
 Usage: python3 deployment_controller.py
 note - this would have to run 24/7 as a service
@@ -31,10 +32,10 @@ logging.basicConfig(
     level=logging.INFO, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
+ANSIBLE_PLAYBOOKS_PATH = "/home/pnispero/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
-SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
+SCRATCH_FILEPATH = "/home/pnispero/scratch"
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -191,7 +192,7 @@ def parse_shebang(shebang_line: str):
 def extract_ioc_cpu_shebang_info(tarball_path: str, app_dir_name: str) -> dict:
     """ Function to extract tarball and process the st.cmd files """
     # 1) Open and extract the tarball
-    extract_to_dir = '/app'
+    extract_to_dir = './'
     with tarfile.open(tarball_path, "r:gz") as tar:
         tar.extractall(path=extract_to_dir)
         print(f"Extracted tarball to {extract_to_dir}")
@@ -357,8 +358,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
 
     # 2) Call to artifact api for component/tag
-    if (not artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
-        return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
+    # if (not artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
+    #     return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
     facilities_ioc_dict = dict.fromkeys(facilities, [])
@@ -370,8 +371,9 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                 return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
             facilities_ioc_dict[facility].append(ioc)
 
+    # TODO:
     # 3.2) Find the info needed to create the startup.cmd for each ioc
-    tarball_filepath = '/app/' + ioc_to_deploy.tag + '.tar.gz'
+    tarball_filepath = '/home/pnispero/BuildSystem/build_deploy_scripts/build_results.tar.gz'
     ioc_info = extract_ioc_cpu_shebang_info(tarball_filepath, ioc_to_deploy.tag)
     # 3.3) Figure out which startup.cmd to use for each ioc,
     ioc_info_list_dict = []
@@ -380,14 +382,14 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             if ('ioc' in ioc['folder_name']):
                 startup_cmd_template = 'startup.cmd.linuxRT'
             else:
-                startup_cmd_template = 'startup.cmd.cpu'
+                startup_cmd_template = 'startup.cmd.cpu' # TODO: Add facility
         elif ('rtems' in ioc['architecture'].lower()):
             startup_cmd_template = 'startup.cmd.rtems'
         else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
             if ('ioc' in ioc['folder_name'].lower()):
                 startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
             else:
-                startup_cmd_template = 'startup.cmd.soft.cpu'
+                startup_cmd_template = 'startup.cmd.soft.cpu' # TODO: Add facility
         ioc_dict = {
             'name': ioc['folder_name'],
             'architecture': ioc['architecture'],
@@ -400,10 +402,10 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
-    playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
+    playbook_args_dict['playbook_path'] = '/home/pnispero/build-system-playbooks/ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
-    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_report_file = '/home/pnispero/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     logging.info(f"facilities: {facilities}")
     for facility in facilities:
@@ -417,57 +419,61 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
             facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['iocs']])
 
-        # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
+# <<<<<<<<<<<<<<
+        # Iterate over ioc_list_dict and add matching items to refined_ioc_dict
         facility_ioc_dict = []
         for ioc in ioc_info_list_dict:
             if ioc['name'] in facilities_ioc_dict[facility]:
                 if ('cpu' in ioc['startup_cmd_template']): # Add the facility to startup.cmd template if cpu
                     ioc['startup_cmd_template'] += f'.{facility.lower()}'
                 facility_ioc_dict.append(ioc)
-
-
         playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
+# >>>>>>>>>>>>>>>>>>>>>>>
+
+        # playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
-                                        facility, playbook_args, return_output=True, no_color=True)
-        # 5.1) Combine output
-        deployment_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
-        if (return_code != 0):
-            status = 400 # Deployment failed
-            if (stderr != ''):
-                deployment_output += "\n== Errors ==\n\n" + stderr
+                                        'test', playbook_args, return_output=True, no_color=True)
+        print(f"Output:\n{stdout}")
+        print(f"Error:\n{stderr}")
+    #     # 5.1) Combine output
+    #     deployment_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+    #     if (return_code != 0):
+    #         status = 400 # Deployment failed
+    #         if (stderr != ''):
+    #             deployment_output += "\n== Errors ==\n\n" + stderr
     
-        # 6) Write new configuration to deployment db for each facility
-        timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
-        tzinfo = timezone(timedelta(hours=timezone_offset))
-        timestamp = datetime.now(tzinfo).isoformat()
-        update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
-                                     ioc_to_deploy.tag, facilities_ioc_dict[facility])
-    logging.info('Generating summary/report...')
+    #     # 6) Write new configuration to deployment db for each facility
+    #     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
+    #     tzinfo = timezone(timedelta(hours=timezone_offset))
+    #     timestamp = datetime.now(tzinfo).isoformat()
+    #     update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
+    #                                  ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
+    # logging.info('Generating summary/report...')
     # 6) Generate summary for report
-    summary = \
-f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
-#### Date: {timestamp}
-#### User: {ioc_to_deploy.user}
-\n#### IOCs deployed: {facilities_ioc_dict}"""
+#     summary = \
+# f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
+# #### Date: {timestamp}
+# #### User: {ioc_to_deploy.user}
+# \n#### IOCs deployed: {facilities_ioc_dict}"""
 
-    if (status == 200): # 200 means success
-        # 6.2) Write summary of deployment to report at the top
-        with open(deployment_report_file, 'w') as report_file:
-            summary += "\n#### Overall status: Success\n\n" + deployment_output
-            report_file.write(summary)
-    else: # Failure
-        # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
-        status = 400
-        with open(deployment_report_file, 'w') as report_file:
-            summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
-            report_file.write(summary)
-    # 7) Cleanup - delete downloaded tarball
-    os.remove(tarball_filepath)
-    # 8) Return ansible playbook output to user
-    return FileResponse(path=deployment_report_file, status_code=status)
+#     if (status == 200): # 200 means success
+#         # 6.2) Write summary of deployment to report at the top
+#         with open(deployment_report_file, 'w') as report_file:
+#             summary += "\n#### Overall status: Success\n\n" + deployment_output
+#             report_file.write(summary)
+#     else: # Failure
+#         # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
+#         status = 400
+#         with open(deployment_report_file, 'w') as report_file:
+#             summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
+#             report_file.write(summary)
+#     # 7) Cleanup - delete downloaded tarball
+#     os.remove(tarball_filepath)
+#     # 8) Return ansible playbook output to user
+#     return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
     uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=120)
