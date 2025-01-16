@@ -370,7 +370,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                 return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
             facilities_ioc_dict[facility].append(ioc)
 
-    # TODO:
     # 3.2) Find the info needed to create the startup.cmd for each ioc
     tarball_filepath = '/app/' + ioc_to_deploy.tag + '.tar.gz'
     ioc_info = extract_ioc_cpu_shebang_info(tarball_filepath, ioc_to_deploy.tag)
@@ -381,14 +380,14 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             if ('ioc' in ioc['folder_name']):
                 startup_cmd_template = 'startup.cmd.linuxRT'
             else:
-                startup_cmd_template = 'startup.cmd.cpu' # TODO: Add facility
+                startup_cmd_template = 'startup.cmd.cpu'
         elif ('rtems' in ioc['architecture'].lower()):
             startup_cmd_template = 'startup.cmd.rtems'
         else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
             if ('ioc' in ioc['folder_name'].lower()):
-                startup_cmd_template = 'startup.cmd.soft' # TODO: or soft.ioc?
+                startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
             else:
-                startup_cmd_template = 'startup.cmd.soft.cpu' # TODO: Add facility
+                startup_cmd_template = 'startup.cmd.soft.cpu'
         ioc_dict = {
             'name': ioc['folder_name'],
             'architecture': ioc['architecture'],
@@ -418,16 +417,16 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
             facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['iocs']])
 
-# <<<<<<<<<<<<<<
-        # Iterate over ioc_list_dict and add matching items to refined_ioc_dict
+        # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
         facility_ioc_dict = []
         for ioc in ioc_info_list_dict:
             if ioc['name'] in facilities_ioc_dict[facility]:
+                if ('cpu' in ioc['startup_cmd_template']): # Add the facility to startup.cmd template if cpu
+                    ioc['startup_cmd_template'] += f'.{facility.lower()}'
                 facility_ioc_dict.append(ioc)
-        playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
-# >>>>>>>>>>>>>>>>>>>>>>>
 
-        # playbook_args_dict['ioc_list'] = facilities_ioc_dict[facility] # Update ioc list for each facility
+
+        playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
@@ -445,7 +444,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         tzinfo = timezone(timedelta(hours=timezone_offset))
         timestamp = datetime.now(tzinfo).isoformat()
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
-                                     ioc_to_deploy.tag, playbook_args_dict['ioc_list'])
+                                     ioc_to_deploy.tag, facilities_ioc_dict[facility])
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     summary = \

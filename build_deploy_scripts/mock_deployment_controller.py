@@ -387,7 +387,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             startup_cmd_template = 'startup.cmd.rtems'
         else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
             if ('ioc' in ioc['folder_name'].lower()):
-                startup_cmd_template = 'startup.cmd.soft' # TODO: or soft.ioc?
+                startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
             else:
                 startup_cmd_template = 'startup.cmd.soft.cpu' # TODO: Add facility
         ioc_dict = {
@@ -424,6 +424,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         facility_ioc_dict = []
         for ioc in ioc_info_list_dict:
             if ioc['name'] in facilities_ioc_dict[facility]:
+                if ('cpu' in ioc['startup_cmd_template']): # Add the facility to startup.cmd template if cpu
+                    ioc['startup_cmd_template'] += f'.{facility.lower()}'
                 facility_ioc_dict.append(ioc)
         playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
 # >>>>>>>>>>>>>>>>>>>>>>>

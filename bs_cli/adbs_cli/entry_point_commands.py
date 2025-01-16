@@ -58,11 +58,11 @@ def run_process_real_time(command):
 
     # Print output in real-time
     for line in iter(process.stdout.readline, ''):
-        click.echo(line, end='')  # Print each line as it is output
+        click.echo(line, nl=False)  # Print each line as it is output
 
     # Ensure all stderr is also handled
     for line in iter(process.stderr.readline, ''):
-        click.echo(line, end='')
+        click.echo(line, nl=False)
 
     process.stdout.close()
     process.stderr.close()
