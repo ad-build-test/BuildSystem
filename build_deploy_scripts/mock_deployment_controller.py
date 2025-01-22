@@ -263,9 +263,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         deployment_output += current_output
     
         # 6) Write new configuration to deployment db for each facility
-        timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
-        tzinfo = timezone(timedelta(hours=timezone_offset))
-        timestamp = datetime.now(tzinfo).isoformat()
+        timestamp = datetime.now().isoformat()
     # TODO: Add checks if any database operations fail, then bail and return to user
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
                                      ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility])
@@ -275,6 +273,9 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     print(f"Error:\n{stderr}")
     return
     # 6) Generate summary for report
+    timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
+    tzinfo = timezone(timedelta(hours=timezone_offset))
+    timestamp = datetime.now(tzinfo).isoformat()
     summary = \
 f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
 #### Date: {timestamp}
