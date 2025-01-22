@@ -50,6 +50,9 @@ def send_get_root_request():
 def send_get_ioc_info_request(component_name: str):
     ioc_request = BasicIoc(component_name=component_name)
     response = client.get("/ioc/info", params=ioc_request.dict())
+    print(response.request.url)
+    print(response.request.headers)
+
     if response.status_code == 200:
         print(f"GET /ioc/info succeeded: {response.json()}")
     else:
@@ -63,7 +66,6 @@ def send_put_deploy_ioc_request(ioc_dict: IocDict):
     else:
         print("PUT /ioc/deployment failed:", response.status_code)
 
-
 def main():
     # Start the FastAPI app
     process = run_fastapi_app()
@@ -73,7 +75,7 @@ def main():
         send_get_root_request()
 
         # Sending GET request to "/ioc/info"
-        send_get_ioc_info_request(component_name="oscilloscope")
+        # send_get_ioc_info_request(component_name="oscilloscope")
 
         # Sending PUT request to "/ioc/deployment"
         ioc_dict = IocDict(
