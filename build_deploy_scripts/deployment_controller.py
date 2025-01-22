@@ -11,6 +11,7 @@ from ruamel.yaml import YAML # Using ruamel instead of pyyaml because it keeps t
 import logging
 import ansible_api
 import tarfile
+import requests
 from artifact_api import ArtifactApi
 
 import uvicorn
@@ -35,6 +36,8 @@ ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
 SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
+BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
+APP_PATH = "/app"
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -70,56 +73,57 @@ def update_yaml(filename: str, data: dict):
         yaml.dump(data, file)
 
 def update_component_in_facility(facility: str, timestamp: str, user: str, app_type: str,
-                                  component_to_update: str, tag: str, ioc_list: list = None) -> bool:
+                                  component_to_update: str, tag: str, log_output: str, ioc_list: list = None) -> bool:
     """
     Function to update a component in the deployment db
     """
-    config_dict = parse_yaml(CONFIG_FILE_PATH)
+    # 1) Find the component
+    component = find_component_in_facility(facility, component_to_update)
+    if (component is None):
+        return False
+    # 2) Update tag in original config dict
+    component['tag'] = tag
+    # 3) Update iocs (if applicable)
+    if (app_type == 'ioc'):
+        for ioc in component['dependsOn']:
+            if (ioc['name'] in ioc_list):
+                ioc['tag'] = tag
+    # 4) Update component in db
+    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
+    response = requests.put(endpoint, json=component)
 
-    for component in config_dict[facility][app_type]: # 1) Find the component
-        if (component_to_update in component['name']):
-            # 1) Update tag in original config dict
-            component['tag'] = tag
-
-            # 2) Update iocs (if applicable)
-            if (app_type == 'ioc'):
-                for ioc in component['iocs']:
-                    if (ioc['name'] in ioc_list):
-                        ioc['tag'] = tag
-            
-            # 3) Update the history = current component + user + date
-            history = deepcopy(component)
-            del history['name'] # remove the name from the history
-            del history['history'] # remove the history from the history
-            history['tag'] = tag
-            history['date'] = timestamp
-            history['user'] = user
-            component['history'].insert(0, history) # insert history at the front
-    update_yaml(CONFIG_FILE_PATH, config_dict)
+    # 5) add entry to history
+    deployment_log = {
+        "log": log_output,
+        "logDate": timestamp,
+        "user": user,
+    }
+    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}/logs'
+    response = requests.post(endpoint, json=deployment_log)
     return True
 
-def find_component_in_facility(facility: str, app_type: str, component_to_find: str) -> dict:
+def find_component_in_facility(facility: str, component_to_find: str) -> dict:
     """ Function to return component information """
-    config_dict = parse_yaml(CONFIG_FILE_PATH)
-    facility_config = config_dict[facility][app_type]
-    for component in facility_config:
-        if (component_to_find in component['name']):
-            return component
-    return None
+    endpoint = BACKEND_URL + f'deployments/{component_to_find}/{facility}'
+    response = requests.get(endpoint)
+    if (response.ok):
+        return response.json()['payload']
+    else: 
+        return None
 
 def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
     """ Function to return the facility that the ioc is in """
     for facility in get_facilities_list(): # Loop through each facility
-        component = find_component_in_facility(facility, 'ioc', component_with_ioc)
+        component = find_component_in_facility(facility, component_with_ioc)
         if (component):
-            for ioc in component['iocs']: # Loop through each ioc
+            for ioc in component['dependsOn']: # Loop through each ioc
                 if (ioc_to_find in ioc['name']):
                     return facility
     return None
 
 def get_facilities_list() -> list:
-    config_dict = parse_yaml(CONFIG_FILE_PATH)
-    return config_dict.keys()
+    # TODO: May make this dynamic but for now these are the facilities
+    return ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 
 def extract_date(entry) -> datetime:
     return datetime.fromisoformat(entry['date'])
@@ -191,7 +195,7 @@ def parse_shebang(shebang_line: str):
 def extract_ioc_cpu_shebang_info(tarball_path: str, app_dir_name: str) -> dict:
     """ Function to extract tarball and process the st.cmd files """
     # 1) Open and extract the tarball
-    extract_to_dir = '/app'
+    extract_to_dir = APP_PATH
     with tarfile.open(tarball_path, "r:gz") as tar:
         tar.extractall(path=extract_to_dir)
         print(f"Extracted tarball to {extract_to_dir}")
@@ -257,7 +261,7 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     try:
         found_ioc = False
         for facility in facilities:
-            component_info = find_component_in_facility(facility, 'ioc', ioc_request.component_name)
+            component_info = find_component_in_facility(facility, ioc_request.component_name)
             if (component_info):
                 info = {f"{facility}": component_info}
                 component_info_list.append(info)
@@ -357,7 +361,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
 
     # 2) Call to artifact api for component/tag
-    if (not artifact_api.get_component_from_registry('/app', ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
+    if (not artifact_api.get_component_from_registry(APP_PATH, ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
         return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
@@ -371,7 +375,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             facilities_ioc_dict[facility].append(ioc)
 
     # 3.2) Find the info needed to create the startup.cmd for each ioc
-    tarball_filepath = '/app/' + ioc_to_deploy.tag + '.tar.gz'
+## UNCOMMENT tarball_filepath = '/home/pnispero/BuildSystem/build_deploy_scripts/build_results.tar.gz'
+    tarball_filepath = APP_PATH + '/' + ioc_to_deploy.tag + '.tar.gz'
     ioc_info = extract_ioc_cpu_shebang_info(tarball_filepath, ioc_to_deploy.tag)
     # 3.3) Figure out which startup.cmd to use for each ioc,
     ioc_info_list_dict = []
@@ -400,9 +405,11 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
+## UNCOMMENT     playbook_args_dict['playbook_path'] = '/home/pnispero/build-system-playbooks/ioc_module'
     playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
+## UNCOMMENT
     deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     logging.info(f"facilities: {facilities}")
@@ -410,12 +417,12 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         logging.info(f"facility: {facility}")
         logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
-        if (find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name) is None):
+        if (find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
             continue
         if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
             # 3.2) If ioc = 'ALL' then create list of iocs based on facility
-            component_info = find_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name)
-            facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['iocs']])
+            component_info = find_component_in_facility(facility, ioc_to_deploy.component_name)
+            facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['dependsOn']])
 
         # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
         facility_ioc_dict = []
@@ -430,23 +437,33 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+## UNCOMMENT         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
+                                        # 'test', playbook_args, return_output=True, no_color=True)
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
                                         facility, playbook_args, return_output=True, no_color=True)
         # 5.1) Combine output
-        deployment_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+        current_output = ""
+        current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
         if (return_code != 0):
             status = 400 # Deployment failed
             if (stderr != ''):
-                deployment_output += "\n== Errors ==\n\n" + stderr
+                current_output += "\n== Errors ==\n\n" + stderr
+        deployment_output += current_output
     
         # 6) Write new configuration to deployment db for each facility
-        timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
-        tzinfo = timezone(timedelta(hours=timezone_offset))
-        timestamp = datetime.now(tzinfo).isoformat()
+        timestamp = datetime.now().isoformat()
+    # TODO: Add checks if any database operations fail, then bail and return to user
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
-                                     ioc_to_deploy.tag, facilities_ioc_dict[facility])
+                                     ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility])
     logging.info('Generating summary/report...')
+## UNCOMMENT 
+    # print(f"Output:\n{stdout}")
+    # print(f"Error:\n{stderr}")
+    # return
     # 6) Generate summary for report
+    timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
+    tzinfo = timezone(timedelta(hours=timezone_offset))
+    timestamp = datetime.now(tzinfo).isoformat()
     summary = \
 f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.tag} ####
 #### Date: {timestamp}
