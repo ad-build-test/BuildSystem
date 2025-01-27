@@ -154,20 +154,20 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
     if (full_branch_name == None):
         full_branch_name = branch_type + '-' + branch_type_value
 
-    # 4) Write to database
+    # 4) Create the branch using git and push
+    if (not add): # Dont create branch if user just wants to add to database
+        component_obj.git_create_branch(branch_point_type, branch_point_value, full_branch_name)
+        component_obj.git_commit(full_branch_name)
+        if (component_obj.git_push(full_branch_name)):
+            click.echo('Successfully created branch: ' + full_branch_name)
+
+    # 5) Write to database
     endpoint = 'component/' + component_obj.name + '/branch'
     request.set_endpoint(endpoint)
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)
     request.add_to_payload("branchName", full_branch_name)
     request.put_request(log=verbose, msg="Add branch to component database")
-
-    # 5) Create the branch using git and push
-    if (not add): # Dont create branch if user just wants to add to database
-        component_obj.git_create_branch(branch_point_type, branch_point_value, full_branch_name)
-        component_obj.git_commit(full_branch_name)
-        if (component_obj.git_push(full_branch_name)):
-            click.echo('Successfully created branch: ' + full_branch_name)
 
 @create.command()
 @click.option("-c", "--component", required=False, help="Component Name")

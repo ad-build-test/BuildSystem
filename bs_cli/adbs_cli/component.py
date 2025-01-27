@@ -28,6 +28,8 @@ class Component(object):
         # Tag is the only special case
         if (branch_point_type == 'tag'):
             branch_point_value = 'tags/' + branch_point_value
+        # Do a git pull on the branch point first
+        self.git_repo.git.pull('origin', branch_point_value)
         self.git_repo.git.checkout('-b', branch_name, branch_point_value)
 
     def git_commit(self, branch_name: str):

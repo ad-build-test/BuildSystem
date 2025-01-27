@@ -269,12 +269,20 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
         deployment_request.set_endpoint('/ioc/info')
         response = deployment_request.get_request(log=verbose)
-        # Pretty print the json
         payload = response.json()['payload']
-        # pretty_print = yaml.dump(payload, indent=1)
-        pprint(payload, sort_dicts=False, indent=1)
-        # click.echo("Active releases: \n" + pretty_print)
-        # TODO: Can use deeper keys [facility][iocs] to clear out the clutter
+
+        # Loop through the list of deployment entries (one for each facility if exists)
+        for deployment in payload:
+            # Extract the inner dictionary (assuming there's only one item at the top level)
+            for facility, details in deployment.items():
+                # Print the facility with color
+                click.echo("Current versions on facility: ", nl=False)
+                click.echo(click.style(details['facility'], fg = 'cyan'))
+                # Print the current master release
+                click.echo(f"Current master release => {details['tag']}")
+                # Loop through the 'dependsOn' list and print each entry
+                for dep in details['dependsOn']:
+                    click.echo(f"IOC: {dep['name']} => {dep['tag']}")
         return
 
     # 2) Get fields
