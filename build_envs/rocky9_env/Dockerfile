@@ -11,7 +11,7 @@ RUN dnf -y update
 # install readline-devel, ncurses-devel
 # install glibc-devel, gcc, make
 # install vim and python3 and pip
-# install perl, git, podman
+# install perl, git, podman, rsync
 RUN dnf install -y readline-devel \
     ncurses-devel \
     glibc-devel \ 
@@ -23,6 +23,7 @@ RUN dnf install -y readline-devel \
     perl \
     git \
     podman \
+    rsync \
     && dnf clean all
 
 RUN dnf install -y vim && dnf install -y python3 && dnf install -y pip

@@ -13,7 +13,7 @@ RUN yum -y update
 # install glibc, readline-devel (missing in rhel7 ubi), ncurses-devel
 # install gcc, make, vim
 # install python3.8, special case for rhel7 since default is python2.7
-# install wget, git, rpm-build
+# install wget, git, rpm-build, rsync
 RUN yum install -y glibc \
     readline-devel \
     ncurses-devel \
@@ -24,6 +24,7 @@ RUN yum install -y glibc \
     wget \
     git \
     rpm-build \
+    rsync \
     && yum clean all
 
 RUN ln -s /usr/lib64/libreadline.so.6 /usr/lib64/libreadline.so
