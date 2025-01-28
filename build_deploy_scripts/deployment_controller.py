@@ -375,7 +375,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             facilities_ioc_dict[facility].append(ioc)
 
     # 3.2) Find the info needed to create the startup.cmd for each ioc
-## UNCOMMENT tarball_filepath = '/home/pnispero/BuildSystem/build_deploy_scripts/build_results.tar.gz'
     tarball_filepath = APP_PATH + '/' + ioc_to_deploy.tag + '.tar.gz'
     ioc_info = extract_ioc_cpu_shebang_info(tarball_filepath, ioc_to_deploy.tag)
     # 3.3) Figure out which startup.cmd to use for each ioc,
@@ -405,11 +404,9 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
-## UNCOMMENT     playbook_args_dict['playbook_path'] = '/home/pnispero/build-system-playbooks/ioc_module'
     playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
-## UNCOMMENT
     deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     logging.info(f"facilities: {facilities}")
@@ -437,8 +434,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-## UNCOMMENT         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
-                                        # 'test', playbook_args, return_output=True, no_color=True)
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
                                         facility, playbook_args, return_output=True, no_color=True)
         # 5.1) Combine output
@@ -456,10 +451,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
                                      ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility])
     logging.info('Generating summary/report...')
-## UNCOMMENT 
-    # print(f"Output:\n{stdout}")
-    # print(f"Error:\n{stderr}")
-    # return
     # 6) Generate summary for report
     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
     tzinfo = timezone(timedelta(hours=timezone_offset))

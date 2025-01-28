@@ -1,8 +1,8 @@
-# How to build: docker build --tag pnispero/artifact-api:latest .
+# How to build: docker build --tag ghcr.io/ad-build-test/artifact-api:latest .
 # base image
 # How to build:
 # 1) Go to artifact_storage/api/
-# 2) docker build --tag pnispero/artifact-api:latest -f Dockerfile .
+# 2) docker build --tag ghcr.io/ad-build-test/artifact-api:latest -f Dockerfile .
 FROM rockylinux:9
 
 # update

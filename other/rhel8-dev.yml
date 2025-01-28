@@ -30,7 +30,7 @@ spec:
         runAsGroup: 1006
       containers:
       - name: test-build-rhel8-dev-deployment
-        image: pnispero/rocky9-env:dev
+        image: ghcr.io/ad-build-test/rocky9-env:dev
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]

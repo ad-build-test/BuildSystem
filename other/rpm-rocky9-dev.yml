@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: rpm-rocky9-dev
-        image: pnispero/rocky9-env:latest
+        image: ghcr.io/ad-build-test/rocky9-env:latest
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]

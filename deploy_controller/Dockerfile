@@ -1,8 +1,8 @@
-# How to build: docker build --tag pnispero/deploy-env:latest .
+# How to build: docker build --tag ghcr.io/ad-build-test/deploy-env:latest .
 # base image
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/deployment-controller:latest -f deploy_controller/Dockerfile .
+# 2) docker build --tag ghcr.io/ad-build-test/deployment-controller:latest -f deploy_controller/Dockerfile .
 FROM rockylinux:9
 
 # update

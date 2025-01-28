@@ -1,8 +1,8 @@
-# How to build: docker build --tag pnispero/rocky9-env:latest .
+# How to build: docker build --tag ghcr.io/ad-build-test/rocky9-env:latest .
 # base image
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/rocky9-env:latest -f build_envs/rocky9_env/Dockerfile .
+# 2) docker build --tag ghcr.io/ad-build-test/rocky9-env:latest -f build_envs/rocky9_env/Dockerfile .
 FROM rockylinux:9
 
 # update

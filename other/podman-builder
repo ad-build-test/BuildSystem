@@ -1,7 +1,7 @@
 # base image
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/podman-builder:latest -f other/podman-builder .
+# 2) docker build --tag ghcr.io/ad-build-test/podman-builder:latest -f other/podman-builder .
 FROM quay.io/podman/stable:latest
 
 # update

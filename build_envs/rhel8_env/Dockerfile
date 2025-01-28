@@ -2,7 +2,7 @@
 # note from redhat official website - the base image is free to use, but Red Hat technologies are supported through red hat subscription
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/rhel8-env:latest -f build_envs/rhel8_env/Dockerfile .
+# 2) docker build --tag ghcr.io/ad-build-test/rhel8-env:latest -f build_envs/rhel8_env/Dockerfile .
 FROM redhat/ubi8:8.6
 
 # update

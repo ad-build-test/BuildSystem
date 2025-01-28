@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: fastapi-app
-        image: pnispero/fastapi-app:test
+        image: ghcr.io/ad-build-test/fastapi-app:test
         ports:
         - containerPort: 80
 

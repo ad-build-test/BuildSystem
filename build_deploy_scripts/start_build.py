@@ -224,7 +224,7 @@ class Build(object):
         dockerfile_name = self.component + "-" + self.branch + "-" + self.os_env
         docker_full_filepath = self.registry_base_path + "dockerfiles/" + dockerfile_name
         with open(docker_full_filepath, "w") as f:   # Opens file and casts as f 
-            f.write("FROM " + "pnispero/" + self.os_env + "-env:latest\n")       # base image
+            f.write("FROM " + "ghcr.io/ad-build-test/" + self.os_env + "-env:latest\n")       # base image
             for dependency in dependencies:
                 for name,tag in dependency.items():
                     f.write("ADD " + self.registry_base_path + name + "/" + tag + " /build\n")
