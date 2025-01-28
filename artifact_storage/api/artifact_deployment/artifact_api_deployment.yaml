@@ -30,7 +30,7 @@ spec:
       serviceAccountName: artifact-sa
       containers:
       - name: artifact-api-service
-        image: pnispero/artifact-api:latest
+        image: ghcr.io/ad-build-test/artifact-api:latest
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]

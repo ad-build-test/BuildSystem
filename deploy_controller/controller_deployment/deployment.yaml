@@ -29,7 +29,7 @@ spec:
         runAsGroup: 1006
       containers:
       - name: deployment-controller
-        image: pnispero/deployment-controller:latest
+        image: ghcr.io/ad-build-test/deployment-controller:latest
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]

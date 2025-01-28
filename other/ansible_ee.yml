@@ -9,7 +9,7 @@ spec:
   #   runAsGroup: 1006
   containers:
   - name: ansible-execution-environment
-    image: pnispero/deploy-env:latest
+    image: ghcr.io/ad-build-test/deploy-env:latest
     imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]

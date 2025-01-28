@@ -3,7 +3,7 @@
 # https://catalog.redhat.com/software/containers/ubi7/ubi/5c3592dcd70cc534b3a37814?architecture=amd64&image=66569cf6d9fa3da18316f6f9&container-tabs=gti&gti-tabs=unauthenticated
 # How to build:
 # 1) Go to top of repo
-# 2) docker build --tag pnispero/rhel7-env:latest -f build_envs/rhel7_env/Dockerfile .
+# 2) docker build --tag ghcr.io/ad-build-test/rhel7-env:latest -f build_envs/rhel7_env/Dockerfile .
 # TODO: update the install to use just one RUN command and a bunch of /'s'
 FROM registry.access.redhat.com/ubi7/ubi
 

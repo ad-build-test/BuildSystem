@@ -32,7 +32,7 @@ spec:
         fsGroup: 1006
       containers:
       - name: gh-runner
-        image: pnispero/gh-runner-image:latest
+        image: ghcr.io/ad-build-test/gh-runner-image:latest
         imagePullPolicy: Always
         env:
         - name: ORGANIZATION

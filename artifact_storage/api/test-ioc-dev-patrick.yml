@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: podman
-      image: pnispero/test-ioc-dev-patrick-rocky9:latest
+      image: ghcr.io/ad-build-test/test-ioc-dev-patrick-rocky9:latest
       imagePullPolicy: Always
       command: ["/bin/sh"]
       args:

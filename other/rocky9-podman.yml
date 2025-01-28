@@ -20,7 +20,7 @@ spec:
     runAsGroup: 1006
   containers:
   - name: test-build-rocky9-podman
-    image: pnispero/rocky9-env:podman
+    image: ghcr.io/ad-build-test/rocky9-env:podman
     imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]

@@ -18,7 +18,7 @@ metadata:
 spec:
   containers:
     - name: podman
-      image: pnispero/podman-builder:latest  # Example image with Podman installed
+      image: ghcr.io/ad-build-test/podman-builder:latest  # Example image with Podman installed
       imagePullPolicy: Always
       command: ["/bin/sh"]
       args:
