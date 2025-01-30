@@ -60,3 +60,6 @@ ENV PYTHONUNBUFFERED=1
 
 # Add EPICS_HOST_ARCH variable for ioc builds
 ENV EPICS_HOST_ARCH=rhel7-x86_64
+
+# Add sym link to /afs
+RUN ln -s /mnt/transition/afs /afs

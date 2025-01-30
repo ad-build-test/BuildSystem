@@ -73,7 +73,7 @@ def update_yaml(filename: str, data: dict):
         yaml.dump(data, file)
 
 def update_component_in_facility(facility: str, timestamp: str, user: str, app_type: str,
-                                  component_to_update: str, tag: str, log_output: str, ioc_list: list = None) -> bool:
+                                  component_to_update: str, tag: str, log_output: str, ioc_list: list = None, deploy_success: bool = True) -> bool:
     """
     Function to update a component in the deployment db
     """
@@ -89,8 +89,9 @@ def update_component_in_facility(facility: str, timestamp: str, user: str, app_t
             if (ioc['name'] in ioc_list):
                 ioc['tag'] = tag
     # 4) Update component in db
-    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
-    response = requests.put(endpoint, json=component)
+    if (deploy_success):
+        endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
+        response = requests.put(endpoint, json=component)
 
     # 5) add entry to history
     deployment_log = {
@@ -192,13 +193,10 @@ def parse_shebang(shebang_line: str):
         print(f"Warning: Invalid path structure in shebang line: {shebang_line}")
         return None, None
 
-def extract_ioc_cpu_shebang_info(tarball_path: str, app_dir_name: str) -> dict:
-    """ Function to extract tarball and process the st.cmd files """
+def extract_ioc_cpu_shebang_info(app_dir_name: str) -> dict:
+    """ Function to process the st.cmd files """
     # 1) Open and extract the tarball
     extract_to_dir = APP_PATH
-    with tarfile.open(tarball_path, "r:gz") as tar:
-        tar.extractall(path=extract_to_dir)
-        print(f"Extracted tarball to {extract_to_dir}")
 
     # 2) The directory containing 'iocBoot' is inside the app directory (app_dir_name)
     app_dir = os.path.join(extract_to_dir, app_dir_name)
@@ -241,6 +239,27 @@ def extract_ioc_cpu_shebang_info(tarball_path: str, app_dir_name: str) -> dict:
     shutil.rmtree(app_dir)
     
     return results
+
+def download_file_response(download_dir: str, file_name: str, response: requests.Response, extract: bool):
+        # Download file from api, and extract to download_dir
+        # Download the .tar.gz file
+        tarball_filepath = os.path.join(download_dir, file_name)
+        if response.status_code == 200:
+            # Download response to tarball file
+            stream_size = 1024*1024 # Write in chunks (1MB) since tarball can be big
+            with open(tarball_filepath, 'wb') as file: 
+                for chunk in response.iter_content(chunk_size=stream_size): 
+                    if (chunk):
+                        file.write(chunk)
+            logging.info('Tarball downloaded successfully')
+            # Extract the .tar.gz file
+            if (extract):
+                logging.info('Extracting tarball...')
+                with tarfile.open(tarball_filepath, 'r:gz') as tar:
+                    tar.extractall(path=download_dir)
+                logging.info(f'{tarball_filepath} extracted to {download_dir}')
+        else:
+            logging.info('Failed to retrieve the file. Status code:', response.status_code)
 
 # Begin API functions =================================================================================
 
@@ -360,9 +379,15 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
 
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
 
-    # 2) Call to artifact api for component/tag
-    if (not artifact_api.get_component_from_registry(APP_PATH, ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
-        return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
+    # # 2) Call to artifact api for component/tag
+    # if (not artifact_api.get_component_from_registry(APP_PATH, ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
+    #     return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
+    # 2) Call to backend to get component/tag from github releases
+    endpoint = BACKEND_URL + f'component/{ioc_to_deploy.component_name}/release/{ioc_to_deploy.tag}'
+    tarball = f'{ioc_to_deploy.tag}.tar.gz'
+    response = requests.get(endpoint)
+    download_file_response(APP_PATH, tarball, response, extract=True)
+
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
     facilities_ioc_dict = dict.fromkeys(facilities, [])
@@ -375,8 +400,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             facilities_ioc_dict[facility].append(ioc)
 
     # 3.2) Find the info needed to create the startup.cmd for each ioc
-    tarball_filepath = APP_PATH + '/' + ioc_to_deploy.tag + '.tar.gz'
-    ioc_info = extract_ioc_cpu_shebang_info(tarball_filepath, ioc_to_deploy.tag)
+    tarball_filepath = os.path.join(APP_PATH, tarball)
+    ioc_info = extract_ioc_cpu_shebang_info(ioc_to_deploy.tag)
     # 3.3) Figure out which startup.cmd to use for each ioc,
     ioc_info_list_dict = []
     for ioc in ioc_info:
@@ -439,17 +464,19 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         # 5.1) Combine output
         current_output = ""
         current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+        deployment_success = True
         if (return_code != 0):
             status = 400 # Deployment failed
             if (stderr != ''):
                 current_output += "\n== Errors ==\n\n" + stderr
+                deployment_success = False
         deployment_output += current_output
     
         # 6) Write new configuration to deployment db for each facility
         timestamp = datetime.now().isoformat()
     # TODO: Add checks if any database operations fail, then bail and return to user
         update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
-                                     ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility])
+                                     ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility], deployment_success)
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
