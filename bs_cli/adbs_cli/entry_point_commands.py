@@ -297,6 +297,13 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     if (ioc):
         ioc_list = ioc.split(',')
 
+    # Error check
+    if (not facility and not ioc):
+        click.echo("== ADBS == Please supply the facility and/or the iocs")
+        return
+    if (facility and not ioc):
+        click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
+        return
     # 3.1) Get facilities (if applicable)
     facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 

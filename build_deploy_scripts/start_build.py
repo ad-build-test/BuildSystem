@@ -130,16 +130,27 @@ class Build(object):
                 epics_base_version = dep['epics-base']
                 break
         release_site_dict = {
-            'BASE_MODULE_VERSION': epics_base_version, 
-            'EPICS_SITE_TOP': self.root_dir + '/epics', # Point to modules next to the where app being built
-            'BASE_SITE_TOP': "${EPICS_SITE_TOP}/base",
-            'EPICS_MODULES': self.root_dir,
-            'IOC_SITE_TOP': "${EPICS_SITE_TOP}/iocTop"
+            "BASE_MODULE_VERSION": epics_base_version,
+            "EPICS_SITE_TOP": "/afs/slac/g/lcls/epics",
+            "BASE_SITE_TOP": "$(EPICS_SITE_TOP)/base",
+            "EPICS_MODULES": "$(EPICS_SITE_TOP)/$(BASE_MODULE_VERSION)/modules",
+            "IOC_SITE_TOP": "$(EPICS_SITE_TOP)/iocTop",
+            "PACKAGE_SITE_TOP": "/afs/slac/g/lcls/package",
+            "MATLAB_PACKAGE_TOP": "/afs/slac/g/lcls/package/matlab",
+            "PSPKG_ROOT": "/afs/slac/g/lcls/package/pkg_mgr",
+            "TOOLS_SITE_TOP": "/afs/slac/g/lcls/tools",
+            "ALARM_CONFIGS_TOP": "/afs/slac/g/lcls/tools/AlarmConfigsTop"
         }
+
         # 4) Write the dictionary in the new file
         with open('RELEASE_SITE', 'w') as file:
             for key, value in release_site_dict.items():
                 file.write(f'{key}={value}\n')
+            # Special line
+            epics_host_arch = """ifeq ($(origin EPICS_HOST_ARCH), undefined)
+EPICS_HOST_ARCH     := $(shell $(EPICS_SITE_TOP)/base/$(BASE_MODULE_VERSION)/startup/EpicsHostArch)
+endif"""
+            file.write(f'{epics_host_arch}\n')
 
     def update_config_site(self):
         # This only applies to IOCs for REMOTE builds
@@ -207,12 +218,6 @@ class Build(object):
                                     self.env)
             logger.info(f"Playbook execution finished with return code: {return_code}")
 
-    def push_build_results(self):
-        # TODO: Add logic where if a pre-merge build is done, then push
-        # build results to the artifact storage.
-        if self.build_type == 'official': # TODO: maybe 'tagged'?
-            pass
-
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed
         # Then send to artifact storage to be built
@@ -253,16 +258,16 @@ if __name__ == "__main__":
     config_yaml = build.parse_yaml('config.yaml')
     # 3) Parse dependencies
     dependencies = build.parse_dependencies(config_yaml)
-    if (dependencies): # Possible an app has no dependencies
-        # 4) Install dependencies
-        build.install_dependencies(dependencies)
+    # if (dependencies): # Possible an app has no dependencies
+    #     # 4) Install dependencies
+    #     build.install_dependencies(dependencies)
     # 4.1) Install python packages if available
     py_pkgs_file = build.install_python_packages(config_yaml)
     # 5) Update RELEASE_SITE and CONFIG_SITE if EPICS IOC
     # TODO: Update logic to figure out what kind of app were building, for now focus on IOC
     if (dependencies):
         build.create_release_site(config_yaml)
-    build.update_config_site()
+    # build.update_config_site()
     # 6) Run repo build script
     build.run_build(config_yaml)
     # 7) Run unit_tests
@@ -276,8 +281,5 @@ if __name__ == "__main__":
         # TODO: Don't release this yet until done with regular remote build
         # build.create_docker_file(dependencies, py_pkgs_file)
     
-    # 9) If official build, push build results
-    build.push_build_results()
-    
-    # 10)  Done
-    # logger.info("Remote build finished.")
+    # 9)  Done
+    logger.info("Remote build finished.")
