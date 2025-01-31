@@ -3,6 +3,10 @@ from setuptools import setup, find_packages
 setup(
     name='adbs_cli',
     version='1.0.0',
+    description="Command line interface for the accelerator directorate build system (software factory)",
+    author="Patrick Nisperos, Jerry Katzung, Claudio Bisegni",
+    author_email="pnispero@slac.stanford.edu, katzung@slac.stanford.edu, bisegni@slac.stanford.edu",
+    url="https://github.com/ad-build-test/BuildSystem",
     packages=find_packages(),
     install_requires=[
         "click==8.1.7",

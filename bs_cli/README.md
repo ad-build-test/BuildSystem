@@ -6,3 +6,4 @@
 
 ## Dev
 1. To install package in 'editable mode', just do a ```pip install -e .``` assuming you are the bs_cli/ directory (top of the source code dir)
+2. To rebuild the package distribution, you can do ```python3 -m build``` assuming you are at the bs_cli/ directory (top of the source code dir)
