@@ -6,24 +6,21 @@ note - this would have to run 24/7 as a service
 """
 import os
 import shutil
-import subprocess
 from ruamel.yaml import YAML # Using ruamel instead of pyyaml because it keeps the comments
 import logging
 import ansible_api
 import tarfile
 import requests
-from artifact_api import ArtifactApi
 
 import uvicorn
 import json
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
-from copy import deepcopy
 
 """
-Ex api request - curl -X 'GET' 'http://172.24.8.139/' -H 'accept: application/json'
+Ex api request
 curl -X 'GET' 'https://ad-build-dev.slac.stanford.edu/api/deployment/' -H 'accept: application/json'
 """
 
@@ -42,14 +39,13 @@ APP_PATH = "/app"
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
 
-artifact_api = ArtifactApi()
-
 class IocDict(BaseModel):
     facilities: list = None # Optional
     component_name: str
     tag: str
     ioc_list: list
     user: str
+    new: bool
 
 class TagDict(BaseModel):
     component_name: str
@@ -72,8 +68,38 @@ def update_yaml(filename: str, data: dict):
     with open(filename, 'w') as file:
         yaml.dump(data, file)
 
-def update_component_in_facility(facility: str, timestamp: str, user: str, app_type: str,
-                                  component_to_update: str, tag: str, log_output: str, ioc_list: list = None, deploy_success: bool = True) -> bool:
+def add_log_to_component(facility: str, timestamp: str, user: str, component_to_update: str, log_output: str) -> bool:
+    # add entry to history
+    deployment_log = {
+        "log": log_output,
+        "logDate": timestamp,
+        "user": user,
+    }
+    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}/logs'
+    response = requests.post(endpoint, json=deployment_log)
+    return True
+
+def add_new_component(facility: str, app_type: str, component_name: str,
+                       tag: str, ioc_list: list = None) -> bool:
+    """
+    Function to add a new component in the deployment db
+    """
+    new_component = { "name": component_name,
+        "facility": facility,
+        "tag": tag,
+        "type": app_type,
+    }
+    if (ioc_list):
+        new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
+        new_component['dependsOn'] = new_depends_on_list
+    
+    endpoint = BACKEND_URL + 'deployments'
+    response = requests.post(endpoint, json=new_component)
+    return True
+
+
+def update_component_in_facility(facility: str, app_type: str, component_to_update: str,
+                                  tag: str, ioc_list: list = None, new: bool = False) -> bool:
     """
     Function to update a component in the deployment db
     """
@@ -85,22 +111,16 @@ def update_component_in_facility(facility: str, timestamp: str, user: str, app_t
     component['tag'] = tag
     # 3) Update iocs (if applicable)
     if (app_type == 'ioc'):
-        for ioc in component['dependsOn']:
-            if (ioc['name'] in ioc_list):
-                ioc['tag'] = tag
+        if (new): # If new component then add the new iocs
+            new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
+            component['dependsOn'].append(new_depends_on_list)
+        else:
+            for ioc in component['dependsOn']:
+                if (ioc['name'] in ioc_list):
+                    ioc['tag'] = tag
     # 4) Update component in db
-    if (deploy_success):
-        endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
-        response = requests.put(endpoint, json=component)
-
-    # 5) add entry to history
-    deployment_log = {
-        "log": log_output,
-        "logDate": timestamp,
-        "user": user,
-    }
-    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}/logs'
-    response = requests.post(endpoint, json=deployment_log)
+    endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
+    response = requests.put(endpoint, json=component)
     return True
 
 def find_component_in_facility(facility: str, component_to_find: str) -> dict:
@@ -261,6 +281,10 @@ def download_file_response(download_dir: str, file_name: str, response: requests
         else:
             logging.info('Failed to retrieve the file. Status code:', response.status_code)
 
+def write_file(filepath: str, content: str):
+    with open(filepath, 'w') as file:
+        file.write(content)
+
 # Begin API functions =================================================================================
 
 @app.get("/")
@@ -302,6 +326,7 @@ async def post_tag_creation(tag_request: TagDict):
     """
     Function to create a tag and push it to artifact storage
     """
+    return NotImplementedError
     results_dir_top = os.path.join(SCRATCH_FILEPATH, tag_request.results, tag_request.component_name)
 
     # 1) Change to the 'build_results' directory
@@ -367,37 +392,52 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
 
     logging.info(f"data: {ioc_to_deploy}")
     # 1) Get the data of the CLI api call, varies depending on app type
-        # IOC app type:
-        # playbook_args_dict = {
-        # "initial": initial,
-        # "component_name": request.component.name,
-        # "tag": tag,
-        # "user": linux_uname,
-        # "tarball": tarball,
-        # "ioc_list": ioc_list,
-        # }
-
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
 
-    # # 2) Call to artifact api for component/tag
-    # if (not artifact_api.get_component_from_registry(APP_PATH, ioc_to_deploy.component_name, ioc_to_deploy.tag, os_env='null', extract=False)):
-    #     return JSONResponse(content={"payload": {"Error": "artifact storage api is unreachable"}}, status_code=400)
     # 2) Call to backend to get component/tag from github releases
     endpoint = BACKEND_URL + f'component/{ioc_to_deploy.component_name}/release/{ioc_to_deploy.tag}'
     tarball = f'{ioc_to_deploy.tag}.tar.gz'
     response = requests.get(endpoint)
     download_file_response(APP_PATH, tarball, response, extract=True)
 
+    # Special case - if adding new deployment
+    deploy_new_iocs = False
+    new_iocs = []
+    deploy_new_commponent = False
+    if (ioc_to_deploy.new):
+        # Ensure only one facility is specified (because deployments are specific to each facility)
+        if (len(ioc_to_deploy.facilities) == 1):
+            # Check if deployment already exists
+            component = find_component_in_facility(ioc_to_deploy.facilities, ioc_to_deploy.component_name)
+            if (component):
+                # Extract ioc names from dictionaries
+                existing_iocs = {ioc["name"] for ioc in component['dependsOn']}
+
+                # Find iocs that are in user list but not in existing deployment
+                new_iocs = [ioc for ioc in ioc_to_deploy.ioc_list if ioc not in existing_iocs]
+                if (new_iocs == None):
+                    # Check if both the deployment and iocs exist, then return error to user.
+                    return JSONResponse(content={"payload": {"Error": "Deployment and iocs already exist in deployment configuration/database"}}, status_code=400)
+                else:
+                # else user is trying to add a new ioc to 'dependsOn'
+                    deploy_new_iocs = True
+            else:
+                # Otherwise create a new entry to deployment database
+                deploy_new_commponent = True
+
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
     facilities_ioc_dict = dict.fromkeys(facilities, [])
+    
+    if (deploy_new_iocs): # set the ioc dict to new_iocs
+        facilities_ioc_dict[facilities[0]] = new_iocs
     # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
-    if (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
-        for ioc in ioc_to_deploy.ioc_list:
-            facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-            if (facility == None): # Means ioc doesnt exist (typo on user end)
-                return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
-            facilities_ioc_dict[facility].append(ioc)
+    elif (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
+            for ioc in ioc_to_deploy.ioc_list:
+                facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+                if (facility == None): # Means ioc doesnt exist (typo on user end)
+                    return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+                facilities_ioc_dict[facility].append(ioc)
 
     # 3.2) Find the info needed to create the startup.cmd for each ioc
     tarball_filepath = os.path.join(APP_PATH, tarball)
@@ -439,7 +479,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         logging.info(f"facility: {facility}")
         logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
-        if (find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
+        if (not deploy_new_commponent and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
             continue
         if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
             # 3.2) If ioc = 'ALL' then create list of iocs based on facility
@@ -475,8 +515,13 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         # 6) Write new configuration to deployment db for each facility
         timestamp = datetime.now().isoformat()
     # TODO: Add checks if any database operations fail, then bail and return to user
-        update_component_in_facility(facility, timestamp, ioc_to_deploy.user, 'ioc', ioc_to_deploy.component_name,
-                                     ioc_to_deploy.tag, current_output, facilities_ioc_dict[facility], deployment_success)
+        # Special case - If new then add the new component
+        if (deployment_success):
+            if (deploy_new_commponent):
+                add_new_component(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility])
+            else:
+                update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility])
+        add_log_to_component(facility, timestamp, ioc_to_deploy.user, ioc_to_deploy.component_name, current_output)
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
@@ -490,19 +535,25 @@ f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.t
 
     if (status == 200): # 200 means success
         # 6.2) Write summary of deployment to report at the top
-        with open(deployment_report_file, 'w') as report_file:
-            summary += "\n#### Overall status: Success\n\n" + deployment_output
-            report_file.write(summary)
+        summary += "\n#### Overall status: Success\n\n" + deployment_output
+        write_file(deployment_report_file, summary)
     else: # Failure
         # response_msg = {"payload": {"Output": stdout, "Error": stderr}}
         status = 400
-        with open(deployment_report_file, 'w') as report_file:
-            summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
-            report_file.write(summary)
+        summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
+    write_file(deployment_report_file, summary)
+    logging.debug(summary)
     # 7) Cleanup - delete downloaded tarball
-    os.remove(tarball_filepath)
+    try:
+        os.remove(tarball_filepath)
+    except Exception as e:
+        logging.error(f'Error removing tarball: {str(e)}')
     # 8) Return ansible playbook output to user
-    return FileResponse(path=deployment_report_file, status_code=status)
+    if os.getenv('PYTHON_TESTING') == 'True':
+        content = summary
+        return Response(content=content, media_type="text/plain", status_code=status)
+    else:
+        return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
     uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=120)
