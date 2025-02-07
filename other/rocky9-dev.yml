@@ -29,7 +29,7 @@ spec:
         runAsGroup: 1006
       containers:
       - name: test-build-rocky9-dev
-        image: ghcr.io/ad-build-test/rocky9-env:dev
+        image: ghcr.io/ad-build-test/rocky9-env:latest
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]
@@ -40,8 +40,6 @@ spec:
               cd /build/ && 
               echo "$ pwd && ls" &&
               pwd && ls &&
-              echo "$ python3 start_build.py" &&
-              python3 start_build.py &&
               echo "$ sleep to keep container alive for debug" &&
               sleep infinity
         env:

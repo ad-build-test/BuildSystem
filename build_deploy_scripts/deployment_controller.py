@@ -35,6 +35,7 @@ CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
 SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
 BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
+FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -91,8 +92,10 @@ def add_new_component(facility: str, app_type: str, component_name: str,
     }
     if (ioc_list):
         new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
+        logging.debug(f"new_depends_on_list: {new_depends_on_list}")
         new_component['dependsOn'] = new_depends_on_list
     
+    logging.debug(f"new_component: {new_component}")
     endpoint = BACKEND_URL + 'deployments'
     response = requests.post(endpoint, json=new_component)
     return True
@@ -113,19 +116,23 @@ def update_component_in_facility(facility: str, app_type: str, component_to_upda
     if (app_type == 'ioc'):
         if (new): # If new component then add the new iocs
             new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
-            component['dependsOn'].append(new_depends_on_list)
+            component['dependsOn'].extend(new_depends_on_list)
+            logging.debug(new_depends_on_list)
         else:
             for ioc in component['dependsOn']:
                 if (ioc['name'] in ioc_list):
                     ioc['tag'] = tag
     # 4) Update component in db
+    logging.debug(component)
     endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
     response = requests.put(endpoint, json=component)
+    logging.debug(f"response.json(): {response.json()}")
     return True
 
 def find_component_in_facility(facility: str, component_to_find: str) -> dict:
     """ Function to return component information """
     endpoint = BACKEND_URL + f'deployments/{component_to_find}/{facility}'
+    logging.debug(f"find_component_in_facility endpoint: {endpoint}")
     response = requests.get(endpoint)
     if (response.ok):
         return response.json()['payload']
@@ -134,17 +141,13 @@ def find_component_in_facility(facility: str, component_to_find: str) -> dict:
 
 def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
     """ Function to return the facility that the ioc is in """
-    for facility in get_facilities_list(): # Loop through each facility
+    for facility in FACILITIES: # Loop through each facility
         component = find_component_in_facility(facility, component_with_ioc)
         if (component):
             for ioc in component['dependsOn']: # Loop through each ioc
                 if (ioc_to_find in ioc['name']):
                     return facility
     return None
-
-def get_facilities_list() -> list:
-    # TODO: May make this dynamic but for now these are the facilities
-    return ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 
 def extract_date(entry) -> datetime:
     return datetime.fromisoformat(entry['date'])
@@ -299,7 +302,7 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     # 1) Return dictionary of information for an App
     # TODO: Change this to get every facility
     error_msg = "== ADBS == ERROR - ioc not found, name or facility is wrong or missing."
-    facilities = get_facilities_list()
+    facilities = FACILITIES
     component_info_list = []
     try:
         found_ioc = False
@@ -393,28 +396,30 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     logging.info(f"data: {ioc_to_deploy}")
     # 1) Get the data of the CLI api call, varies depending on app type
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
-
+    logging.info(f"facilities: {FACILITIES}")
     # 2) Call to backend to get component/tag from github releases
     endpoint = BACKEND_URL + f'component/{ioc_to_deploy.component_name}/release/{ioc_to_deploy.tag}'
     tarball = f'{ioc_to_deploy.tag}.tar.gz'
     response = requests.get(endpoint)
+    logging.debug(f"Release download response: {response}")
     download_file_response(APP_PATH, tarball, response, extract=True)
-
     # Special case - if adding new deployment
     deploy_new_iocs = False
     new_iocs = []
-    deploy_new_commponent = False
+    deploy_new_component = False
     if (ioc_to_deploy.new):
         # Ensure only one facility is specified (because deployments are specific to each facility)
         if (len(ioc_to_deploy.facilities) == 1):
             # Check if deployment already exists
-            component = find_component_in_facility(ioc_to_deploy.facilities, ioc_to_deploy.component_name)
+            component = find_component_in_facility(ioc_to_deploy.facilities[0], ioc_to_deploy.component_name)
+            logging.debug(f"component: {component}")
             if (component):
                 # Extract ioc names from dictionaries
                 existing_iocs = {ioc["name"] for ioc in component['dependsOn']}
 
                 # Find iocs that are in user list but not in existing deployment
                 new_iocs = [ioc for ioc in ioc_to_deploy.ioc_list if ioc not in existing_iocs]
+                logging.debug(f"new_iocs: {new_iocs}")
                 if (new_iocs == None):
                     # Check if both the deployment and iocs exist, then return error to user.
                     return JSONResponse(content={"payload": {"Error": "Deployment and iocs already exist in deployment configuration/database"}}, status_code=400)
@@ -423,7 +428,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                     deploy_new_iocs = True
             else:
                 # Otherwise create a new entry to deployment database
-                deploy_new_commponent = True
+                deploy_new_component = True
+    logging.debug(f"deploy_new_component: {deploy_new_component}")
 
     # 3) Logic for special cases
     facilities = ioc_to_deploy.facilities
@@ -431,6 +437,8 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     
     if (deploy_new_iocs): # set the ioc dict to new_iocs
         facilities_ioc_dict[facilities[0]] = new_iocs
+    elif (deploy_new_component): # Add brand new iocs 
+        facilities_ioc_dict[facilities[0]] = ioc_to_deploy.ioc_list
     # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
     elif (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
             for ioc in ioc_to_deploy.ioc_list:
@@ -438,7 +446,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                 if (facility == None): # Means ioc doesnt exist (typo on user end)
                     return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
                 facilities_ioc_dict[facility].append(ioc)
-
     # 3.2) Find the info needed to create the startup.cmd for each ioc
     tarball_filepath = os.path.join(APP_PATH, tarball)
     ioc_info = extract_ioc_cpu_shebang_info(ioc_to_deploy.tag)
@@ -465,21 +472,20 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
         }
         ioc_info_list_dict.append(ioc_dict)
     # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
-
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
-    playbook_args_dict['playbook_path'] = '/sdf/group/ad/eed/ad-build/build-system-playbooks/ioc_module'
+    playbook_args_dict['playbook_path'] = ANSIBLE_PLAYBOOKS_PATH + '/ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
-    deployment_report_file = '/app/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_report_file = APP_PATH + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     logging.info(f"facilities: {facilities}")
     for facility in facilities:
         logging.info(f"facility: {facility}")
         logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
         # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
-        if (not deploy_new_commponent and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
+        if (not deploy_new_component and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
             continue
         if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
             # 3.2) If ioc = 'ALL' then create list of iocs based on facility
@@ -494,7 +500,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
                     ioc['startup_cmd_template'] += f'.{facility.lower()}'
                 facility_ioc_dict.append(ioc)
 
-
+        logging.info(f"facility_ioc_dict: {facility_ioc_dict}")
         playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
@@ -517,10 +523,11 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # TODO: Add checks if any database operations fail, then bail and return to user
         # Special case - If new then add the new component
         if (deployment_success):
-            if (deploy_new_commponent):
+            if (deploy_new_component):
+                logging.debug("Adding new component")
                 add_new_component(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility])
             else:
-                update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility])
+                update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility], ioc_to_deploy.new)
         add_log_to_component(facility, timestamp, ioc_to_deploy.user, ioc_to_deploy.component_name, current_output)
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
