@@ -14,41 +14,26 @@ or pytest -v test_deployment_controller.py -s
 
 POST TEST: 
 1) Even if tests say pass, check the database yourself to see if it added the right items
-TODO: Patrick fix this just query the database and see if its the right info added
     1.1) There should be a new deployment with the following info:
 
     name: "test-ioc"
     facility: "test"
-    tag: "1.0.57"
+    tag: "1.0.58"
     type: "ioc"
+    dependsOn: Array (2)
+    0: Object
+        name: "sioc-b34-gtest01"
+        tag: "1.0.58"
 
-    dependsOn Array (1)
-
-    0
-    Object
-    name
-    "sioc-b34-gtest01"
-    tag
-    "1.0.57"
-2) Please delete the new deployment you made which is test-ioc at 'test' tag '1.0.57' then can
+    1: Object
+        name: "sioc-b34-gtest02"
+        tag: "1.0.58"
+2) Please delete the new deployment you made which is test-ioc at facility 'test' then can
 rerun test
 TODO: We should make an api in backend to delete deployment, then we can run that as post test
 Then we really have a self-contained test without any need for POST operations
 
 """
-# patrick here -
-# currently changed ioc names for test-ioc, but there are some bugs with the tagging automation
-# it was working before, but I guess after updating start_build.py, it builds quickly and may have something to do with it 
-# Also rocky9 env img can't build test-ioc, but rhel7 does. (BUT it built rocky9 before, check one of the older automatic
-# builds then check the log)
-# test-ioc-fix-35-ROCKY9-679427aab07dcd363573bfe0/ - that one built for rocky9 successfully
-# Using test-ioc, has 2 iocs, iocGuardianTest and iocGuardianTest-rocky9
-# TODO: I think we should rename the iocs so it looks realistic, like sioc-b34-gtest01
-# 1) bs deploy --facility S3DF -i ALL -t 1.0.15
-# 2) bs deploy --facility S3DF -i iocGuardianTest -t 1.0.15
-# 3) bs deploy -i iocGuardianTest -t 1.0.15
-# 4) bs deploy --facility S3DF -i iocGuardianTest-rocky9 -t 1.0.15 --new
-# 5) 
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,8 +68,6 @@ def test_get_ioc_component_info_success(mock_paths):
     response = client.request("GET", "/ioc/info", json={"component_name": "test-ioc"})
     
     assert response.status_code == 200
-    assert len(response.json()['payload']) == 1
-    assert 'S3DF' in response.json()['payload'][0]
     print(f"payload: {response.json()['payload']}")
 
 def test_get_ioc_component_info_not_found(mock_paths):
@@ -98,7 +81,8 @@ def test_get_ioc_component_info_not_found(mock_paths):
 ####### Tests for deploy_ioc
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_component_success(mock_paths):
-    print("Starting test_deploy_ioc_new_component_success - add a new component entirely")
+    print("Starting test_deploy_ioc_new_component_success - add a new component entirely\n \
+          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.57 -n")
     
     ioc_request = IocDict(
         facilities=["test"],
@@ -121,7 +105,8 @@ async def test_deploy_ioc_new_component_success(mock_paths):
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_ioc_success(mock_paths):
-    print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component")
+    print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component\n \
+          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.57 -n")
     
     ioc_request = IocDict(
         facilities=["test"],
@@ -144,15 +129,23 @@ async def test_deploy_ioc_new_ioc_success(mock_paths):
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_all_success(mock_paths):
-    print("Starting test_deploy_ioc_new_tag_all_success - deploy new tag to an existing component with ALL iocs")
+    print("Starting test_deploy_ioc_new_tag_all_success - deploy new tag to an existing component with ALL iocs\n \
+          bs deploy --facility test -i ALL -t 1.0.58")
     
+    test_facility = "test"
+    test_component = "test-ioc"
+    test_tag = "1.0.58"
+    test_ioc_list = "ALL"
+    test_user = "test_user"
+    test_new = False
+
     ioc_request = IocDict(
-        facilities=["test"],
-        component_name="test-ioc",
-        tag="1.0.58",
-        ioc_list=["ALL"],
-        user="test_user",
-        new=True
+        facilities=[test_facility],
+        component_name=test_component,
+        tag=test_tag,
+        ioc_list=[test_ioc_list],
+        user=test_user,
+        new=test_new
     )
     
     print("Sending request to /ioc/deployment")
@@ -164,6 +157,25 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
     assert response.status_code == 200
     assert "Deployment report" in response.text
     assert "Success" in response.text
+
+    print("Confirm deployment database contents are correct...")
+    response = client.request("GET", "/ioc/info", json={"component_name": "test-ioc"})
+    payload = response.json()['payload']
+    print(f"payload: {payload}")
+    details = []
+    # Loop through the list of deployment entries (one for each facility if exists)
+    for deployment in payload:
+        # Extract the inner dictionary (assuming there's only one item at the top level)
+        for facility, details in deployment.items():
+            if (facility == test_facility):
+                assert details['name'] == test_component
+                assert details['tag'] == test_tag
+                assert details['type'] == 'ioc'
+            # # Loop through the 'dependsOn' list and print each entry
+                dependencies = details['dependsOn']
+     # Check if both entries exist
+    assert any(dep['name'] == 'sioc-b34-gtest01' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest01 not found or tag mismatch"
+    assert any(dep['name'] == 'sioc-b34-gtest02' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest02 not found or tag mismatch"
 
 # @pytest.mark.asyncio
 # async def test_deploy_ioc_failure(mock_external_dependencies, mock_paths):

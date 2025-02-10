@@ -305,6 +305,9 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     if (facility and not ioc):
         click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
         return
+    if (ioc.upper() == "ALL" and new):
+        click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component")
+        return
     # 3.1) Get facilities (if applicable)
     facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
