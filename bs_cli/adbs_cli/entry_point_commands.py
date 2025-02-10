@@ -249,10 +249,11 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
+@click.option("-n", "--new", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, branch: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, list: bool, local: bool, revert: bool, verbose: bool):
+                ioc: str, tag: str, list: bool, local: bool, revert: bool, new: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -304,6 +305,9 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     if (facility and not ioc):
         click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
         return
+    if (ioc.upper() == "ALL" and new):
+        click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component")
+        return
     # 3.1) Get facilities (if applicable)
     facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
@@ -320,7 +324,8 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "ioc_list": ioc_list
+        "ioc_list": ioc_list,
+        "new": new
     }
 
     # 5) If revert then send deployment revert request to deployment controller
