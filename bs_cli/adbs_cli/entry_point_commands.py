@@ -87,24 +87,38 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
 
     return run_process_real_time(command)
 
+
 @click.command()
 def configure():
     """Configure to authorize commands"""
     linux_uname = os.environ.get('USER')
     # get github name from environment as well, if not then prompt user
     github_uname = os.environ.get('AD_BUILD_GH_USER')
-    if (github_uname): 
+    if github_uname:
         click.echo('CLI already configured.')
     else:
         github_uname = input('What is your github username? ')
-        # TODO: Either write to bashrc from here, or have them put it themselves
-        write_env = "\n\n# Build System CLI Configuration\
-                    \nexport AD_BUILD_GH_USER=" + github_uname
-        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
-            # 'a' stands for "append"  
+        
+        # Create the ~/.profile.d directory if it doesn't exist
+        profile_d_dir = os.path.expanduser("~/.profile.d")
+        if (not os.path.exists(profile_d_dir)):
+            click.echo("== ADBS == Error ~/.profile.d does not exist. Ensure you are on dev server")
+            return
+        # os.makedirs(profile_d_dir, exist_ok=True)
+        
+        # Path to the sw_factory.conf file
+        conf_file = os.path.join(profile_d_dir, "sw_factory.conf")
+        
+        # Content to write
+        write_env = f"# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n"
+        
+        # Write to sw_factory.conf
+        with open(conf_file, "a") as outfile:
             outfile.write(write_env)
-        click.echo("** Successfully added to .bashrc **\n" + \
-                    "Please 'source ~" + linux_uname + "/.bashrc' or reload shell")
+        
+        click.echo(f"** Successfully added to {conf_file} **")
+        click.echo("Please source this file or reload your shell to apply changes.")
+
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")

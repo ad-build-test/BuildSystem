@@ -33,7 +33,7 @@ ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
 SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
-BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
+BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 

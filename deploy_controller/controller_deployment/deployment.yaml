@@ -68,5 +68,5 @@ spec:
           claimName: s3df-dev-container-ad-group
       - name: s3df-ssh-key-volume
         secret:
-          secretName: deployment-controller-ssh-keys
+          secretName: deployment-controller-secrets
 
