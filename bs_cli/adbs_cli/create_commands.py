@@ -2,7 +2,6 @@ import click
 from adbs_cli.request import Request
 from adbs_cli.auto_complete import AutoComplete
 from adbs_cli.component import Component
-import logging
 import inquirer
 from adbs_cli.cli_configuration import INPUT_PREFIX
 
@@ -38,6 +37,8 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
     request.add_to_payload("organization", organization)
     issue_tracker = issue_tracker.lower()
     request.add_to_payload("issueTracker", issue_tracker)
+    if (issue_tracker != 'jira' or issue_tracker != 'github'): 
+        click.echo("== ADBS == issue tracker must be jira or github.")
     if (issue_tracker == 'jira'):
         if (jira_project_key == None):
             jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
@@ -66,15 +67,12 @@ def repo(component: str, organization: str, testing_criteria: str, approval_rule
 
 
 @create.command()
-@click.option("-f", "--fix", type=int, required=False, help="Add fix branch based off issue number")
-@click.option("-ft", "--feat", type=int, required=False, help="Add feature branch based off issue number")
-@click.option("-d", "--dev", required=False, help="Add development branch")
 @click.option("-b", "--branch", required=False, help="Specify which branch to branch from")
 @click.option("-t", "--tag", required=False, help="Specify which tag to branch from")
 @click.option("-ct", "--commit", required=False, help="Specify which commit to branch from")
 @click.option("-a", "--add", is_flag=True, required=False, help="Add an EXISTING branch to database")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
+def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
     """Create a new branch"""
     component_obj = Component()
     request = Request(component_obj)
@@ -128,31 +126,24 @@ def branch(fix: int, feat: int, dev: str, branch: str, tag: str, commit: str, ad
         
         branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
-    # 3) See if fix, feat, or dev option filled out, or prompt user
+    # 3) 
     full_branch_name = None
-    if (fix): 
-        branch_type = 'fix'
-        branch_type_value = str(fix)
-    elif (feat):
-        branch_type = 'feat'
-        branch_type_value = str(feat)
-    elif (dev):
-        branch_type = 'dev'
-        branch_type_value = str(dev)
+    # If adding existing branch, skip asking type of branch to create
+    if (add):
+        AutoComplete.set_auto_complete_vals('branch', branches)
+        full_branch_name = input("Specify name of existing branch: ")
     else:
-        # If adding existing branch, skip asking type of branch to create
-        if (add):
-            AutoComplete.set_auto_complete_vals('branch', branches)
-            full_branch_name = input("Specify name of existing branch: ")
-        else:
-            question = [inquirer.List(
-                        "branch_type",
-                        message="Specify type of branch to create",
-                        choices=["fix", "feat", "dev"])]
-            branch_type = inquirer.prompt(question)['branch_type']
-            branch_type_value = input("Specify name of issue number (or dev name): ")
-    if (full_branch_name == None):
-        full_branch_name = branch_type + '-' + branch_type_value
+        issue_num = input("Specify issue number (or branch name): ")
+        try: # Get issue tracker if issue number
+            issue_num = int(issue_num)
+            component_info = request.get_component_from_db()
+            issue_tracker = component_info['issueTracker']
+            if (issue_tracker == 'github'):
+                full_branch_name = f'issue-{issue_num}'
+            elif (issue_tracker == 'jira'):
+                full_branch_name = f"{component_info['jiraProjectKey']}-{issue_num}"
+        except ValueError: # otherwise branch name already given
+            full_branch_name = issue_num
 
     # 4) Create the branch using git and push
     if (not add): # Dont create branch if user just wants to add to database
