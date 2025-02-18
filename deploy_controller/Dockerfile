@@ -3,6 +3,7 @@
 # How to build:
 # 1) Go to top of repo
 # 2) docker build --tag ghcr.io/ad-build-test/deployment-controller:latest -f deploy_controller/Dockerfile .
+# DEV) docker build --tag ghcr.io/ad-build-test/deployment-controller:dev -f deploy_controller/Dockerfile .
 FROM rockylinux:9
 
 # update

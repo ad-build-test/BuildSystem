@@ -307,6 +307,7 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     try:
         found_ioc = False
         for facility in facilities:
+            logging.info(f"get_ioc_component_info: component_name: {ioc_request.component_name}, facility: {facility}")
             component_info = find_component_in_facility(facility, ioc_request.component_name)
             if (component_info):
                 info = {f"{facility}": component_info}

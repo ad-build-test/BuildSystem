@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s3df-dev-container-ad-group
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment-controller
+  template:
+    metadata:
+      labels:
+        app: deployment-controller
+    spec:
+      securityContext:
+        runAsUser: 46487
+        runAsGroup: 1006
+      containers:
+      - name: deployment-controller
+        image: ghcr.io/ad-build-test/deployment-controller:dev
+        imagePullPolicy: Always
+        # start the build script
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - >-
+              echo "$ cd /app/" &&
+              cd /app/ && 
+              echo "$ pwd && ls" &&
+              pwd && ls &&
+              echo "$ uvicorn deployment_controller:app --host 0.0.0.0 --port 8080 --timeout-keep-alive 120" &&
+              uvicorn deployment_controller:app --host 0.0.0.0 --port 8080 --timeout-keep-alive 120
+        ports:
+        - containerPort: 8080  
+        resources:
+        # Important there is enough resources to prevent timeouts
+        # TODO: Add autoscaling horizontally if utilization goes abvout 80 percent.
+          requests:
+            # memory: "1Gi"
+            # cpu: "1000m"
+            # try this next if uvicorn time out doesnt work. Could also be you need to setup 
+            # keep-alive at the fastapi run command above
+          limits:
+            memory: 2Gi
+            cpu: "2000m"
+        volumeMounts:
+        - name: s3df-dev-container-ad-group
+          mountPath: /mnt
+        - name: s3df-ssh-key-volume
+          mountPath: /home/adbuild/.ssh/deployment_controller_s3df
+          subPath: s3df-key
+          readOnly: true
+      volumes:
+      - name: s3df-dev-container-ad-group
+        persistentVolumeClaim:
+          claimName: s3df-dev-container-ad-group
+      - name: s3df-ssh-key-volume
+        secret:
+          secretName: deployment-controller-secrets
+
