@@ -279,10 +279,18 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     if (test):
         under_development()
 
+    # 1.2) Option - local
+    if (local):
+        under_development()
+
+    # 1.3) Option - revert
+    if (revert):
+        under_development()
+
     # 1.2) Option - list
     if (list):
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
-        deployment_request.set_endpoint('/ioc/info')
+        deployment_request.set_endpoint('ioc/info')
         response = deployment_request.get_request(log=verbose)
         payload = response.json()['payload']
 
