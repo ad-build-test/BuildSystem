@@ -162,18 +162,28 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
 
 @create.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-ci", "--cater-id", required=True, help="CATER ID")
+@click.option("-ci", "--cater-id", required=False, help="CATER ID - when given, title and description is gathered from CATER")
+@click.option("-t", "--issue-title", required=False, help="Issue title (if no CATER ID is provided)")
+@click.option("-b", "--issue-body", required=False, help="Issue body (if no CATER ID is provided)")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def issue(component: str, cater_id: int, verbose: bool=False):
-    """Create a new issue based off CATER ID"""
+def issue(component: str, cater_id: int, issue_title: str, issue_body: str, verbose: bool=False):
+    """Create a new issue"""
     # TODO: CATER does not have an API, but will have it once the NEW CATER 
 
     # 1) Set fields
-    click.echo("THIS COMMAND IS ONLY used for demo purposes for now (New CATER under development)")
     request = Request(Component(component))
     request.set_component_name()
     component_info = request.get_component_from_db()
     issue_tracker = component_info['issueTracker']
+
+    if (cater_id):
+        click.echo("== ADBS == Cater API not yet available.")
+        return
+    
+    if (issue_title == None): 
+        issue_title = input("Specify issue title: ")
+    if (issue_body == None): 
+        issue_body = input("Specify issue body: ")
 
     # 1.1) If Jira, add project key to request
     if (issue_tracker == 'jira'):
@@ -182,14 +192,14 @@ def issue(component: str, cater_id: int, verbose: bool=False):
     # 2) Make call to cater
     # TODO: Since CATER doesn't have API as of this comment written,
     # just put in placeholder info for demo
-    cater_link = "https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3"
-    cater_title = "add EPICS control for oscilloscope scop-li20-ex04"
-    issue_title = f"CATER {cater_id} - {cater_title}"
-    if (issue_tracker == 'github'): # Different link formatting for both issue trackers
-        cater_link = f"[{cater_id}]({cater_link})"
-    elif (issue_tracker == 'jira'):
-        cater_link = f"[{cater_id}|{cater_link}]"
-    issue_body = f"Created to address CATER: {cater_link} by @{request.github_uname}"
+    # cater_link = "https://oraweb.slac.stanford.edu/apex/slacprod/f?p=194:4:8146126360777:::4:P4_PROB_ID,P4_DIV_CODE_ID,P4_RP:170777,1,3"
+    # cater_title = "add EPICS control for oscilloscope scop-li20-ex04"
+    # issue_title = f"CATER {cater_id} - {cater_title}"
+    # if (issue_tracker == 'github'): # Different link formatting for both issue trackers
+    #     cater_link = f"[{cater_id}]({cater_link})"
+    # elif (issue_tracker == 'jira'):
+    #     cater_link = f"[{cater_id}|{cater_link}]"
+    # issue_body = f"Created to address CATER: {cater_link} by @{request.github_uname}"
 
     # 3) Add to payload
     request.add_to_payload("issueTitle", issue_title)
