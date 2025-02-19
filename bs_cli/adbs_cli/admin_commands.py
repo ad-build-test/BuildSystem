@@ -10,7 +10,6 @@ from adbs_cli.cli_configuration import under_development,  Api
 @click.group(hidden=True)
 def admin():
     """admin [ create | edit | delete ]"""
-    # Register our completer function for tags
     pass
 
 @admin.command()
@@ -21,25 +20,4 @@ def admin():
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def add(component: str, branch: str, tag: str, results: str, verbose: bool): # TODO
     """Add a component to the component database"""
-    click.echo("== ADBS == Failure to tag")
-
-@admin.command()
-def edit():
-    """Edit an existing tag"""
-    under_development() # TODO
-    click.echo('edit tag')
-    tag_name = input('What is the tag name? (<tab> for list): ')
-    subprocess.run(['gh', 'release', 'edit', tag_name])
-    # TODO: Figure out which flags for tag editing we want:
-        # List of flags 
-        # 1) tag name
-        # 2) tag title
-        # 3) ...
-
-@admin.command()
-def delete(): 
-    """Delete an existing tag"""
-    under_development() # TODO
-    click.echo('delete tag')
-    tag_name = input('What is the tag name? (<tab> for list): ')
-    subprocess.run(['gh', 'release', 'delete', tag_name])
+    click.echo("== ADBS == Failure to add to database")
