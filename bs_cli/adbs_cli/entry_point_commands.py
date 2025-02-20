@@ -89,8 +89,8 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
 
 
 @click.command()
-def configure():
-    """Configure to authorize commands"""
+def configure_user():
+    """Configure user to authorize commands"""
     linux_uname = os.environ.get('USER')
     # get github name from environment as well, if not then prompt user
     github_uname = os.environ.get('AD_BUILD_GH_USER')
@@ -110,8 +110,9 @@ def configure():
         conf_file = os.path.join(profile_d_dir, "sw_factory.conf")
         
         # Content to write
-        write_env = f"# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n"
-        
+        write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
+eval "$(_BS_COMPLETE=bash_source bs)"
+"""
         # Write to sw_factory.conf
         with open(conf_file, "a") as outfile:
             outfile.write(write_env)
@@ -119,6 +120,53 @@ def configure():
         click.echo(f"** Successfully added to {conf_file} **")
         click.echo("Please source this file or reload your shell to apply changes.")
 
+@click.command()
+def generate_config():
+    """Generate config.yaml for your component"""
+    # Get user input
+    at_top = click.confirm("Are you at the TOP level of your repo?")
+    if (at_top):
+        top_level = os.getcwd()
+        repo_name = os.path.basename(top_level)
+    else: 
+        top_level = input("Specify filepath to the TOP level of your repo: ")
+        if os.path.exists(top_level):
+            repo_name = os.path.basename(os.path.abspath(top_level))
+        else:
+            click.echo(f"Error: The specified path '{top_level}' does not exist.")
+            return
+
+    org_name = input("Specify name of org: ")
+    environments = input("Specify list of environments (OS) the repo runs on (comma-separated): ")
+    build_command = input("Specify how to build (if applicable, can be as simple as 'make'): ")
+
+    # Process the environments
+    env_list = [env.strip() for env in environments.split(',')]
+
+    # Create the content
+    content = f"""# [Required]
+repo: {repo_name}
+organization: {org_name}
+
+# [Required]
+# Environments this app runs on
+environments:
+{chr(10).join('   - ' + env for env in env_list)}
+
+# [Optional] 
+# Build method for building the component
+# Can be a simple command like 'make'
+build: {build_command}
+"""
+
+    # Generate full filepath
+    filepath = os.path.join(top_level, 'config.yaml')
+
+    # Write to file
+    with open(filepath, 'w') as f:
+        f.write(content)
+
+    click.echo(f"File '{filepath}' has been generated successfully!")
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")

@@ -63,10 +63,7 @@ class Build(object):
 
     def parse_dependencies(self, config_yaml: dict) -> dict:
         try:
-            if (config_yaml['format'] == 2):
-                dependencies = config_yaml['environments'][self.os_env]['dependencies']
-            else:
-                dependencies = config_yaml['dependencies']
+            dependencies = config_yaml['dependencies']
         except KeyError:
             return None
         return dependencies
