@@ -139,6 +139,8 @@ def generate_config():
     org_name = input(INPUT_PREFIX + "Specify name of org: ")
     description = input(INPUT_PREFIX + "Specify repo description: ")
     build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
+    if (build_command == None):
+        build_command = 'n/a'
     question = [
     inquirer.List(
         "issueTracker",
@@ -147,7 +149,6 @@ def generate_config():
         ),
     ]
     issue_tracker = inquirer.prompt(question)['issueTracker']
-    print(issue_tracker)
     jira_project_key = 'n/a'
     if (issue_tracker == 'jira'):
         jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
