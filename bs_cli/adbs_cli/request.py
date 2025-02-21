@@ -60,6 +60,9 @@ class Request(object):
     def get_request(self, log: bool, msg: str=None) -> requests.Response:
         return self.send_request("GET", log, msg)
     
+    def delete_request(self, log: bool, msg: str=None) -> requests.Response:
+        return self.send_request("DELETE", log, msg)
+    
     def send_request(self, request_type: str, log: bool, msg) -> requests.Response:
         """Generalized function for GET, POST, and PUT requests."""
         try:
@@ -70,6 +73,8 @@ class Request(object):
                 self.response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
             elif request_type == 'PUT':
                 self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
+            elif request_type == 'DELETE':
+                self.response = requests.delete(self.url, params=self.params, headers=self.headers, json=self.payload)
 
             self.log_request(log, msg)
             return self.response
