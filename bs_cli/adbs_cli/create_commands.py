@@ -8,63 +8,8 @@ from adbs_cli.cli_configuration import INPUT_PREFIX
 
 @click.group()
 def create():
-    """Create a new [ repo | branch | issue ]"""
+    """Create a new [ branch | issue ]"""
     pass
-
-@create.command()
-@click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-o", "--organization", required=False, help="Organization Name", prompt=INPUT_PREFIX + "Specify organization name")
-@click.option("-t", "--testing-criteria", required=False, help="Testing Criteria", prompt=INPUT_PREFIX + "Specify testing criteria")
-@click.option("-a", "--approval-rule", required=False, help="Approval Rule", prompt=INPUT_PREFIX + "Specify approval rule")
-@click.option("-d", "--desc", required=False, help="Description", prompt=INPUT_PREFIX + "Specify component description")
-@click.option("-i", "--issue-tracker", required=False, help="Issue tracking system", prompt=INPUT_PREFIX + "Specify issue tracking system [github | jira]")
-@click.option("-j", "--jira-project-key", required=False, help="Jira project key")
-@click.option("-u", "--url", required=False, help="Add existing component to build system")
-@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, url: str, verbose: bool=False):
-    """Create a new repo"""
-    request = Request(Component(component))
-    # args: (May make most of these prompted to user)
-    # organization, template repo name, new repo owner (should be automatic),
-    # name of repo, description, include_all_branches, private
-    # Backend creates the repo, may make option for user to clone it directly after creating
-    request.set_endpoint('component')
-    request.set_component_name()
-    request.add_to_payload("name", request.component.name)
-    request.add_to_payload("description", desc)
-    request.add_to_payload("testingCriteria", testing_criteria)
-    request.add_to_payload("approvalRule", approval_rule)
-    request.add_to_payload("organization", organization)
-    issue_tracker = issue_tracker.lower()
-    request.add_to_payload("issueTracker", issue_tracker)
-    if (issue_tracker != 'jira' or issue_tracker != 'github'): 
-        click.echo("== ADBS == issue tracker must be jira or github.")
-    if (issue_tracker == 'jira'):
-        if (jira_project_key == None):
-            jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
-        request.add_to_payload("jiraProjectKey", jira_project_key)
-    # TODO: Ask user to specify build os - This should be automatic assuming 
-    # the build os(s) are specified in the config manifest
-    question = [
-    inquirer.Checkbox(
-        "buildOs",
-        message="What are the operating systems this app runs on? (Arrow keys for selection, enter if done)",
-        choices=["ROCKY9", "UBUNTU", "RHEL8", "RHEL7", "RHEL6", "RHEL5"],
-        default=[],
-        ),
-    ]
-    build_os_list = inquirer.prompt(question)
-    click.echo(build_os_list)
-    request.add_dict_to_payload(build_os_list)
-    if (url): request.add_to_payload("url", url)
-    request.post_request(verbose)
-
-    # Create another put request but to enable permissions for backend to receive events
-    enable_envents_endpoint = 'component/' + request.component.name + '/event/true'
-    request = Request(Component(component))
-    request.set_endpoint(enable_envents_endpoint)
-    request.put_request(log=verbose, msg="Add repo to component database")
-
 
 @create.command()
 @click.option("-b", "--branch", required=False, help="Specify which branch to branch from")

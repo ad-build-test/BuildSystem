@@ -136,22 +136,51 @@ def generate_config():
             click.echo(f"Error: The specified path '{top_level}' does not exist.")
             return
 
-    org_name = input("Specify name of org: ")
-    environments = input("Specify list of environments (OS) the repo runs on (comma-separated): ")
-    build_command = input("Specify how to build (if applicable, can be as simple as 'make'): ")
-
-    # Process the environments
-    env_list = [env.strip() for env in environments.split(',')]
+    org_name = input(INPUT_PREFIX + "Specify name of org: ")
+    description = input(INPUT_PREFIX + "Specify repo description: ")
+    build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
+    question = [
+    inquirer.List(
+        "issueTracker",
+        message="What issue tracking system does this app use?",
+        choices=["github", "jira"]
+        ),
+    ]
+    issue_tracker = inquirer.prompt(question)['issueTracker']
+    print(issue_tracker)
+    jira_project_key = 'n/a'
+    if (issue_tracker == 'jira'):
+        jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
+    question = [
+    inquirer.Checkbox(
+        "buildOs",
+        message="What are the operating systems this app runs on? (Arrow keys for selection, enter if done)",
+        choices=["ROCKY9", "UBUNTU", "RHEL8", "RHEL7", "RHEL6", "RHEL5"],
+        default=[],
+        ),
+    ]
+    build_os_list = inquirer.prompt(question)['buildOs']
+    click.echo(build_os_list)
 
     # Create the content
     content = f"""# [Required]
+# Basic component information
 repo: {repo_name}
 organization: {org_name}
+url: https://github.com/{org_name}/{repo_name}
+description: {description}
+
+# [Required]
+# Continous integration
+approvalRule: all
+testingCriteria: all
+issueTracker: {issue_tracker}
+jiraProjectKey: {jira_project_key}
 
 # [Required]
 # Environments this app runs on
 environments:
-{chr(10).join('   - ' + env for env in env_list)}
+{chr(10).join('   - ' + env for env in build_os_list)}
 
 # [Optional] 
 # Build method for building the component
