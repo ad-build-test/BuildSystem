@@ -1,3 +1,5 @@
+import time
+from typing import Set
 import click
 import yaml
 import os
@@ -86,6 +88,29 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     logging.info(command)
 
     return run_process_real_time(command)
+
+def get_remote_build_log(build_id: str, verbose: bool=False):
+    request = Request()
+    status = "PENDING"
+    seen_ids = set()
+    click.echo(f"== ADBS == Retrieving build log for {build_id}...\n")
+    while(status == "PENDING" or status == "IN_PROGRESS"):
+        time.sleep(1)  # Loop every second
+
+        # API call to get the status
+        request.set_endpoint(f"build/{build_id}")
+        results = request.get_request(log=verbose).json()['payload']
+        status = results['buildStatus']
+
+        # API call to get the log
+        request.set_endpoint(f"build/{build_id}/log")
+        results = request.get_request(log=verbose).json()['payload']
+
+        for build_log in results:
+            log_id = build_log['id']
+            if log_id not in seen_ids:
+                click.echo(f"{build_log['log']}")
+                seen_ids.add(log_id)
 
 
 @click.command()
@@ -248,12 +273,18 @@ def clone(component: str, branch: str="main", verbose: bool=False):
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-l", "--local", is_flag=True, required=False, help="Local build")
+@click.option("-l", "--log", required=False, help="Retrieve log of a remote build (specify id)")
+@click.option("-lc", "--local", is_flag=True, required=False, help="Local build")
 @click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
 @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def build(component: str, branch: str, local: bool, remote: bool, container: bool, verbose: bool=False):
+def build(component: str, branch: str, log: str, local: bool, remote: bool, container: bool, verbose: bool=False):
     """Trigger a build [local | remote | container]"""
+    # 0) Special case, if log only
+    if (log):
+        get_remote_build_log(log, verbose)
+        return
+
     # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
@@ -304,7 +335,11 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
         request.set_endpoint(endpoint)
         request.add_to_payload("ADBS_BUILD_TYPE", "normal")
-        request.post_request(log=verbose, msg="Start remote build")
+        payload = request.post_request(log=verbose, msg="Start remote build id")
+        build_id = payload.json()['payload'][0] # TODO: This payload returns list of build ids, but since we only expect one os for now, get the first item
+
+        # 3) Get the live log output:
+        get_remote_build_log(build_id, verbose)
 
     ## Container build
     elif (build_type == "CONTAINER"): # (NOTE - this feature will be long-term goal and is not priority atm)

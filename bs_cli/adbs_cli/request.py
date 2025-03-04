@@ -18,9 +18,10 @@ class Request(object):
         self.payload = {}
         self.component = component
         self.response = {}
+        self.endpoint = ""
 
     def set_endpoint(self, endpoint: str):
-        self.url += endpoint
+        self.endpoint = endpoint
 
     def add_to_payload(self, key: str, value: str):
         self.payload[key] = value
@@ -68,13 +69,13 @@ class Request(object):
         try:
             # Determine the request method and send the corresponding request
             if request_type == 'GET':
-                self.response = requests.get(self.url, params=self.params, headers=self.headers, json=self.payload)
+                self.response = requests.get(self.url + self.endpoint, params=self.params, headers=self.headers, json=self.payload)
             elif request_type == 'POST':
-                self.response = requests.post(self.url, params=self.params, headers=self.headers, json=self.payload)
+                self.response = requests.post(self.url + self.endpoint, params=self.params, headers=self.headers, json=self.payload)
             elif request_type == 'PUT':
-                self.response = requests.put(self.url, params=self.params, headers=self.headers, json=self.payload)
+                self.response = requests.put(self.url + self.endpoint, params=self.params, headers=self.headers, json=self.payload)
             elif request_type == 'DELETE':
-                self.response = requests.delete(self.url, params=self.params, headers=self.headers, json=self.payload)
+                self.response = requests.delete(self.url + self.endpoint, params=self.params, headers=self.headers, json=self.payload)
 
             self.log_request(log, msg)
             return self.response
