@@ -253,30 +253,20 @@ if __name__ == "__main__":
     logger.info("Root dir: " + build.root_dir)
     # 2) Parse yaml
     config_yaml = build.parse_yaml('config.yaml')
-    # 3) Parse dependencies
-    dependencies = build.parse_dependencies(config_yaml)
-    # if (dependencies): # Possible an app has no dependencies
-    #     # 4) Install dependencies
-    #     build.install_dependencies(dependencies)
-    # 4.1) Install python packages if available
+    # 3) Install python packages (if applicable)
     py_pkgs_file = build.install_python_packages(config_yaml)
-    # 5) Update RELEASE_SITE and CONFIG_SITE if EPICS IOC
-    # TODO: Update logic to figure out what kind of app were building, for now focus on IOC
-    if (dependencies):
-        build.create_release_site(config_yaml)
-    # build.update_config_site()
-    # 6) Run repo build script
+    # 4) Run repo build script
     build.run_build(config_yaml)
-    # 7) Run unit_tests
+    # 5) Run unit_tests
     switch_log_file(build.source_dir + '/tests.log')
     test = Test()
     test.run_unit_tests(build.source_dir)
 
-    # 8) If container build - Build dockerfile
+    # 6) If container build - Build dockerfile
     if (build.build_type.lower() == 'container'):
         pass
         # TODO: Don't release this yet until done with regular remote build
         # build.create_docker_file(dependencies, py_pkgs_file)
     
-    # 9)  Done
+    # 7)  Done
     logger.info("Remote build finished.")
