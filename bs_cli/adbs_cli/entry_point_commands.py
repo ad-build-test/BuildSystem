@@ -1,16 +1,13 @@
+import time
 import click
 import yaml
 import os
 import git
-import ansible_runner # TODO: Move to its own module once done testing
 import inquirer
 import json
 import logging
 import subprocess
 import pathlib
-from pprint import pprint
-import rich
-from rich.json import JSON
 from adbs_cli.component import Component
 from adbs_cli.request import Request
 from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development, cli_configuration
@@ -86,6 +83,29 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
     logging.info(command)
 
     return run_process_real_time(command)
+
+def get_remote_build_log(build_id: str, verbose: bool=False):
+    request = Request()
+    status = "PENDING"
+    seen_ids = set()
+    click.echo(f"== ADBS == Retrieving build log for {build_id}...\n")
+    while(status == "PENDING" or status == "IN_PROGRESS"):
+        time.sleep(1)  # Loop every second
+
+        # API call to get the status
+        request.set_endpoint(f"build/{build_id}")
+        results = request.get_request(log=verbose).json()['payload']
+        status = results['buildStatus']
+
+        # API call to get the log
+        request.set_endpoint(f"build/{build_id}/log")
+        results = request.get_request(log=verbose).json()['payload']
+
+        for build_log in results:
+            log_id = build_log['id']
+            if log_id not in seen_ids:
+                click.echo(f"{build_log['log']}")
+                seen_ids.add(log_id)
 
 
 @click.command()
@@ -248,15 +268,61 @@ def clone(component: str, branch: str="main", verbose: bool=False):
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
-@click.option("-l", "--local", is_flag=True, required=False, help="Local build")
+@click.option("-l", "--log", is_flag=True, required=False, help="Retrieve log of a remote build")
+@click.option("-lc", "--local", is_flag=True, required=False, help="Local build")
 @click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
 @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def build(component: str, branch: str, local: bool, remote: bool, container: bool, verbose: bool=False):
+def build(component: str, branch: str, log: bool, local: bool, remote: bool, container: bool, verbose: bool=False):
     """Trigger a build [local | remote | container]"""
-    # 1) Set fields
     request = Request(Component(component, branch))
     request.set_component_fields()
+    # 0) Special case, if log only
+    if (log):
+        # Get user input
+        know_id = click.confirm("Do you know the build ID?")
+        if know_id:
+            build_id = input(f"{INPUT_PREFIX} Specify build id: ")
+        else:
+            # Get all the build ids available, then show the top 5 most recent ones 
+            # and ask user to select which one they want to view
+            request.set_endpoint(f"build/component/{request.component.name}/branch/{request.component.branch_name}")
+            response = request.get_request(log=verbose).json()
+            builds = response['payload']
+            
+            if not builds:
+                click.echo("== ADBS == No recent builds found.")
+                return
+
+            # Sort builds by createdDate in descending order and get the top 5 builds
+            sorted_builds = sorted(builds, key=lambda x: x.get('createdDate', ''), reverse=True)[:5]
+
+            # (for header) - Find the maximum width for each column
+            max_date_width = max(len(build['createdDate']) for build in sorted_builds)
+            max_id_width = max(len(build['id']) for build in sorted_builds)
+            max_status_width = max(len(build['buildStatus']) for build in sorted_builds)
+            max_os_width = max(len(build['buildOs']) for build in sorted_builds)
+
+            # Print the header
+            click.echo("Recent builds:")
+            click.echo(f"{'#':<3} {'Date':<{max_date_width}} | {'Build ID':<{max_id_width}} | {'Status':<{max_status_width}} | {'OS':<{max_os_width}}")
+            click.echo("-" * (3 + max_date_width + max_id_width + max_status_width + max_os_width + 9))  # 9 for extra spaces and |
+
+            # Print the builds
+            for idx, build in enumerate(sorted_builds, 1):
+                click.echo(f"{idx:<3} {build['createdDate']:<{max_date_width}} | {build['id']:<{max_id_width}} | {build['buildStatus']:<{max_status_width}} | {build['buildOs']:<{max_os_width}}")
+            
+            while True:
+                choice = click.prompt("Choose a build number", type=int)
+                if 1 <= choice <= len(sorted_builds):
+                    build_id = sorted_builds[choice - 1]['id']
+                    break
+                click.echo("Invalid choice. Please try again.")
+
+        get_remote_build_log(build_id, verbose)
+        return
+
+    # 1) Set fields
     request.add_to_payload("ADBS_COMPONENT", request.component.name)
     request.add_to_payload("ADBS_BRANCH", request.component.branch_name)
     # 2) Prompt if local or remote build
@@ -304,7 +370,11 @@ def build(component: str, branch: str, local: bool, remote: bool, container: boo
         endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
         request.set_endpoint(endpoint)
         request.add_to_payload("ADBS_BUILD_TYPE", "normal")
-        request.post_request(log=verbose, msg="Start remote build")
+        payload = request.post_request(log=verbose, msg="Start remote build id")
+        build_id = payload.json()['payload'][0] # TODO: This payload returns list of build ids, but since we only expect one os for now, get the first item
+
+        # 3) Get the live log output:
+        get_remote_build_log(build_id, verbose)
 
     ## Container build
     elif (build_type == "CONTAINER"): # (NOTE - this feature will be long-term goal and is not priority atm)
