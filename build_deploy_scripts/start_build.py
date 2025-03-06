@@ -193,11 +193,6 @@ endif"""
             
         return_code = run_process(command, self.env)
 
-PATRICK - left off here - you made changes to start_build.py to fix the r
-eturn error if error in build, and now it shows failed status if build fails. Good! but havent pushed c
-hanges yet, make an issue on BuildSystem and push those changes. You also made the build live output
-
-
         if (return_code != 0):
             logger.info("Build process FAILED!")
             sys.exit(EXIT_BUILD_FAILURE)
