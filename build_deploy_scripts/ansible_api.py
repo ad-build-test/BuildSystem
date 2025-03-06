@@ -25,42 +25,45 @@ def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
             # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
             command += ['--extra-vars', extra_vars]
 
-        # Determine the appropriate arguments based on the Python version
-        if sys.version_info >= (3, 7):
-            # For Python 3.7 and above
-            text = {
-                'text': True
-            }
-        else:
-            # For Python 3.6 and below
-            text = {
-                'universal_newlines': True
-            }
+        run_process(command, custom_env, return_output)
 
-        # Use subprocess.Popen to forward output directly
-        logger.info(f"Running ansible playbook...\n{command}")
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            **text,
-            env=custom_env
-        )
+def run_process(command: list, custom_env: dict, return_output: bool = False):
+    # Determine the appropriate arguments based on the Python version
+    if sys.version_info >= (3, 7):
+        # For Python 3.7 and above
+        text = {
+            'text': True
+        }
+    else:
+        # For Python 3.6 and below
+        text = {
+            'universal_newlines': True
+        }
 
-        if (return_output):
-            # Capture the output and error streams
-            stdout, stderr = process.communicate()
-            return stdout, stderr, process.returncode
+    # Use subprocess.Popen to forward output directly
+    logger.info(f"Running ansible playbook...\n{command}")
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **text,
+        env=custom_env
+    )
 
-        # logger.info output in real-time
-        for line in iter(process.stdout.readline, ''):
-            logger.debug(line.strip())  # Print each line as it is output
+    if (return_output):
+        # Capture the output and error streams
+        stdout, stderr = process.communicate()
+        return stdout, stderr, process.returncode
 
-        # Ensure all stderr is also handled
-        for line in iter(process.stderr.readline, ''):
-            logger.debug(line.strip())
+    # logger.info output in real-time
+    for line in iter(process.stdout.readline, ''):
+        logger.debug(line.strip())  # Print each line as it is output
 
-        process.stdout.close()
-        process.stderr.close()
-        return_code = process.wait()
-        return return_code
+    # Ensure all stderr is also handled
+    for line in iter(process.stderr.readline, ''):
+        logger.debug(line.strip())
+
+    process.stdout.close()
+    process.stderr.close()
+    return_code = process.wait()
+    return return_code

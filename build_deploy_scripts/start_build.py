@@ -1,8 +1,9 @@
+import sys
 import yaml
 import os
 import subprocess
 import requests
-from ansible_api import run_ansible_playbook
+from ansible_api import run_ansible_playbook, run_process
 from artifact_api import ArtifactApi
 from start_test import Test
 from logger_setup import setup_logger, switch_log_file
@@ -20,6 +21,10 @@ from logger_setup import setup_logger, switch_log_file
 
 # 4) Then run the function in start_test.py
     # 4.1) Which will look into certain directories and run those tests
+
+# Define exit codes
+EXIT_SUCCESS = 0
+EXIT_BUILD_FAILURE = 1
 
 class Build(object):
     def __init__(self):
@@ -176,33 +181,26 @@ endif"""
             file.writelines(lines)
 
     def run_build(self, config_yaml: dict):
-        error_in_build = False
         build_method = config_yaml['build']
         logger.info("Build environment:")
         logger.debug("self.env=" + str(self.env))
         logger.info("Running Build:")
         if build_method.endswith('.sh'): # Run the repo-defined build-script
             build_script = './' + config_yaml['build']
-            try: # Used check_output() instead of run() since check_output is since py3.1 and run is 3.5
-                build_output_bytes = subprocess.check_output(['sh', build_script], stderr=subprocess.STDOUT, env=self.env)
-            except subprocess.CalledProcessError as e:
-                build_output_bytes = e.output
-                error_in_build = True
-        else: # Run the build command
-            try:
-                build_output_bytes = subprocess.check_output([build_method], stderr=subprocess.STDOUT, env=self.env)
-            except subprocess.CalledProcessError as e:
-                build_output_bytes = e.output
-                error_in_build = True
+            command = ['sh', build_script]
+        else:  # Run the build command
+            command = [build_method]
+            
+        return_code = run_process(command, self.env)
 
-        build_output = build_output_bytes.decode("utf-8")
-        logger.info(build_output)
+PATRICK - left off here - you made changes to start_build.py to fix the r
+eturn error if error in build, and now it shows failed status if build fails. Good! but havent pushed c
+hanges yet, make an issue on BuildSystem and push those changes. You also made the build live output
 
-        # Create build results
-        # module from python might work too, then its for rocky9 rhel8/7.
-        # test deployment again since altered ansible api, then test build this section specifically
-        if (error_in_build):
-            logger.info("Error in the build")
+
+        if (return_code != 0):
+            logger.info("Build process FAILED!")
+            sys.exit(EXIT_BUILD_FAILURE)
         else:
             user_src_repo = self.source_dir
             playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
@@ -270,3 +268,4 @@ if __name__ == "__main__":
     
     # 7)  Done
     logger.info("Remote build finished.")
+    sys.exit(EXIT_SUCCESS)
