@@ -86,27 +86,52 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
 
 def get_remote_build_log(build_id: str, verbose: bool=False):
     request = Request()
-    status = "PENDING"
-    seen_ids = set()
     click.echo(f"== ADBS == Retrieving build log for {build_id}...\n")
-    while(status == "PENDING" or status == "IN_PROGRESS"):
-        time.sleep(1)  # Loop every second
-
-        # API call to get the status
-        request.set_endpoint(f"build/{build_id}")
-        results = request.get_request(log=verbose).json()['payload']
-        status = results['buildStatus']
-
+    
+    # 1) See if build is already completed, if so then get the log
+    # API call to get the status
+    request.set_endpoint(f"build/{build_id}")
+    results = request.get_request(log=verbose).json()['payload']
+    status = results['buildStatus']
+    if (status != "PENDING" and status != "IN_PROGRESS"):
         # API call to get the log
         request.set_endpoint(f"build/{build_id}/log")
         results = request.get_request(log=verbose).json()['payload']
 
         for build_log in results:
-            log_id = build_log['id']
-            if log_id not in seen_ids:
-                click.echo(f"{build_log['log']}")
-                seen_ids.add(log_id)
+            click.echo(f"{build_log['log']}")
+        return
 
+    # 2) Otherwise do a livestream of the log
+    request = Request()
+    request.set_endpoint(f"build/{build_id}/log/tail")
+    response = request.get_streaming_request(log=verbose)
+    try:
+        response.raise_for_status()
+            
+        for line in response.iter_lines(chunk_size=8192):
+            if line:
+                try:
+                    line_str = line.decode('utf-8')
+                    if verbose:
+                        click.echo(f"Decoded line: {line_str}")
+                        
+                    log_entry = json.loads(line_str)
+
+                    click.echo(log_entry['log'])
+
+                except json.JSONDecodeError as e:
+                    if verbose:
+                        click.echo(f"JSON decode error: {e}")
+                        click.echo(f"Failed to parse JSON from line: {line.decode('utf-8', errors='replace')}")
+                except Exception as e:
+                    if verbose:
+                        click.echo(f"Error processing line: {e}")
+    
+    except Exception as e:
+        click.echo(f"Error retrieving build log: {e}")
+    
+    click.echo(f"\n== ADBS == Build log retrieval completed for {build_id}")
 
 @click.command()
 def configure_user():
@@ -131,6 +156,7 @@ def configure_user():
         
         # Content to write
         write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
+export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"
 eval "$(_BS_COMPLETE=bash_source bs)"
 """
         # Write to sw_factory.conf
@@ -358,8 +384,8 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
             # manifest_data = f"'{manifest_data}'"
             user_src_repo_bind = user_src_repo + ":" + user_src_repo
             dependencies_bind = "/sdf/sw/:/sdf/sw/"
-            build_system_bind = "/sdf/group/ad/eed/ad-build/registry/BuildSystem/:/sdf/group/ad/eed/ad-build/registry/BuildSystem/"
-            build_command = ["apptainer", "exec", "--bind", build_system_bind, "--bind", user_src_repo_bind, "--bind", 
+            afs_dependencies_bind = "/afs/:/afs/"
+            build_command = ["apptainer", "exec", "--bind", afs_dependencies_bind, "--bind", user_src_repo_bind, "--bind", 
                             dependencies_bind, build_img, "python3", "/build/local_build.py",
                             manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
             run_process_real_time(build_command)

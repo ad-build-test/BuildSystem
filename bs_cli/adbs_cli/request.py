@@ -13,8 +13,9 @@ class Request(object):
         self.linux_uname = cli_configuration["linux_uname"]
         self.github_uname = cli_configuration["github_uname"]
         self.params = {}
-        self.headers = {"linux_username": self.linux_uname,
-                            "github_username": self.github_uname }
+        # X - meaning non-standard headers
+        self.headers = {"X-adbs-linux-user": self.linux_uname,
+                        "X-adbs-github-user": self.github_uname }
         self.payload = {}
         self.component = component
         self.response = {}
@@ -43,14 +44,14 @@ class Request(object):
         self.component.set_component_field_logic("branch")
 
     def log_request_response(self):
-        logging.info(self.response.status_code)
         try:
+            logging.info(self.response.status_code)
             logging.info(self.response.json())
+            logging.info(self.response.request.url)
+            logging.info(self.response.request.body)
+            logging.info(self.response.request.headers)
         except Exception as e:
-            logging.info("response json not available")
-        logging.info(self.response.request.url)
-        logging.info(self.response.request.body)
-        logging.info(self.response.request.headers)
+            logging.info(f"Error printing response: {e}")
 
     def post_request(self, log: bool, msg: str=None)-> requests.Response:
         return self.send_request("POST", log, msg)
@@ -63,6 +64,18 @@ class Request(object):
     
     def delete_request(self, log: bool, msg: str=None) -> requests.Response:
         return self.send_request("DELETE", log, msg)
+    
+    def get_streaming_request(self, log: bool, msg: str=None) -> requests.Response:
+        """Make a GET request with streaming enabled."""
+        self.headers['Accept'] = 'application/x-ndjson'
+        self.headers['Connection'] = 'keep-alive'
+
+        self.log_request(log, msg)
+
+        return requests.get(self.url + self.endpoint, 
+                        params=self.params, 
+                        headers=self.headers, 
+                        stream=True)
     
     def send_request(self, request_type: str, log: bool, msg) -> requests.Response:
         """Generalized function for GET, POST, and PUT requests."""
@@ -105,7 +118,10 @@ class Request(object):
         if (self.response.ok):
             print(f"== ADBS == SUCCESS: {msg} - {self.response.json()['payload']}")
         else:
-            print(f"== ADBS == FAIL: {msg} - {self.response.json()}")
+            try:
+                print(f"== ADBS == FAIL: {msg} - {self.response.json()}")
+            except:
+                print(f"== ADBS == Request failed: {msg} - {self.response} ")
 
                 
 
