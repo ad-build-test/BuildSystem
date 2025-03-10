@@ -3,6 +3,8 @@
 # How to build:
 # 1) Go to top of repo
 # 2) docker build --tag ghcr.io/ad-build-test/rocky9-env:latest -f build_envs/rocky9_env/Dockerfile .
+# 3) Please remember to update apptainer as well at /sdf/group/ad/eed/ad-build/registry/rocky9-env
+
 FROM rockylinux:9
 
 # update
