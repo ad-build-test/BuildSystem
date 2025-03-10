@@ -8,23 +8,18 @@ from artifact_api import ArtifactApi
 from start_test import Test
 from logger_setup import setup_logger, switch_log_file
 
-# Flow
-# 1) Parse the contents of /config/build_config.json
-    
-# 2) Using the ADBS_COMPONENT and ADBS_BRANCH from build_config.json,
-#     look into /mnt and find the src code dir
-
-# 3) Then depending on the ADBS_BUILD_COMMAND
-    # 3.1) if name of script, then run the script
-    # 3.2) if ...
-    # 3...)
-
-# 4) Then run the function in start_test.py
-    # 4.1) Which will look into certain directories and run those tests
-
 # Define exit codes
 EXIT_SUCCESS = 0
 EXIT_BUILD_FAILURE = 1
+
+# Initialize a default logger that will be replaced when setup_logger is called
+logger = None
+
+# Export this function to set up the logger
+def initialize_logger(log_file_path):
+    global logger
+    logger = setup_logger(log_file_path)
+    return logger
 
 class Build(object):
     def __init__(self):
@@ -180,10 +175,11 @@ endif"""
         with open(file_path, 'w') as file:
             file.writelines(lines)
 
-    def run_build(self, config_yaml: dict):
+    def run_build(self, config_yaml: dict, verbose: bool=False):
         build_method = config_yaml['build']
-        logger.info("Build environment:")
-        logger.debug("self.env=" + str(self.env))
+        if (verbose):
+            logger.debug("Build environment:")
+            logger.debug("self.env=" + str(self.env))
         logger.info("Running Build:")
         if build_method.endswith('.sh'): # Run the repo-defined build-script
             build_script = './' + config_yaml['build']
@@ -249,7 +245,7 @@ if __name__ == "__main__":
     # 3) Install python packages (if applicable)
     py_pkgs_file = build.install_python_packages(config_yaml)
     # 4) Run repo build script
-    build.run_build(config_yaml)
+    build.run_build(config_yaml, verbose=True)
     # 5) Run unit_tests
     switch_log_file(build.source_dir + '/tests.log')
     test = Test()

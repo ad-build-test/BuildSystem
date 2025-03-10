@@ -4,7 +4,8 @@
 # How to build:
 # 1) Go to top of repo
 # 2) docker build --tag ghcr.io/ad-build-test/rhel7-env:latest -f build_envs/rhel7_env/Dockerfile .
-# TODO: update the install to use just one RUN command and a bunch of /'s'
+# 3) Please remember to update apptainer as well at /sdf/group/ad/eed/ad-build/registry/rhel7-env
+
 FROM registry.access.redhat.com/ubi7/ubi
 
 # update

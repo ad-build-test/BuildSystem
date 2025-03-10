@@ -90,17 +90,17 @@ def get_remote_build_log(build_id: str, verbose: bool=False):
     
     # 1) See if build is already completed, if so then get the log
     # API call to get the status
-    request.set_endpoint(f"build/{build_id}")
-    results = request.get_request(log=verbose).json()['payload']
-    status = results['buildStatus']
-    if (status != "PENDING" and status != "IN_PROGRESS"):
-        # API call to get the log
-        request.set_endpoint(f"build/{build_id}/log")
-        results = request.get_request(log=verbose).json()['payload']
+    # request.set_endpoint(f"build/{build_id}")
+    # results = request.get_request(log=verbose).json()['payload']
+    # status = results['buildStatus']
+    # if (status != "PENDING" and status != "IN_PROGRESS"):
+    #     # API call to get the log
+    #     request.set_endpoint(f"build/{build_id}/log")
+    #     results = request.get_request(log=verbose).json()['payload']
 
-        for build_log in results:
-            click.echo(f"{build_log['log']}")
-        return
+    #     for build_log in results:
+    #         click.echo(f"{build_log['log']}")
+    #     return
 
     # 2) Otherwise do a livestream of the log
     request = Request()
@@ -385,8 +385,9 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
             user_src_repo_bind = user_src_repo + ":" + user_src_repo
             dependencies_bind = "/sdf/sw/:/sdf/sw/"
             afs_dependencies_bind = "/afs/:/afs/"
-            build_command = ["apptainer", "exec", "--bind", afs_dependencies_bind, "--bind", user_src_repo_bind, "--bind", 
-                            dependencies_bind, build_img, "python3", "/build/local_build.py",
+            ad_group_bind = "/sdf/group/ad/:/mnt/"
+            build_command = ["apptainer", "exec", "--writable-tmpfs", "--bind", afs_dependencies_bind, "--bind", user_src_repo_bind, "--bind", 
+                            dependencies_bind, "--bind", ad_group_bind, build_img, "python3", "/build/local_build.py",
                             manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
             run_process_real_time(build_command)
 
