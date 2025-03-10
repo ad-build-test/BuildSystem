@@ -194,11 +194,28 @@ endif"""
             logger.debug("Build environment:")
             logger.debug("self.env=" + str(self.env))
         logger.info("Running Build:")
-        if build_method.endswith('.sh'): # Run the repo-defined build-script
+        # Create a shell command string that sources the environment and runs the build
+
+
+        # TODO: We got a problem
+        # 1) Essentially if you source the dev enviornment in dev-rhel9 theres some 
+        # os eval going on in there where it now recognizes you are in a rhel9 os,
+        # and it will try to build for rhel9, even if you started your rhel7 container.
+        # And creates an error when trying to build locally. 
+        # 2) But for a remote build, if you sourced the dev environment and build, there are no 
+        # issues. 
+
+
+        if build_method.endswith('.sh'):
+            # For shell script builds
             build_script = './' + config_yaml['build']
-            command = ['sh', build_script]
-        else:  # Run the build command
-            command = [build_method]
+            shell_command = f"source {self.init_script} && sh {build_script}"
+        else:
+            # For direct command builds
+            shell_command = f"source {self.init_script} && {build_method}"
+        
+        # Run the combined command through bash
+        command = ['bash', '-c', shell_command]
             
         return_code = run_process(command, self.env)
 
