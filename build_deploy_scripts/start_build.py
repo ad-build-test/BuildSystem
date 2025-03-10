@@ -36,7 +36,20 @@ class Build(object):
         return yaml_data
 
     def get_environment(self):
-        # 0) Get environment variables - assuming we're not using a configMap
+        # 0) Source dev environment 
+        # Path to the mounted script
+        init_script = "/afs/slac/g/lcls/tools/script/ENVS64.bash"
+        self.env = os.environ.copy()
+        
+        if os.path.exists(init_script):
+            logger.info(f"Sourcing dev env script: {init_script}")
+            command = ['sh', init_script]
+            stdout, stderr, return_code = run_process(command, self.env, return_output=True)
+            logger.info(f"Source dev env script return code: {return_code}")
+        else:
+            print(f"No initialization script found at {init_script}")
+
+        # 1) Get environment variables - assuming we're not using a configMap
         self.os_env = os.getenv("ADBS_OS_ENVIRONMENT") # From backend
         self.build_type = os.getenv('ADBS_BUILD_TYPE') # From CLI - Either 'normal' or 'container'
         self.source_dir = os.getenv('ADBS_SOURCE') # From backend - This is full filepath, like /mnt/eed/ad-build/scratch/component-a-branch1-RHEL8-66c4e8cb1dabd45f50f3112f/component-a
