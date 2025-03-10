@@ -8,8 +8,8 @@ class Api(str, Enum):
     DEPLOYMENT = 'deployment_controller'
 
 cli_configuration = {
-    "server_url": "https://ad-build.slac.stanford.edu/api/cbs/v1/",
-    "deployment_controller_url": "https://ad-build.slac.stanford.edu/api/deployment/",
+    "server_url": "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/",
+    "deployment_controller_url": "https://ad-build-dev.slac.stanford.edu/api/deployment/",
     "build_system_filepath": "/sdf/group/ad/eed/ad-build/registry/BuildSystem/", # TODO: Temporarily spot
     "build_images_filepath": "/sdf/group/ad/eed/ad-build/registry/"
 }
