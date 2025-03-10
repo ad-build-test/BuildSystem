@@ -25,6 +25,7 @@ def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
             # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
             command += ['--extra-vars', extra_vars]
 
+        logger.info(f"Running ansible playbook...\n{command}")
         run_process(command, custom_env, return_output)
 
 def run_process(command: list, custom_env: dict, return_output: bool = False):
@@ -41,7 +42,6 @@ def run_process(command: list, custom_env: dict, return_output: bool = False):
         }
 
     # Use subprocess.Popen to forward output directly
-    logger.info(f"Running ansible playbook...\n{command}")
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
