@@ -154,7 +154,6 @@ def configure_user():
     # Content to write
     write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
 export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"
-eval "$(_BS_COMPLETE=bash_source bs)"
 """
     auto_complete_script = """
 _bs_completion() {
