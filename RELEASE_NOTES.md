@@ -1,0 +1,10 @@
+# RELEASE_NOTES
+
+Release notes for the AD Build System (Software Factory)
+
+## Releases:
+* tag:1.0.1b0 11-Mar-2025 P. Nisperos (pnispero)
+  * Bug fix for cli autocomplete
+
+* tag:1.0.0b0 10-Mar-2025 P. Nisperos (pnispero)
+  * Beta release
