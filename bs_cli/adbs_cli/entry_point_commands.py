@@ -212,8 +212,6 @@ def generate_config():
     org_name = input(INPUT_PREFIX + "Specify name of org: ")
     description = input(INPUT_PREFIX + "Specify repo description: ")
     build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
-    if (build_command == None):
-        build_command = 'n/a'
     question = [
     inquirer.List(
         "issueTracker",
@@ -259,8 +257,11 @@ environments:
 # [Optional] 
 # Build method for building the component
 # Can be a simple command like 'make'
-build: {build_command}
 """
+    if (build_command == ""):
+        content += "# build: \n"
+    else:
+        content += f"build: {build_command}\n"
 
     # Generate full filepath
     filepath = os.path.join(top_level, 'config.yaml')

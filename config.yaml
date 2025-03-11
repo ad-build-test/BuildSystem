@@ -20,4 +20,4 @@ environments:
 # [Optional] 
 # Build method for building the component
 # Can be a simple command like 'make'
-build: 
+# build: 
