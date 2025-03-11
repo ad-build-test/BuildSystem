@@ -258,7 +258,8 @@ if __name__ == "__main__":
     # 3) Install python packages (if applicable)
     py_pkgs_file = build.install_python_packages(config_yaml)
     # 4) Run repo build script
-    build.run_build(config_yaml, verbose=True)
+    if ("build" in config_yaml):
+        build.run_build(config_yaml, verbose=True)
     # 5) Run unit_tests
     switch_log_file(build.source_dir + '/tests.log')
     test = Test()
