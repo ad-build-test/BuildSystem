@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
     os.chdir(build.source_dir)
     build.root_dir = os.path.dirname(build.source_dir)
-    logger = setup_logger(build.source_dir + '/build.log')
+    logger = initialize_logger(build.source_dir + '/build.log')
     logger.info("Current dir: " + str(os.getcwd()))
     logger.info("Root dir: " + build.root_dir)
     # 2) Parse yaml
