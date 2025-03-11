@@ -136,35 +136,63 @@ def get_remote_build_log(build_id: str, verbose: bool=False):
 @click.command()
 def configure_user():
     """Configure user to authorize commands"""
-    linux_uname = os.environ.get('USER')
-    # get github name from environment as well, if not then prompt user
-    github_uname = os.environ.get('AD_BUILD_GH_USER')
-    if github_uname:
-        click.echo('CLI already configured.')
-    else:
-        github_uname = input('What is your github username? ')
-        
-        # Create the ~/.profile.d directory if it doesn't exist
-        profile_d_dir = os.path.expanduser("~/.profile.d")
-        if (not os.path.exists(profile_d_dir)):
-            click.echo("== ADBS == Error ~/.profile.d does not exist. Ensure you are on dev server")
-            return
-        # os.makedirs(profile_d_dir, exist_ok=True)
-        
-        # Path to the sw_factory.conf file
-        conf_file = os.path.join(profile_d_dir, "sw_factory.conf")
-        
-        # Content to write
-        write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
+    # Create the ~/.profile.d directory if it doesn't exist
+    profile_d_dir = os.path.expanduser("~/.profile.d")
+    if (not os.path.exists(profile_d_dir)):
+        click.echo("== ADBS == Error ~/.profile.d does not exist. Ensure you are on dev server")
+        return
+    
+    # Path to the sw_factory.conf file
+    conf_file = os.path.join(profile_d_dir, "sw_factory.conf")
+
+    # Reset the sw_factory.conf if it already exists
+    if os.path.exists(conf_file):
+        os.remove(conf_file)
+
+    github_uname = input(f"{INPUT_PREFIX}Specify github username: ")
+
+    # Content to write
+    write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
 export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"
 eval "$(_BS_COMPLETE=bash_source bs)"
 """
-        # Write to sw_factory.conf
-        with open(conf_file, "a") as outfile:
-            outfile.write(write_env)
-        
-        click.echo(f"** Successfully added to {conf_file} **")
-        click.echo("Please source this file or reload your shell to apply changes.")
+    auto_complete_script = """
+_bs_completion() {
+local IFS=$'\n'
+local response
+
+response=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _BS_COMPLETE=bash_complete $1)
+
+for completion in $response; do
+    IFS=',' read type value <<< "$completion"
+
+    if [[ $type == 'dir' ]]; then
+        COMPREPLY=()
+        compopt -o dirnames
+    elif [[ $type == 'file' ]]; then
+        COMPREPLY=()
+        compopt -o default
+    elif [[ $type == 'plain' ]]; then
+        COMPREPLY+=($value)
+    fi
+done
+
+return 0
+}
+
+_bs_completion_setup() {
+complete -o nosort -F _bs_completion bs
+}
+
+_bs_completion_setup;
+"""
+    write_env += auto_complete_script
+    # Write to sw_factory.conf
+    with open(conf_file, "a") as outfile:
+        outfile.write(write_env)
+    
+    click.echo(f"** Successfully added to {conf_file} **")
+    click.echo(f"Please source {conf_file} or reload your shell to apply changes.")
 
 @click.command()
 def generate_config():
