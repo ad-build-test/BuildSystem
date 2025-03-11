@@ -42,10 +42,10 @@ class Build(object):
         self.env = os.environ.copy()
         
         if os.path.exists(init_script):
-            logger.info(f"Sourcing dev env script: {init_script}")
+            print(f"Sourcing dev env script: {init_script}")
             command = ['sh', init_script]
             stdout, stderr, return_code = run_process(command, self.env, return_output=True)
-            logger.info(f"Source dev env script return code: {return_code}")
+            print(f"Source dev env script return code: {return_code}")
         else:
             print(f"No initialization script found at {init_script}")
 
