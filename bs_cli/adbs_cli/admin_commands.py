@@ -22,9 +22,9 @@ def admin():
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def add_repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, verbose: bool=False):
     """Add a component to the component database"""
-    component = component.lower()
     request = Request(Component(component))
     request.set_endpoint('component')
+    print(request.component.name)
     request.add_to_payload("name", request.component.name)
     request.add_to_payload("description", desc)
     request.add_to_payload("testingCriteria", testing_criteria)
@@ -60,7 +60,7 @@ def add_repo(component: str, organization: str, testing_criteria: str, approval_
 
     # Add the main branch automatically
     request = Request(Component(component))
-    endpoint = 'component/' + component + '/branch'
+    endpoint = 'component/' + request.component.name.lower() + '/branch'
     request.set_endpoint(endpoint)
     request.add_to_payload("type", "branch")
     request.add_to_payload("branchName", "main")
