@@ -73,7 +73,7 @@ class Component(object):
         git_root = self.git_repo.git.rev_parse("--show-toplevel")
         repo_name = os.path.splitext(os.path.basename(git_root))[0]
         branch_name = self.git_repo.active_branch.name
-        self.name = repo_name
+        self.name = repo_name.lower()
         self.branch_name = branch_name
         return True
 
@@ -81,13 +81,13 @@ class Component(object):
         AutoComplete.set_auto_complete_vals("component")
         if (not prompt):
             prompt = 'What is the component name? (<tab>-complete) '
-        self.name = input(prompt)
+        self.name = input(prompt).lower()
 
     def prompt_branch_name(self, prompt: str=None):
         AutoComplete.set_auto_complete_vals("branch")
         if (not prompt):
             prompt = 'What is the branch name? (<tab>-complete) '
-        self.branch_name = input(prompt)
+        self.branch_name = input(prompt).lower()
 
     # logic does 3 seperate steps to set a field
     def set_component_field_logic(self, field: str):

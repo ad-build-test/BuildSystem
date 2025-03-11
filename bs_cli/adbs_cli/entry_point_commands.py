@@ -154,7 +154,6 @@ def configure_user():
     # Content to write
     write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
 export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"
-eval "$(_BS_COMPLETE=bash_source bs)"
 """
     auto_complete_script = """
 _bs_completion() {
@@ -213,8 +212,6 @@ def generate_config():
     org_name = input(INPUT_PREFIX + "Specify name of org: ")
     description = input(INPUT_PREFIX + "Specify repo description: ")
     build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
-    if (build_command == None):
-        build_command = 'n/a'
     question = [
     inquirer.List(
         "issueTracker",
@@ -260,8 +257,11 @@ environments:
 # [Optional] 
 # Build method for building the component
 # Can be a simple command like 'make'
-build: {build_command}
 """
+    if (build_command == ""):
+        content += "# build: \n"
+    else:
+        content += f"build: {build_command}\n"
 
     # Generate full filepath
     filepath = os.path.join(top_level, 'config.yaml')

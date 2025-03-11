@@ -26,7 +26,7 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
     if (not component_obj.set_cur_dir_component()):
         click.echo('fatal: not a git repository (or any of the parent directories)')
         return
-
+    
     # 2) See if branch, tag, committ option filled out, or prompt user
     branches = component_obj.git_get_branches()
     tags = component_obj.git_get_tags()
@@ -57,7 +57,7 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
     else:
         # Change prompt if adding an existing branch
         if (add):
-            prompt_branch_from = "Specify branch point you branched off of (skip if main)"
+            prompt_branch_from = "Specify branch point you branched off of"
         else:
             prompt_branch_from = "Specify what to branch from"
 

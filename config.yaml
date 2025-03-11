@@ -1,0 +1,23 @@
+# [Required]
+# Basic component information
+repo: BuildSystem
+organization: ad-build-test
+url: https://github.com/ad-build-test/BuildSystem
+description: BuildSystem (Software Factory) repo
+
+# [Required]
+# Continous integration
+approvalRule: all
+testingCriteria: all
+issueTracker: jira
+jiraProjectKey: EEDSWCM
+
+# [Required]
+# Environments this app runs on
+environments:
+   - ROCKY9
+
+# [Optional] 
+# Build method for building the component
+# Can be a simple command like 'make'
+# build: 

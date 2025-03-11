@@ -42,10 +42,10 @@ class Build(object):
         self.env = os.environ.copy()
         
         if os.path.exists(init_script):
-            logger.info(f"Sourcing dev env script: {init_script}")
+            print(f"Sourcing dev env script: {init_script}")
             command = ['sh', init_script]
             stdout, stderr, return_code = run_process(command, self.env, return_output=True)
-            logger.info(f"Source dev env script return code: {return_code}")
+            print(f"Source dev env script return code: {return_code}")
         else:
             print(f"No initialization script found at {init_script}")
 
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # ex: /mnt/eed/ad-build/scratch/test-ioc-main-pnispero/test-ioc-main
     os.chdir(build.source_dir)
     build.root_dir = os.path.dirname(build.source_dir)
-    logger = setup_logger(build.source_dir + '/build.log')
+    logger = initialize_logger(build.source_dir + '/build.log')
     logger.info("Current dir: " + str(os.getcwd()))
     logger.info("Root dir: " + build.root_dir)
     # 2) Parse yaml
@@ -258,7 +258,8 @@ if __name__ == "__main__":
     # 3) Install python packages (if applicable)
     py_pkgs_file = build.install_python_packages(config_yaml)
     # 4) Run repo build script
-    build.run_build(config_yaml, verbose=True)
+    if ("build" in config_yaml):
+        build.run_build(config_yaml, verbose=True)
     # 5) Run unit_tests
     switch_log_file(build.source_dir + '/tests.log')
     test = Test()
