@@ -226,8 +226,8 @@ def generate_config():
     question = [
     inquirer.Checkbox(
         "buildOs",
-        message="What are the operating systems this app runs on? (Arrow keys for selection, enter if done)",
-        choices=["ROCKY9", "UBUNTU", "RHEL8", "RHEL7", "RHEL6", "RHEL5"],
+        message="What are the operating systems this app runs on?",
+        choices=["ROCKY9", "RHEL7", "RHEL6", "RHEL5"],
         default=[],
         ),
     ]
@@ -515,7 +515,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     click.echo("== ADBS == At the moment, deployment only for IOCs is supported")
     question = [inquirer.Checkbox(
                 "facility",
-                message="What facilities to deploy to? (Arrow keys for selection, enter if done)",
+                message="What facilities to deploy to?",
                 choices=["DEV", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]

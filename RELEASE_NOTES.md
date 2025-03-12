@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.3b0 11-Mar-2025 P. Nisperos (pnispero)
+  * Bug fix for repos with camelCase
+
 * tag:1.0.2b0 11-Mar-2025 P. Nisperos (pnispero)
   * Patch for cli autocomplete
 

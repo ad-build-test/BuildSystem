@@ -98,7 +98,7 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
             click.echo('Successfully created branch: ' + full_branch_name)
 
     # 5) Write to database
-    endpoint = 'component/' + component_obj.name + '/branch'
+    endpoint = 'component/' + component_obj.name.lower() + '/branch'
     request.set_endpoint(endpoint)
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)

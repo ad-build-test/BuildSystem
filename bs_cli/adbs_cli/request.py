@@ -39,15 +39,9 @@ class Request(object):
     
     def set_component_name(self):
         self.component.set_component_field_logic("name")
-        # Lowercase component name
-        if (self.component.name):
-            self.component.name = self.component.name.lower()
 
     def set_component_branch_name(self):
         self.component.set_component_field_logic("branch")
-        # Lowercase branch name
-        if (self.component.branch_name):
-            self.component.branch_name = self.component.branch_name.lower()
 
     def log_request_response(self):
         try:
