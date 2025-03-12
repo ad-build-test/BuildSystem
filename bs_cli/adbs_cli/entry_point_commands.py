@@ -87,22 +87,8 @@ def run_ansible_playbook(inventory, playbook, host_pattern, extra_vars):
 def get_remote_build_log(build_id: str, verbose: bool=False):
     request = Request()
     click.echo(f"== ADBS == Retrieving build log for {build_id}...\n")
-    
-    # 1) See if build is already completed, if so then get the log
-    # API call to get the status
-    # request.set_endpoint(f"build/{build_id}")
-    # results = request.get_request(log=verbose).json()['payload']
-    # status = results['buildStatus']
-    # if (status != "PENDING" and status != "IN_PROGRESS"):
-    #     # API call to get the log
-    #     request.set_endpoint(f"build/{build_id}/log")
-    #     results = request.get_request(log=verbose).json()['payload']
 
-    #     for build_log in results:
-    #         click.echo(f"{build_log['log']}")
-    #     return
-
-    # 2) Otherwise do a livestream of the log
+    # 2) Get the log, if live then stream, otherwise compelete log will be returned
     request = Request()
     request.set_endpoint(f"build/{build_id}/log/tail")
     response = request.get_streaming_request(log=verbose)
@@ -232,7 +218,6 @@ def generate_config():
         ),
     ]
     build_os_list = inquirer.prompt(question)['buildOs']
-    click.echo(build_os_list)
 
     # Create the content
     content = f"""# [Required]

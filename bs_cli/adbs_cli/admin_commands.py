@@ -24,7 +24,6 @@ def add_repo(component: str, organization: str, testing_criteria: str, approval_
     """Add a component to the component database"""
     request = Request(Component(component))
     request.set_endpoint('component')
-    print(request.component.name)
     request.add_to_payload("name", request.component.name)
     request.add_to_payload("description", desc)
     request.add_to_payload("testingCriteria", testing_criteria)
