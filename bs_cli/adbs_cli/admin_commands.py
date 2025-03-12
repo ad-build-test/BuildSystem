@@ -42,8 +42,8 @@ def add_repo(component: str, organization: str, testing_criteria: str, approval_
     question = [
     inquirer.Checkbox(
         "buildOs",
-        message="What are the operating systems this app runs on? (Arrow keys for selection, enter if done)",
-        choices=["ROCKY9", "UBUNTU", "RHEL8", "RHEL7", "RHEL6", "RHEL5"],
+        message="What are the operating systems this app runs on?",
+        choices=["ROCKY9", "RHEL7", "RHEL6", "RHEL5"],
         default=[],
         ),
     ]
