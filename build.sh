@@ -40,6 +40,6 @@ mkdir -p "${RESULTS_DIR}"
 
 # Move built files to results directory
 echo "Moving build artifacts to results directory..."
-mv "${DIST_DIR}"/* "${RESULTS_DIR}/" || echo "No artifacts found to move."
+cp "${DIST_DIR}"/* "${RESULTS_DIR}/" || echo "No artifacts found to move."
 
 echo "Build complete! Results are in: ${RESULTS_DIR}"
