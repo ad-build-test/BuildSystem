@@ -4,7 +4,7 @@ Release notes for the AD Build System (Software Factory)
 
 ## Releases:
 * tag:1.0.5b0 13-Mar-2025 P. Nisperos (pnispero)
-  * Bug fix for local build
+  * Bug fix for local build, added build script for BuildSystem itself
   
 * tag:1.0.4b0 12-Mar-2025 P. Nisperos (pnispero)
   * Removed unnecessary prints from cli
