@@ -29,7 +29,7 @@ def parse_manifest(filename: str) -> dict:
     # Parse manifest - filepath is only here, so if ever need to change its only one location
     with open(filename, 'r') as file:
         yaml_data = yaml.safe_load(file)
-    logging.info(yaml_data)
+    # logging.info(yaml_data)
     return yaml_data
 
 def find_tarball(base_path):
@@ -45,7 +45,7 @@ def find_tarball(base_path):
 
 def run_process_real_time(command):
     # Use subprocess.Popen to forward output directly
-    click.echo(command)
+    # click.echo(command)
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -390,6 +390,7 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
         # 3) shell into the build environment, and run local_build() in there
         for build_os in build_os_list:
+            build_os = build_os.lower()
             click.echo(f"== ADBS == Building for architecture: {build_os}")
             if (build_os == "rocky9"):
                 build_os == "rhel9"
