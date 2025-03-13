@@ -2,12 +2,20 @@
 set -e  # Exit on error
 
 # Define paths
-ROOT_DIR="$(pwd)"  # Assuming we're starting at ~/BuildSystem
+ROOT_DIR="$(pwd)"
 CLI_DIR="${ROOT_DIR}/bs_cli"
 DIST_DIR="${CLI_DIR}/dist"
 RESULTS_DIR="${ROOT_DIR}/build_results"
 
 echo "Starting build process..."
+
+# Check if build module is available, install dependencies only if needed
+if ! python3 -c "import build" &>/dev/null; then
+    echo "Installing build dependencies..."
+    pip install --upgrade pip setuptools wheel build
+else
+    echo "Build dependencies already installed."
+fi
 
 # Navigate to CLI directory
 cd "${CLI_DIR}"
@@ -32,6 +40,6 @@ mkdir -p "${RESULTS_DIR}"
 
 # Move built files to results directory
 echo "Moving build artifacts to results directory..."
-mv "${DIST_DIR}"/* "${RESULTS_DIR}/"
+mv "${DIST_DIR}"/* "${RESULTS_DIR}/" || echo "No artifacts found to move."
 
 echo "Build complete! Results are in: ${RESULTS_DIR}"
