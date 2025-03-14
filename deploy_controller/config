@@ -7,7 +7,7 @@ Host s3dflogin.slac.stanford.edu
 
 # Configuration for s3df ad 
 Host ad
-    HostName ad
+    HostName dev-srv09
     StrictHostKeyChecking no
     User pnispero
     IdentityFile ~/.ssh/deployment_controller_s3df

@@ -34,6 +34,8 @@ ADD deploy_controller/config /home/adbuild/.ssh
 RUN chown -R 46487:1006 /app
 RUN chown -R 46487:1006 /home
 RUN chown -R 46487:1006 /home/adbuild/.ssh
+RUN mkdir /etc/ansible
+ADD deploy_controller/ansible.cfg /etc/ansible/
 
 # install requirements.txt
 RUN pip install -r /app/requirements.txt

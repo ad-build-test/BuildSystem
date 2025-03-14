@@ -564,6 +564,6 @@ f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.t
         return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=120)
-    # timeout_keep_alive set to 120 seconds, in case deployment takes longer than usual
+    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=180)
+    # timeout_keep_alive set to 180 seconds, in case deployment takes longer than usual
     # deployment_controller refers to file, and app is the app=fastapi()
