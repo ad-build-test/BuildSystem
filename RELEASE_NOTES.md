@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.6b0 13-Mar-2025 P. Nisperos (pnispero)
+  * Updated deployment controller with bug fixes with mount paths, ansible ssh pipelining. And more error checking in deployment cli.
+
 * tag:1.0.5b0 13-Mar-2025 P. Nisperos (pnispero)
   * Bug fix for local build, added build script for BuildSystem itself
   
