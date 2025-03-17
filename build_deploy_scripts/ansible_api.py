@@ -26,7 +26,7 @@ def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
             command += ['--extra-vars', extra_vars]
 
         logger.info(f"Running ansible playbook...\n{command}")
-        run_process(command, custom_env, return_output)
+        return run_process(command, custom_env, return_output)
 
 def run_process(command: list, custom_env: dict, return_output: bool = False):
     # Determine the appropriate arguments based on the Python version

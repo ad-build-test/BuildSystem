@@ -26,14 +26,14 @@ curl -X 'GET' 'https://ad-build-dev.slac.stanford.edu/api/deployment/' -H 'accep
 
 app = FastAPI(debug=False, title="Deployment_controller", version='1.0.0')
 logging.basicConfig(
-    level=logging.INFO, # TODO: Change this to NOTSET when use in production
+    level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
 ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
 SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
-BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
+BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 
@@ -281,8 +281,10 @@ def download_file_response(download_dir: str, file_name: str, response: requests
                 with tarfile.open(tarball_filepath, 'r:gz') as tar:
                     tar.extractall(path=download_dir)
                 logging.info(f'{tarball_filepath} extracted to {download_dir}')
+                return True
         else:
             logging.info('Failed to retrieve the file. Status code:', response.status_code)
+            return False
 
 def write_file(filepath: str, content: str):
     with open(filepath, 'w') as file:
@@ -403,7 +405,10 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     tarball = f'{ioc_to_deploy.tag}.tar.gz'
     response = requests.get(endpoint)
     logging.debug(f"Release download response: {response}")
-    download_file_response(APP_PATH, tarball, response, extract=True)
+    if (not download_file_response(APP_PATH, tarball, response, extract=True)):
+        # If download fail, then return that to user, either tag doesn't exist or
+        # backend is broken
+        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
     # Special case - if adding new deployment
     deploy_new_iocs = False
     new_iocs = []
@@ -476,7 +481,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
-    playbook_args_dict['playbook_path'] = ANSIBLE_PLAYBOOKS_PATH + '/ioc_module'
+    playbook_args_dict['playbook_path'] = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
     deployment_report_file = APP_PATH + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'

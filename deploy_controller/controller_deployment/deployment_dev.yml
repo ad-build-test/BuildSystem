@@ -53,7 +53,7 @@ spec:
             # try this next if uvicorn time out doesnt work. Could also be you need to setup 
             # keep-alive at the fastapi run command above
           limits:
-            memory: 3Gi
+            memory: 2Gi
             cpu: "2000m"
         volumeMounts:
         - name: s3df-dev-container-ad-group
