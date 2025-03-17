@@ -443,7 +443,6 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate iocs by comma, ex: dev,lcls")
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm] *not in use yet")
@@ -455,14 +454,14 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-n", "--new", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def deploy(component: str, branch: str, facility: str, type: str, test: bool,
+def deploy(component: str, facility: str, type: str, test: bool,
                 ioc: str, tag: str, list: bool, local: bool, revert: bool, new: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
     # 1) Set fields
-    deployment_request = Request(Component(component, branch), Api.DEPLOYMENT)    
-    deployment_request.set_component_fields()
+    deployment_request = Request(Component(component), Api.DEPLOYMENT)    
+    deployment_request.set_component_name()
 
     # 1.1) Option - test
     if (test):
@@ -483,6 +482,9 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         response = deployment_request.get_request(log=verbose)
         payload = response.json()['payload']
 
+        if (not response.ok):
+            click.echo(f"== ADBS == Error - {payload}")
+            return
         # Loop through the list of deployment entries (one for each facility if exists)
         for deployment in payload:
             # Extract the inner dictionary (assuming there's only one item at the top level)
@@ -517,7 +519,7 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
         click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
         return
     if (ioc.upper() == "ALL" and new):
-        click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component")
+        click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
         return
     # 3.1) Get facilities (if applicable)
     facilities = None
@@ -549,6 +551,10 @@ def deploy(component: str, branch: str, facility: str, type: str, test: bool,
     deployment_request.add_dict_to_payload(playbook_args_dict)
     click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
+    if (not response.ok):
+        payload = response.json()['payload']
+        click.echo(f"== ADBS == {payload}")
+        return
     # 5.1) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')

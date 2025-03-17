@@ -303,7 +303,7 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     """
     # 1) Return dictionary of information for an App
     # TODO: Change this to get every facility
-    error_msg = "== ADBS == ERROR - ioc not found, name or facility is wrong or missing."
+    error_msg = "IOC component not found in deployment database, name or facility is wrong or missing. Or it has never been deployed"
     facilities = FACILITIES
     component_info_list = []
     try:
@@ -414,7 +414,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     new_iocs = []
     deploy_new_component = False
     if (ioc_to_deploy.new):
-        # Ensure only one facility is specified (because deployments are specific to each facility)
+        # Ensure only one facility is specified (ex: bs deploy --ioc sioc-b34-test1 --facility DEV )
         if (len(ioc_to_deploy.facilities) == 1):
             # Check if deployment already exists
             component = find_component_in_facility(ioc_to_deploy.facilities[0], ioc_to_deploy.component_name)
@@ -535,6 +535,11 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             else:
                 update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility], ioc_to_deploy.new)
         add_log_to_component(facility, timestamp, ioc_to_deploy.user, ioc_to_deploy.component_name, current_output)
+    
+    # Error check - If deployment output is empty, then the component can't be found in deployment database
+    if (deployment_output == ""):
+        return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
+    
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
