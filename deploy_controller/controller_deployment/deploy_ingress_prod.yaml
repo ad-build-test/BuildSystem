@@ -5,8 +5,8 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/whitelist-source-range: 134.79.0.0/16,172.16.0.0/12
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120" 
-    # 120 seconds is max time to recieve a response from a request
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180" 
+    # 180 seconds is max time to recieve a response from a request
   labels:
     name: deployment-controller-ingress
 spec:

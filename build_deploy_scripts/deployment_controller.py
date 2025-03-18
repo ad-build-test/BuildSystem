@@ -26,14 +26,14 @@ curl -X 'GET' 'https://ad-build-dev.slac.stanford.edu/api/deployment/' -H 'accep
 
 app = FastAPI(debug=False, title="Deployment_controller", version='1.0.0')
 logging.basicConfig(
-    level=logging.INFO, # TODO: Change this to NOTSET when use in production
+    level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-ANSIBLE_PLAYBOOKS_PATH = "/mnt/eed/ad-build/build-system-playbooks/"
+ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
 INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
-SCRATCH_FILEPATH = "/mnt/eed/ad-build/scratch"
-BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
+SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
+BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 
@@ -281,8 +281,10 @@ def download_file_response(download_dir: str, file_name: str, response: requests
                 with tarfile.open(tarball_filepath, 'r:gz') as tar:
                     tar.extractall(path=download_dir)
                 logging.info(f'{tarball_filepath} extracted to {download_dir}')
+                return True
         else:
             logging.info('Failed to retrieve the file. Status code:', response.status_code)
+            return False
 
 def write_file(filepath: str, content: str):
     with open(filepath, 'w') as file:
@@ -301,7 +303,7 @@ async def get_ioc_component_info(ioc_request: BasicIoc):
     """
     # 1) Return dictionary of information for an App
     # TODO: Change this to get every facility
-    error_msg = "== ADBS == ERROR - ioc not found, name or facility is wrong or missing."
+    error_msg = "IOC component not found in deployment database, name or facility is wrong or missing. Or it has never been deployed"
     facilities = FACILITIES
     component_info_list = []
     try:
@@ -403,13 +405,16 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     tarball = f'{ioc_to_deploy.tag}.tar.gz'
     response = requests.get(endpoint)
     logging.debug(f"Release download response: {response}")
-    download_file_response(APP_PATH, tarball, response, extract=True)
+    if (not download_file_response(APP_PATH, tarball, response, extract=True)):
+        # If download fail, then return that to user, either tag doesn't exist or
+        # backend is broken
+        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
     # Special case - if adding new deployment
     deploy_new_iocs = False
     new_iocs = []
     deploy_new_component = False
     if (ioc_to_deploy.new):
-        # Ensure only one facility is specified (because deployments are specific to each facility)
+        # Ensure only one facility is specified (ex: bs deploy --ioc sioc-b34-test1 --facility DEV )
         if (len(ioc_to_deploy.facilities) == 1):
             # Check if deployment already exists
             component = find_component_in_facility(ioc_to_deploy.facilities[0], ioc_to_deploy.component_name)
@@ -476,7 +481,7 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['tarball'] = tarball_filepath
-    playbook_args_dict['playbook_path'] = ANSIBLE_PLAYBOOKS_PATH + '/ioc_module'
+    playbook_args_dict['playbook_path'] = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
     playbook_args_dict['user_src_repo'] = None
     status = 200
     deployment_report_file = APP_PATH + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
@@ -530,6 +535,11 @@ async def deploy_ioc(ioc_to_deploy: IocDict):
             else:
                 update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility], ioc_to_deploy.new)
         add_log_to_component(facility, timestamp, ioc_to_deploy.user, ioc_to_deploy.component_name, current_output)
+    
+    # Error check - If deployment output is empty, then the component can't be found in deployment database
+    if (deployment_output == ""):
+        return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
+    
     logging.info('Generating summary/report...')
     # 6) Generate summary for report
     timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
@@ -564,6 +574,6 @@ f"""#### Deployment report for {ioc_to_deploy.component_name} - {ioc_to_deploy.t
         return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=120)
-    # timeout_keep_alive set to 120 seconds, in case deployment takes longer than usual
+    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=180)
+    # timeout_keep_alive set to 180 seconds, in case deployment takes longer than usual
     # deployment_controller refers to file, and app is the app=fastapi()
