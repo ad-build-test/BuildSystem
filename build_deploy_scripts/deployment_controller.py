@@ -30,10 +30,10 @@ logging.basicConfig(
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
 ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
-INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'deployment_controller_inventory.ini'
+INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'global_inventory.ini'
 CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
-BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
+BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
 

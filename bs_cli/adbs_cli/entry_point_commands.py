@@ -218,6 +218,14 @@ def generate_config():
         ),
     ]
     build_os_list = inquirer.prompt(question)['buildOs']
+    question = [
+    inquirer.List(
+        "deploymentType",
+        message="What type of deployment will this app use?",
+        choices=["ioc", "hla", "tools", "matlab", "pydm"]
+        ),
+    ]
+    deployment_type = inquirer.prompt(question)['deploymentType']
 
     # Create the content
     content = f"""# [Required]
@@ -238,6 +246,11 @@ jiraProjectKey: {jira_project_key}
 # Environments this app runs on
 environments:
 {chr(10).join('   - ' + env for env in build_os_list)}
+
+# [Required]
+# Type of deployment
+# Types: [ioc, hla, tools, matlab, pydm]
+deploymentType: {deployment_type}
 
 # [Optional] 
 # Build method for building the component
@@ -451,11 +464,11 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
-@click.option("-n", "--new", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
+@click.option("-u", "--update-db", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, list: bool, local: bool, revert: bool, new: bool, verbose: bool):
+                ioc: str, tag: str, list: bool, local: bool, revert: bool, update_db: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -518,7 +531,7 @@ def deploy(component: str, facility: str, type: str, test: bool,
     if (facility and not ioc):
         click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
         return
-    if (ioc.upper() == "ALL" and new):
+    if (ioc.upper() == "ALL" and update_db):
         click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
         return
     # 3.1) Get facilities (if applicable)
@@ -538,16 +551,67 @@ def deploy(component: str, facility: str, type: str, test: bool,
         "tag": tag,
         "user": linux_uname,
         "ioc_list": ioc_list,
-        "new": new
+        "new": update_db
     }
 
-    # 5) If revert then send deployment revert request to deployment controller
+    # 5) Figure out what the deployment type is and set the endpoint accordingly
+    user_src_repo = deployment_request.component.git_get_top_dir()
+    manifest_filepath = user_src_repo + '/config.yaml'
+    deployment_type = parse_manifest(manifest_filepath)['deploymentType'].lower()
+
+    # 6) Error check - Confirm with database that every ioc found in the source tree is in the database.
+    if (deployment_type == 'ioc'): 
+        # 6.1) First check that user is in repo
+        if (not deployment_request.component.set_cur_dir_component()):
+            click.echo('fatal: not a git repository (or any of the parent directories)')
+            return
+        # 6.2) Get top of git dir
+        top_level = deployment_request.component.git_get_top_dir()
+        # 6.3) Enter iocBoot/ dir
+        ioc_boot_dir = os.path.join(top_level, 'iocBoot')
+        os.chdir(ioc_boot_dir)
+        # 6.4) get a list of all directories that start with ioc/eioc/sioc/vioc 
+        all_ioc_dirs = []
+        for item in os.listdir('.'):
+            if os.path.isdir(item) and (item.startswith('ioc') or 
+                                    item.startswith('eioc') or 
+                                    item.startswith('sioc') or 
+                                    item.startswith('vioc')):
+                all_ioc_dirs.append(item)
+        # 6.5) See if user applied "ALL" in their deployment
+        if (ioc.upper() == "ALL"):
+            iocs_in_db = [] 
+            for facility in ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]: # Get every ioc from each facility
+                active_deployment_request = Request(deployment_request.component.name)
+                active_deployment_request.set_endpoint(f"deployments/{deployment_request.component.name}/{facility}")
+                response = active_deployment_request.get_request(log=verbose)
+                if (not response.ok): # Skip if no ioc found in facility
+                    continue
+
+                payload = response.json()['payload']
+                # Extract IOCs from the dependsOn list in the payload
+                for entry in payload.get('dependsOn', []):
+                    iocs_in_db.append(entry.get('name'))
+
+            # 6.6) Find IOCs that are in our directory but not in the database
+            missing_iocs = [ioc for ioc in all_ioc_dirs if ioc not in iocs_in_db]
+            
+            if missing_iocs:
+                click.echo("== ADBS == The following IOCs are not in the deployment database:")
+                for ioc in missing_iocs:
+                    click.echo(f"  - {ioc}")
+                
+                if not click.confirm("Continue with deployment anyway? (If yes, then the above IOCs will not be deployed)"):
+                    click.echo("== ADBS == Please specify IOCs and deploy with '-u' to update database with new iocs.")
+                    return
+    
+    # 7) If revert then send deployment revert request to deployment controller
     if (revert):
         # TODO: Revert endpoint
-        deployment_request.set_endpoint('ioc/deployment/revert')
+        deployment_request.set_endpoint(deployment_type + '/deployment/revert')
     else:
-        # 5) Send deployment request to deployment controller
-        deployment_request.set_endpoint('ioc/deployment')
+        # 8) Send deployment request to deployment controller
+        deployment_request.set_endpoint(deployment_type + '/deployment')
     deployment_request.add_dict_to_payload(playbook_args_dict)
     click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
@@ -555,7 +619,7 @@ def deploy(component: str, facility: str, type: str, test: bool,
         payload = response.json()['payload']
         click.echo(f"== ADBS == {payload}")
         return
-    # 5.1) Prompt user if they want to download and view the report
+    # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')
     # Get the home directory of the current user

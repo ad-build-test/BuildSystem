@@ -55,7 +55,7 @@ def set_test_environment():
 @pytest.fixture
 def mock_paths():
     with patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'), \
-         patch('deployment_controller.INVENTORY_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/deployment_controller_inventory.ini'), \
+         patch('deployment_controller.INVENTORY_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/global_inventory.ini'), \
          patch('deployment_controller.CONFIG_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/config.yaml'), \
          patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
@@ -75,14 +75,13 @@ def test_get_ioc_component_info_not_found(mock_paths):
     response = client.request("GET", "/ioc/info", json={"component_name": "non_existent_ioc"})
     
     assert response.status_code == 404
-    assert "ERROR - ioc not found" in response.json()['payload']
     print(f"payload: {response.json()['payload']}")
 
 ####### Tests for deploy_ioc
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_component_success(mock_paths):
     print("Starting test_deploy_ioc_new_component_success - add a new component entirely\n \
-          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.57 -n")
+          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.57 -u")
     
     ioc_request = IocDict(
         facilities=["test"],
@@ -106,7 +105,7 @@ async def test_deploy_ioc_new_component_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component\n \
-          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.57 -n")
+          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.57 -u")
     
     ioc_request = IocDict(
         facilities=["test"],

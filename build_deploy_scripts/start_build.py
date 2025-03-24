@@ -212,7 +212,7 @@ endif"""
             ioc_playbooks_dir = os.path.join(self.ANSIBLE_PLAYBOOKS_PATH, 'ioc_module')
             return_code = run_ansible_playbook(self.ANSIBLE_PLAYBOOKS_PATH + '/global_inventory.ini',
                                     ioc_playbooks_dir + '/ioc_build.yml',
-                                    'S3DF',
+                                    'localhost',
                                     playbook_args,
                                     self.env)
             logger.info(f"Playbook execution finished with return code: {return_code}")

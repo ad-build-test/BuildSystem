@@ -73,7 +73,7 @@ class Component(object):
         git_root = self.git_repo.git.rev_parse("--show-toplevel")
         repo_name = os.path.splitext(os.path.basename(git_root))[0]
         branch_name = self.git_repo.active_branch.name
-        self.name = repo_name
+        self.name = repo_name.lower()
         self.branch_name = branch_name
         return True
 
