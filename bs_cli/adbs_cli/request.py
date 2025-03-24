@@ -2,7 +2,7 @@ from adbs_cli.cli_configuration import cli_configuration, Api
 from adbs_cli.component import Component
 import logging
 import requests
-
+import sys
 
 class Request(object):
     def __init__(self, component: Component=None, api: str=Api.BACKEND):
@@ -81,6 +81,7 @@ class Request(object):
     
     def send_request(self, request_type: str, log: bool, msg) -> requests.Response:
         """Generalized function for GET, POST, and PUT requests."""
+        self.test_server_connection()
         try:
             # Determine the request method and send the corresponding request
             if request_type == 'GET':
@@ -124,6 +125,20 @@ class Request(object):
                 print(f"== ADBS == FAIL: {msg} - {self.response.json()}")
             except:
                 print(f"== ADBS == Request failed: {msg} - {self.response} ")
+
+    def test_server_connection(self):
+        # Test to see if the backend is alive and well
+        test_endpoint = "echo/test/valid"
+        try:
+            response = requests.get(cli_configuration["server_url"] + test_endpoint)
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            sys.exit(1)
+
+        if (response.status_code == 503):
+            print("== ADBS == Software Factory server is down! Sorry - please contact admins.")
+            print(response.content)
+            sys.exit(1)
 
                 
 

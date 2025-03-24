@@ -35,6 +35,7 @@ def entry_point():
     """ Build System (Software Factory) CLI\n
     Docs: https://confluence.slac.stanford.edu/x/RoOTGg
     """
+    # This function gets called before any other cli command function
     linux_uname = os.environ.get('USER')
     github_uname = os.environ.get('AD_BUILD_GH_USER')
     # Set cli_configuration with linux_uname and gh_uname
