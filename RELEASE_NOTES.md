@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.1 27-Mar-2025 P. Nisperos (pnispero)
+  * Added ssh keys and edited configuration for deployment controller to point to adbuild user
+  * Added environment variable AD_BUILD_PROD for easy switching from dev to prod clusters
+
 * tag:1.0.0 24-Mar-2025 P. Nisperos (pnispero)
   * Added deployment type to a component's config.yaml. Updated --new to --update-db for deployment cli.
   * Added sanity check for deployment to ALL iocs - ensure database is the same as component source tree.

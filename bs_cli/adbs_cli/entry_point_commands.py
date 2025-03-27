@@ -139,7 +139,8 @@ def configure_user():
 
     # Content to write
     write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
-export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"
+export AD_BUILD_SCRATCH="/sdf/group/ad/eed/ad-build/scratch"\n
+export AD_BUILD_PROD=1
 """
     auto_complete_script = """
 _bs_completion() {
@@ -534,6 +535,9 @@ def deploy(component: str, facility: str, type: str, test: bool,
     if (ioc.upper() == "ALL" and update_db):
         click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
         return
+    if (not tag):
+        click.echo("== ADBS == Please provide a tag")
+        return
     # 3.1) Get facilities (if applicable)
     facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
@@ -616,9 +620,11 @@ def deploy(component: str, facility: str, type: str, test: bool,
     click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
     if (not response.ok):
-        payload = response.json()['payload']
-        click.echo(f"== ADBS == {payload}")
-        return
+        try:
+            click.echo(f"== ADBS == Error: {response.json()}")
+            return
+        except Exception:
+            pass
     # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')
