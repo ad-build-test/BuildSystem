@@ -13,7 +13,7 @@ Steps:
 ```kubectl -n core-build-system create secret generic deployment-controller-secrets --from-file=<KEY_NAME_IN_DEPLOYMENT>=<KEY_NAME>```
 where <KEY_NAME_IN_DEPLOYMENT> is the name of the key in `deployment_dev.yml` or `deployment_prod.yml`. and <KEY_NAME> is the name of the key you generated.
 
-Example: --from-file=s3df-key=deployment_controller_s3df
+Example: --from-file=adbuild-key=deployment_controller
 
 5. Add the key's .pub to `authorized_keys`
 6. Repeat the previous step for each facility. Like s3df, or dev-srv09, or mcclogin. For production facilities, we need to ask Ken Brobeck to add `adbuild` ssh keys to production, and mcclogin is the jump host.

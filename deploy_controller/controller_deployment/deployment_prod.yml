@@ -31,6 +31,9 @@ spec:
       - name: deployment-controller
         image: ghcr.io/ad-build-test/deployment-controller:latest
         imagePullPolicy: Always
+        env: 
+        - name: AD_BUILD_PROD
+          value: "1"
         # start the build script
         command: ["/bin/sh"]
         args:
@@ -59,8 +62,8 @@ spec:
         - name: s3df-dev-container-ad-group
           mountPath: /sdf/group/ad
         - name: s3df-ssh-key-volume
-          mountPath: /home/adbuild/.ssh/deployment_controller_s3df
-          subPath: s3df-key
+          mountPath: /home/adbuild/.ssh/deployment_controller
+          subPath: adbuild-key
           readOnly: true
       volumes:
       - name: s3df-dev-container-ad-group

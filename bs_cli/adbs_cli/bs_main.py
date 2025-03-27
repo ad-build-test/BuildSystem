@@ -12,7 +12,6 @@ import click
 import os
 import readline
 import logging
-from adbs_cli.cli_configuration import cli_configuration
 
 import adbs_cli.create_commands as create_group
 import adbs_cli.tag_commands as tag_group
@@ -35,12 +34,6 @@ def entry_point():
     """ Build System (Software Factory) CLI\n
     Docs: https://confluence.slac.stanford.edu/x/RoOTGg
     """
-    # This function gets called before any other cli command function
-    linux_uname = os.environ.get('USER')
-    github_uname = os.environ.get('AD_BUILD_GH_USER')
-    # Set cli_configuration with linux_uname and gh_uname
-    cli_configuration["linux_uname"] = linux_uname
-    cli_configuration["github_uname"] = github_uname
          
 def main():
     # Note - Order of adding in commands reflects on the frontend
