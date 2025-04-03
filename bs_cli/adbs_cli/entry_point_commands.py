@@ -459,7 +459,6 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate iocs by comma, ex: dev,lcls")
 @click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
-@click.option("-ty", "--type", required=False, help="App Type | Options: [ioc, hla, tools, matlab, pydm] *not in use yet")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
 @click.option("-tg", "--tag", required=False, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
@@ -468,8 +467,8 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-u", "--update-db", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def deploy(component: str, facility: str, type: str, test: bool,
-                ioc: str, tag: str, list: bool, local: bool, revert: bool, update_db: bool, verbose: bool):
+def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: bool, local: bool,
+            revert: bool, update_db: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """

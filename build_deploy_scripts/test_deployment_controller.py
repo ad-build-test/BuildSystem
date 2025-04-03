@@ -38,7 +38,7 @@ Then we really have a self-contained test without any need for POST operations
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, mock_open
-from deployment_controller import app, IocDict, BasicIoc
+from deployment_controller import app, IocDict, PydmDict
 import os
 from httpx import AsyncClient, ASGITransport
 import asyncio
@@ -59,20 +59,14 @@ def mock_paths():
          patch('deployment_controller.CONFIG_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/config.yaml'), \
          patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
-         patch('deployment_controller.APP_PATH', '/home/pnispero/test-deployment-controller/app/'), \
+         patch('deployment_controller.APP_PATH', '/home/pnispero/test-deployment-controller/app'), \
          patch('deployment_controller.FACILITIES', ['test', 'LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']):
         yield
 
-####### Tests for get_ioc_component_info
-def test_get_ioc_component_info_success(mock_paths):
-    response = client.request("GET", "/ioc/info", json={"component_name": "test-ioc"})
-    
-    assert response.status_code == 200
-    print(f"payload: {response.json()['payload']}")
-
+####### Tests for get_deployment_component_info
 def test_get_ioc_component_info_not_found(mock_paths):
     
-    response = client.request("GET", "/ioc/info", json={"component_name": "non_existent_ioc"})
+    response = client.request("GET", "/deployment/info", json={"component_name": "non_existent_app"})
     
     assert response.status_code == 404
     print(f"payload: {response.json()['payload']}")
@@ -158,7 +152,7 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
     assert "Success" in response.text
 
     print("Confirm deployment database contents are correct...")
-    response = client.request("GET", "/ioc/info", json={"component_name": "test-ioc"})
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
     payload = response.json()['payload']
     print(f"payload: {payload}")
     details = []
@@ -175,6 +169,89 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
      # Check if both entries exist
     assert any(dep['name'] == 'sioc-b34-gtest01' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest01 not found or tag mismatch"
     assert any(dep['name'] == 'sioc-b34-gtest02' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest02 not found or tag mismatch"
+
+####### Tests for get_ioc_component_info
+def test_get_deployment_component_info_success(mock_paths):
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
+    
+    assert response.status_code == 200
+    print(f"payload: {response.json()['payload']}")
+
+
+####### Tests for deploy_pydm
+@pytest.mark.asyncio
+async def test_deploy_pydm_new_component_success(mock_paths):
+    print("Starting test_deploy_pydm_new_component_success - add a new component entirely\n \
+          bs deploy --facility test -t 1.0.0 -u")
+    
+    pydm_request = PydmDict(
+        facilities=["test"],
+        component_name="test-pydm",
+        tag="1.0.0",
+        user="test_user",
+        new=True
+    )
+    
+    print("Sending request to /pydm/deployment")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/pydm/deployment", json=pydm_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    if (response.json()): print(f"Response payload: {response.json}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+@pytest.mark.asyncio
+async def test_deploy_pydm_new_tag_success(mock_paths):
+    print("Starting test_deploy_pydm_new_tag_success - deploy new tag to an existing component\n \
+          bs deploy --facility test -t 1.0.1 -u")
+    
+    test_facility = "test"
+    test_component = "test-pydm"
+    test_tag = "1.0.1"
+    test_user = "test_user"
+    test_new = False
+
+    ioc_request = IocDict(
+        facilities=[test_facility],
+        component_name=test_component,
+        tag=test_tag,
+        user=test_user,
+        new=test_new
+    )
+    
+    print("Sending request to /ioc/deployment")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+    print("Confirm deployment database contents are correct...")
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
+    payload = response.json()['payload']
+    print(f"payload: {payload}")
+    details = []
+    # Loop through the list of deployment entries (one for each facility if exists)
+    for deployment in payload:
+        # Extract the inner dictionary (assuming there's only one item at the top level)
+        for facility, details in deployment.items():
+            if (facility == test_facility):
+                assert details['name'] == test_component
+                assert details['tag'] == test_tag
+                assert details['type'] == 'ioc'
+            # # Loop through the 'dependsOn' list and print each entry
+                dependencies = details['dependsOn']
+     # Check if both entries exist
+    assert any(dep['name'] == 'sioc-b34-gtest01' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest01 not found or tag mismatch"
+    assert any(dep['name'] == 'sioc-b34-gtest02' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest02 not found or tag mismatch"
+
+
 
 # @pytest.mark.asyncio
 # async def test_deploy_ioc_failure(mock_external_dependencies, mock_paths):

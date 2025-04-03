@@ -49,7 +49,7 @@ def add_repo(component: str, organization: str, testing_criteria: str, approval_
     build_os_list = inquirer.prompt(question)
     request.add_dict_to_payload(build_os_list)
     request.add_to_payload("url", f"https://github.com/{organization}/{request.component.name}")
-    request.post_request(verbose, msg="Add commponent to component database")
+    request.post_request(verbose, msg="Add component to component database")
 
     # Create another put request but to enable permissions for backend to receive events
     enable_envents_endpoint = 'component/' + request.component.name.lower() + '/event/true'
@@ -59,10 +59,15 @@ def add_repo(component: str, organization: str, testing_criteria: str, approval_
 
     # Add the main branch automatically
     request = Request(Component(component))
+    branches = request.component.git_get_branches()
+    if ("main" in branches):
+        main_branch = "main"
+    elif ("master" in branches):
+        main_branch = "master"
     endpoint = 'component/' + request.component.name.lower() + '/branch'
     request.set_endpoint(endpoint)
     request.add_to_payload("type", "branch")
-    request.add_to_payload("branchName", "main")
+    request.add_to_payload("branchName", main_branch)
     request.put_request(log=verbose, msg="Add branch to component database")
 
 @admin.command()
