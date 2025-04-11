@@ -458,17 +458,18 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate iocs by comma, ex: dev,lcls")
-@click.option("-t", "--test", is_flag=True, required=False, help="Deploy to test stand")
+@click.option("-ts", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
-@click.option("-tg", "--tag", required=False, help="Component tag to deploy")
+@click.option("-t", "--tag", required=False, help="Component tag to deploy")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
 @click.option("-u", "--update-db", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
+@click.option("-n", "--dry-run", is_flag=True, required=False, help="Print the commands that would be executed, but do not execute them.")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: bool, local: bool,
-            revert: bool, update_db: bool, verbose: bool):
+            revert: bool, update_db: bool, dry_run: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -491,13 +492,12 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # 1.2) Option - list
     if (list):
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
-        deployment_request.set_endpoint('ioc/info')
+        deployment_request.set_endpoint('deployment/info')
         response = deployment_request.get_request(log=verbose)
-        payload = response.json()['payload']
-
         if (not response.ok):
-            click.echo(f"== ADBS == Error - {payload}")
+            click.echo(f"== ADBS == Error - {response.json()}")
             return
+        payload = response.json()['payload']
         # Loop through the list of deployment entries (one for each facility if exists)
         for deployment in payload:
             # Extract the inner dictionary (assuming there's only one item at the top level)
@@ -508,36 +508,40 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 # Print the current master release
                 click.echo(f"Current master release => {details['tag']}")
                 # Loop through the 'dependsOn' list and print each entry
-                for dep in details['dependsOn']:
-                    click.echo(f"IOC: {dep['name']} => {dep['tag']}")
+                if (details['dependsOn']):
+                    for dep in details['dependsOn']:
+                        click.echo(f"IOC: {dep['name']} => {dep['tag']}")
         return
-
     # 2) Get fields
-    click.echo("== ADBS == At the moment, deployment only for IOCs is supported")
     question = [inquirer.Checkbox(
                 "facility",
                 message="What facilities to deploy to?",
                 choices=["DEV", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]
-    # 3) Get ioc list (if applicable)
-    if (ioc):
-        ioc_list = ioc.split(',')
-
-    # Error check
-    if (not facility and not ioc):
-        click.echo("== ADBS == Please supply the facility and/or the iocs")
-        return
-    if (facility and not ioc):
-        click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
-        return
-    if (ioc.upper() == "ALL" and update_db):
-        click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
-        return
+    # 3) Get app type
+    user_src_repo = deployment_request.component.git_get_top_dir()
+    manifest_filepath = user_src_repo + '/config.yaml'
+    manifest_data = parse_manifest(manifest_filepath)
+    deployment_type = manifest_data['deploymentType'].lower()
+    # 4) Error check
+    if (deployment_type == 'ioc'):
+        # Get ioc list (if applicable)
+        if (ioc):
+            ioc_list = ioc.split(',')
+        if (not facility and not ioc):
+            click.echo("== ADBS == Please supply the facility and/or the iocs")
+            return
+        if (facility and not ioc):
+            click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
+            return
+        if (ioc.upper() == "ALL" and update_db):
+            click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
+            return
     if (not tag):
         click.echo("== ADBS == Please provide a tag")
         return
-    # 3.1) Get facilities (if applicable)
+    # 5) Get facilities (if applicable)
     facilities = None
     if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
         facilities = inquirer.prompt(question)['facility']
@@ -546,24 +550,24 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (facilities):
         facilities = [facility.upper() for facility in facilities] # Uppercase every facility
 
-    # 4) Set the arguments needed for playbook
+    # 6) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
         "facilities": facilities,
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "ioc_list": ioc_list,
-        "new": update_db
+        "new": update_db,
+        "dry_run": dry_run
     }
 
-    # 5) Figure out what the deployment type is and set the endpoint accordingly
+    # 7) Figure out what the deployment type is and set the endpoint accordingly
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
-    deployment_type = parse_manifest(manifest_filepath)['deploymentType'].lower()
 
     # 6) Error check - Confirm with database that every ioc found in the source tree is in the database.
     if (deployment_type == 'ioc'): 
+        playbook_args_dict["ioc_list"] = ioc_list
         # 6.1) First check that user is in repo
         if (not deployment_request.component.set_cur_dir_component()):
             click.echo('fatal: not a git repository (or any of the parent directories)')
@@ -608,6 +612,11 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                     click.echo("== ADBS == Please specify IOCs and deploy with '-u' to update database with new iocs.")
                     return
     
+    # Set subsystem for pydm
+    if (deployment_type == 'pydm'):
+        subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
+        playbook_args_dict["subsystem"] = subsystem
+
     # 7) If revert then send deployment revert request to deployment controller
     if (revert):
         # TODO: Revert endpoint
@@ -642,7 +651,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     click.echo("Report head:")
     for line in summary:
         click.echo(line, nl=False)
-    click.echo(f"Report downloaded successfully to {file_path}")
+    click.echo(f"\nReport downloaded successfully to {file_path}")
 
     # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
     # TODO: Local deployment - if want local deployment, then user must follow the steps to ensure ansible can ssh from s3df to prod. 

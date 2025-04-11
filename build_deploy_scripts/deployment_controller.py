@@ -16,7 +16,8 @@ import requests
 
 import uvicorn
 import json
-from fastapi import FastAPI, UploadFile, File
+import time
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
@@ -54,12 +55,15 @@ class IocDict(Component):
     ioc_list: list
     user: str
     new: bool
+    dry_run: bool = False # Optional
 
 class PydmDict(Component):
     facilities: list = None # Optional
     tag: str
     user: str
     new: bool
+    dry_run: bool = False # Optional
+    subsystem: str # Ex: [mps, mgnt, vac, prof, etc.]
 
 class TagDict(Component):
     branch: str
@@ -245,24 +249,19 @@ def extract_ioc_cpu_shebang_info(app_dir_name: str) -> dict:
     
     return results
 
-@contextmanager
-def deployment_release_manager():
-    """ Context manager for safe cleanup of temporary files (mainly the tarball for the tagged release). 
-        With this, the temporary files will be deleted even if exceptions are thrown """
-    # Create unique directory for this request
-    request_id = str(uuid.uuid4())
-    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
+def cleanup_temp_deployment_dir(directory: str):
+    """ for safe cleanup of temporary files (mainly the tarball for the tagged release). 
+        With this, the temporary files will be deleted even if exceptions are thrown"""
     try:
-        # Create temp directory
-        os.makedirs(temp_download_dir, exist_ok=True)
-        yield temp_download_dir
-    finally:
-        # Clean up everything
-        if os.path.exists(temp_download_dir):
-            logging.info(f"Cleaning up temporary directory: {temp_download_dir}")
-            shutil.rmtree(temp_download_dir, ignore_errors=True)
+        # Wait a bit to ensure file has been sent
+        time.sleep(5)  
+        if os.path.exists(directory):
+            logging.info(f"Cleaning up temporary directory: {directory}")
+            shutil.rmtree(directory, ignore_errors=True)
+    except Exception as e:
+        logging.error(f"Error cleaning up directory {directory}: {str(e)}")
 
-def download_release(component_name: str, tag: str, download_dir: str, extract_tarball: bool = None):
+def download_release(component_name: str, tag: str, download_dir: str, extract_tarball: bool = False):
     """ Download a components tagged release from the backend -> github """
     endpoint = BACKEND_URL + f'component/{component_name}/release/{tag}'
     tarball = f'{tag}.tar.gz'
@@ -278,16 +277,33 @@ def download_release(component_name: str, tag: str, download_dir: str, extract_t
                 if (chunk):
                     file.write(chunk)
         logging.info('Tarball downloaded successfully')
+        logging.debug(f'Extract tarball: {extract_tarball}')
+        logging.debug(f'download dir: {download_dir}')
         if (extract_tarball):
             # Extract the .tar.gz file
             logging.info('Extracting tarball...')
             with tarfile.open(tarball_filepath, 'r:gz') as tar:
                 tar.extractall(path=download_dir)
             logging.info(f'{tarball_filepath} extracted to {download_dir}')
-            return True
+        return True
     else:
         logging.info(f'Failed to retrieve the file. Status code: {response.status_code}')
         return False
+    
+def update_db_after_deployment(deployment_success: bool, deploy_new_component: bool, facility: str, app_type: str, component_name: str,
+                               tag: str, new: bool, user: str, current_output: str, ioc_list: list = None):
+    # 6) Write new configuration to deployment db for each facility
+    timestamp = datetime.now().isoformat()
+    # TODO: Add checks if any database operations fail, then bail and return to user
+    # Special case - If new then add the new component
+    if (deployment_success):
+        if (deploy_new_component):
+            logging.debug("Adding new component")
+            add_new_component(facility, app_type, component_name, tag, ioc_list)
+        else:
+            update_component_in_facility(facility, app_type, component_name, tag, ioc_list, new)
+    add_log_to_component(facility, timestamp, user, component_name, current_output)
+
 
 def write_file(filepath: str, content: str):
     with open(filepath, 'w') as file:
@@ -417,250 +433,246 @@ async def revert_ioc_deployment(ioc_to_deploy: IocDict):
 
     # 5) Return status and log of the playbook in action
 @app.put("/ioc/deployment")
-async def deploy_ioc(ioc_to_deploy: IocDict):
+async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
     """
     Function to deploy an ioc component
     """
-    # 1) Setup context manager
-    with deployment_release_manager() as temp_download_dir:
-        logging.info(f"New deployment request data: {ioc_to_deploy}")
-        ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
-        # 2) Call to backend to get component/tag from github releases
-        if (not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, extract_tarball=True)):
-            return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
+    # 1) Setup temporary directory for deployment contents
+    request_id = str(uuid.uuid4())
+    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
+    os.makedirs(temp_download_dir, exist_ok=True)
+    logging.info(f"New deployment request data: {ioc_to_deploy}")
+    ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
+    # 2) Call to backend to get component/tag from github releases
+    if (not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, extract_tarball=True)):
+        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
 
-        # Special case - if adding new deployment
-        deploy_new_iocs = False
-        new_iocs = []
-        deploy_new_component = False
-        if (ioc_to_deploy.new):
-            # Ensure only one facility is specified (ex: bs deploy --ioc sioc-b34-test1 --facility DEV )
-            # Only one because how would we know which ioc belongs to what facility?
-            if (len(ioc_to_deploy.facilities) == 1):
-                # Check if deployment already exists
-                component = find_component_in_facility(ioc_to_deploy.facilities[0], ioc_to_deploy.component_name)
-                logging.debug(f"component: {component}")
-                if (component):
-                    # Extract ioc names from dictionaries
-                    existing_iocs = {ioc["name"] for ioc in component['dependsOn']}
+    # Special case - if adding new deployment
+    deploy_new_iocs = False
+    new_iocs = []
+    deploy_new_component = False
+    if (ioc_to_deploy.new):
+        # Ensure only one facility is specified (ex: bs deploy --ioc sioc-b34-test1 --facility DEV )
+        # Only one because how would we know which ioc belongs to what facility?
+        if (len(ioc_to_deploy.facilities) == 1):
+            # Check if deployment already exists
+            component = find_component_in_facility(ioc_to_deploy.facilities[0], ioc_to_deploy.component_name)
+            logging.debug(f"component: {component}")
+            if (component):
+                # Extract ioc names from dictionaries
+                existing_iocs = {ioc["name"] for ioc in component['dependsOn']}
 
-                    # Find iocs that are in user list but not in existing deployment
-                    new_iocs = [ioc for ioc in ioc_to_deploy.ioc_list if ioc not in existing_iocs]
-                    logging.debug(f"new_iocs: {new_iocs}")
-                    if (new_iocs == None):
-                        # Check if both the deployment and iocs exist, then return error to user.
-                        return JSONResponse(content={"payload": {"Error": "Deployment and iocs already exist in deployment configuration/database"}}, status_code=400)
-                    else:
-                    # else user is trying to add a new ioc to 'dependsOn'
-                        deploy_new_iocs = True
+                # Find iocs that are in user list but not in existing deployment
+                new_iocs = [ioc for ioc in ioc_to_deploy.ioc_list if ioc not in existing_iocs]
+                logging.debug(f"new_iocs: {new_iocs}")
+                if (new_iocs == None):
+                    # Check if both the deployment and iocs exist, then return error to user.
+                    return JSONResponse(content={"payload": {"Error": "Deployment and iocs already exist in deployment configuration/database"}}, status_code=400)
                 else:
-                    # Otherwise create a new entry to deployment database
-                    deploy_new_component = True
-        logging.debug(f"deploy_new_component: {deploy_new_component}")
+                # else user is trying to add a new ioc to 'dependsOn'
+                    deploy_new_iocs = True
+            else:
+                # Otherwise create a new entry to deployment database
+                deploy_new_component = True
+    logging.debug(f"deploy_new_component: {deploy_new_component}")
 
-        # 3) Logic for special cases
-        facilities = ioc_to_deploy.facilities
-        facilities_ioc_dict = dict.fromkeys(facilities, [])
-        
-        if (deploy_new_iocs): # set the ioc dict to new_iocs
-            facilities_ioc_dict[facilities[0]] = new_iocs
-        elif (deploy_new_component): # Add brand new iocs 
-            facilities_ioc_dict[facilities[0]] = ioc_to_deploy.ioc_list
-        # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
-        elif (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
-                for ioc in ioc_to_deploy.ioc_list:
-                    facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-                    if (facility == None): # Means ioc doesnt exist (typo on user end)
-                        return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
-                    facilities_ioc_dict[facility].append(ioc)
-        # 3.2) Find the info needed to create the startup.cmd for each ioc
-        extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
-        ioc_info = extract_ioc_cpu_shebang_info(extracted_tarball_filepath)
-        tarball_filepath = extracted_tarball_filepath + '.tar.gz'
-        # 3.3) Figure out which startup.cmd to use for each ioc,
-        ioc_info_list_dict = []
-        for ioc in ioc_info:
-            if ('linuxrt' in ioc['architecture'].lower()):
-                if ('ioc' in ioc['folder_name']):
-                    startup_cmd_template = 'startup.cmd.linuxRT'
-                else:
-                    startup_cmd_template = 'startup.cmd.cpu'
-            elif ('rtems' in ioc['architecture'].lower()):
-                startup_cmd_template = 'startup.cmd.rtems'
-            else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
-                if ('ioc' in ioc['folder_name'].lower()):
-                    startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
-                else:
-                    startup_cmd_template = 'startup.cmd.soft.cpu'
-            ioc_dict = {
-                'name': ioc['folder_name'],
-                'architecture': ioc['architecture'],
-                'binary': ioc['binary'],
-                'startup_cmd_template': startup_cmd_template
-            }
-            ioc_info_list_dict.append(ioc_dict)
-        # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
-        # 4) Call the appropriate ansible playbook for each applicable facility 
-        playbook_args_dict = ioc_to_deploy.model_dump()
-        playbook_args_dict['tarball'] = tarball_filepath
-        playbook_args_dict['playbook_path'] = ioc_playbooks_path
-        playbook_args_dict['user_src_repo'] = None
-        status = 200
-        deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
-        deployment_output = ""
-        for facility in facilities:
-            logging.info(f"facility: {facility}")
-            logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
-            # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
-            if (not deploy_new_component and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
-                continue
-            if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
-                # 3.2) If ioc = 'ALL' then create list of iocs based on facility
-                component_info = find_component_in_facility(facility, ioc_to_deploy.component_name)
-                facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['dependsOn']])
+    # 3) Logic for special cases
+    facilities = ioc_to_deploy.facilities
+    facilities_ioc_dict = dict.fromkeys(facilities, [])
+    
+    if (deploy_new_iocs): # set the ioc dict to new_iocs
+        facilities_ioc_dict[facilities[0]] = new_iocs
+    elif (deploy_new_component): # Add brand new iocs 
+        facilities_ioc_dict[facilities[0]] = ioc_to_deploy.ioc_list
+    # 3.1) If not 'ALL' Figure out what facilities the iocs belong to
+    elif (ioc_to_deploy.ioc_list[0].upper() != 'ALL'):
+            for ioc in ioc_to_deploy.ioc_list:
+                facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+                if (facility == None): # Means ioc doesnt exist (typo on user end)
+                    return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
+                facilities_ioc_dict[facility].append(ioc)
+    # 3.2) Find the info needed to create the startup.cmd for each ioc
+    extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
+    ioc_info = extract_ioc_cpu_shebang_info(extracted_tarball_filepath)
+    tarball_filepath = extracted_tarball_filepath + '.tar.gz'
+    # 3.3) Figure out which startup.cmd to use for each ioc,
+    ioc_info_list_dict = []
+    for ioc in ioc_info:
+        if ('linuxrt' in ioc['architecture'].lower()):
+            if ('ioc' in ioc['folder_name']):
+                startup_cmd_template = 'startup.cmd.linuxRT'
+            else:
+                startup_cmd_template = 'startup.cmd.cpu'
+        elif ('rtems' in ioc['architecture'].lower()):
+            startup_cmd_template = 'startup.cmd.rtems'
+        else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
+            if ('ioc' in ioc['folder_name'].lower()):
+                startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
+            else:
+                startup_cmd_template = 'startup.cmd.soft.cpu'
+        ioc_dict = {
+            'name': ioc['folder_name'],
+            'architecture': ioc['architecture'],
+            'binary': ioc['binary'],
+            'startup_cmd_template': startup_cmd_template
+        }
+        ioc_info_list_dict.append(ioc_dict)
+    # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
+    # 4) Call the appropriate ansible playbook for each applicable facility 
+    playbook_args_dict = ioc_to_deploy.model_dump()
+    playbook_args_dict['tarball'] = tarball_filepath
+    playbook_args_dict['playbook_path'] = ioc_playbooks_path
+    playbook_args_dict['user_src_repo'] = None
+    status = 200
+    deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
+    deployment_output = ""
+    for facility in facilities:
+        logging.info(f"facility: {facility}")
+        logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
+        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        if (not deploy_new_component and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
+            continue
+        if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
+            # 3.2) If ioc = 'ALL' then create list of iocs based on facility
+            component_info = find_component_in_facility(facility, ioc_to_deploy.component_name)
+            facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['dependsOn']])
 
-            # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
-            facility_ioc_dict = []
-            for ioc in ioc_info_list_dict:
-                if ioc['name'] in facilities_ioc_dict[facility]:
-                    if ('cpu' in ioc['startup_cmd_template']): # Add the facility to startup.cmd template if cpu
-                        ioc['startup_cmd_template'] += f'.{facility.lower()}'
-                    facility_ioc_dict.append(ioc)
+        # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
+        facility_ioc_dict = []
+        for ioc in ioc_info_list_dict:
+            if ioc['name'] in facilities_ioc_dict[facility]:
+                if ('cpu' in ioc['startup_cmd_template']): # Add the facility to startup.cmd template if cpu
+                    ioc['startup_cmd_template'] += f'.{facility.lower()}'
+                facility_ioc_dict.append(ioc)
 
-            logging.info(f"facility_ioc_dict: {facility_ioc_dict}")
-            playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
-            playbook_args_dict['facility'] = facility
-        # TODO: - may want to do a dry run first to see if there would be any fails.
-            playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-            stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
-                                            facility, playbook_args, return_output=True, no_color=True)
-            # 5.1) Combine output
-            current_output = ""
-            current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
-            deployment_success = True
-            if (return_code != 0):
-                status = 400 # Deployment failed
-                if (stderr != ''):
-                    current_output += "\n== Errors ==\n\n" + stderr
-                    deployment_success = False
-            deployment_output += current_output
-        
+        logging.info(f"facility_ioc_dict: {facility_ioc_dict}")
+        playbook_args_dict['ioc_list'] = facility_ioc_dict # Update ioc list for each facility    
+        playbook_args_dict['facility'] = facility
+    #     First test out the new dry run field you added in cli, then
+    # TODO: - may want to do a dry run first to see if there would be any fails.
+        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
+                                        facility, playbook_args, return_output=True, no_color=True, check_mode=ioc_to_deploy.dry_run)
+        # 5.1) Combine output
+        current_output = ""
+        current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+        deployment_success = True
+        if (return_code != 0):
+            status = 400 # Deployment failed
+            if (stderr != ''):
+                current_output += "\n== Errors ==\n\n" + stderr
+                deployment_success = False
+        deployment_output += current_output
+    
+        if (not ioc_to_deploy.dry_run):
             # 6) Write new configuration to deployment db for each facility
-            timestamp = datetime.now().isoformat()
-        # TODO: Add checks if any database operations fail, then bail and return to user
-            # Special case - If new then add the new component
-            if (deployment_success):
-                if (deploy_new_component):
-                    logging.debug("Adding new component")
-                    add_new_component(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility])
-                else:
-                    update_component_in_facility(facility, 'ioc', ioc_to_deploy.component_name, ioc_to_deploy.tag, facilities_ioc_dict[facility], ioc_to_deploy.new)
-            add_log_to_component(facility, timestamp, ioc_to_deploy.user, ioc_to_deploy.component_name, current_output)
+            update_db_after_deployment(deployment_success, deploy_new_component, facility, 'ioc', ioc_to_deploy.component_name,
+                                        ioc_to_deploy.tag, ioc_to_deploy.new, ioc_to_deploy.user, current_output, facilities_ioc_dict[facility])
         
-        # Error check - If deployment output is empty, then the component can't be found in deployment database
-        if (deployment_output == ""):
-            return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
+    # Error check - If deployment output is empty, then the component can't be found in deployment database
+    if (deployment_output == ""):
+        return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
 
-        # 6) Generate summary for report
-        summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
-                                  deployment_output, status, deployment_report_file, facilities_ioc_dict)
-        # 7) Return ansible playbook output to user
-        if os.getenv('PYTHON_TESTING') == 'True':
-            content = summary
-            return Response(content=content, media_type="text/plain", status_code=status)
-        else:
-            return FileResponse(path=deployment_report_file, status_code=status)
+    # 6) Generate summary for report
+    summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
+                                deployment_output, status, deployment_report_file, facilities_ioc_dict)
+    # Add cleanup
+    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+
+    # 7) Return ansible playbook output to user
+    if os.getenv('PYTHON_TESTING') == 'True':
+        content = summary
+        return Response(content=content, media_type="text/plain", status_code=status)
+    else:
+        return FileResponse(path=deployment_report_file, status_code=status)
     
 @app.put("/pydm/deployment")
-async def deploy_pydm(pydm_to_deploy: PydmDict):
+async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTasks):
     """
     Function to deploy a pydm "screen/display" component
     """
-    # 1) Setup context manager
-    with deployment_release_manager() as temp_download_dir:
-        logging.info(f"New deployment request data: {pydm_to_deploy}")
-        pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
-        # 2) Call to backend to get component/tag from github releases
-        if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir)):
-            return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
+    # 1) Setup temporary directory for deployment contents
+    request_id = str(uuid.uuid4())
+    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
+    os.makedirs(temp_download_dir, exist_ok=True)
+    logging.info(f"New deployment request data: {pydm_to_deploy}")
+    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
+    # 2) Call to backend to get component/tag from github releases
+    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir)):
+        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
 
-        # 3) Logic for special cases
-        facilities = pydm_to_deploy.facilities
+    # 3) Logic for special cases
+    facilities = pydm_to_deploy.facilities
 
-        # Special case - if adding new deployment
-        deploy_new_component = False
-        if (pydm_to_deploy.new):
-            # If adding to multiple facilities, loop through them
-            for facility in facilities:
-                # Check if deployment already exists
-                component = find_component_in_facility(facility, pydm_to_deploy.component_name)
-                logging.debug(f"component: {component}")
-                if (component):
-                    # then return error to user.
-                    return JSONResponse(content={"payload": {"Error": "Deployment already exists in deployment configuration/database"}}, status_code=400)
-                else:
-                    # Otherwise create a new entry to deployment database
-                    deploy_new_component = True
-        logging.debug(f"deploy_new_component: {deploy_new_component}")
-        tarball = f'{pydm_to_deploy.tag}.tar.gz'
-        tarball_filepath = os.path.join(temp_download_dir, tarball)
-        
-        # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
-        # 4) Call the appropriate ansible playbook for each applicable facility 
-        playbook_args_dict = pydm_to_deploy.model_dump()
-        playbook_args_dict['tarball'] = tarball_filepath
-        playbook_args_dict['playbook_path'] = pydm_playbooks_path
-        playbook_args_dict['user_src_repo'] = None
-        status = 200
-        deployment_report_file = temp_download_dir + '/deployment-report-' + pydm_to_deploy.component_name + '-' + pydm_to_deploy.tag + '.log'
-        deployment_output = ""
+    # Special case - if adding new deployment
+    deploy_new_component = False
+    if (pydm_to_deploy.new):
+        # If adding to multiple facilities, loop through them
         for facility in facilities:
-            logging.info(f"facility: {facility}")
-            # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
-            if (not deploy_new_component and find_component_in_facility(facility, pydm_to_deploy.component_name) is None):
-                continue
+            # Check if deployment already exists
+            component = find_component_in_facility(facility, pydm_to_deploy.component_name)
+            logging.debug(f"component: {component}")
+            if (component):
+                # then return error to user.
+                return JSONResponse(content={"payload": {"Error": "Deployment already exists in deployment configuration/database"}}, status_code=400)
+            else:
+                # Otherwise create a new entry to deployment database
+                deploy_new_component = True
+    logging.debug(f"deploy_new_component: {deploy_new_component}")
+    tarball = f'{pydm_to_deploy.tag}.tar.gz'
+    tarball_filepath = os.path.join(temp_download_dir, tarball)
+    
+    # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
+    # 4) Call the appropriate ansible playbook for each applicable facility 
+    playbook_args_dict = pydm_to_deploy.model_dump()
+    playbook_args_dict['tarball'] = tarball_filepath
+    status = 200
+    deployment_report_file = temp_download_dir + '/deployment-report-' + pydm_to_deploy.component_name + '-' + pydm_to_deploy.tag + '.log'
+    deployment_output = ""
+    for facility in facilities:
+        logging.info(f"facility: {facility}")
+        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        if (not deploy_new_component and find_component_in_facility(facility, pydm_to_deploy.component_name) is None):
+            continue
 
-            playbook_args_dict['facility'] = facility
-        # TODO: - may want to do a dry run first to see if there would be any fails.
-            playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-            stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, pydm_playbooks_path + '/pydm_deploy.yml',
-                                            facility, playbook_args, return_output=True, no_color=True)
-            # 5.1) Combine output
-            current_output = ""
-            current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
-            deployment_success = True
-            if (return_code != 0):
-                status = 400 # Deployment failed
-                if (stderr != ''):
-                    current_output += "\n== Errors ==\n\n" + stderr
-                    deployment_success = False
-            deployment_output += current_output
-        
+        playbook_args_dict['facility'] = facility
+    # TODO: - may want to do a dry run first to see if there would be any fails.
+        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, pydm_playbooks_path + '/pydm_deploy.yml',
+                                        facility, playbook_args, return_output=True, no_color=True, check_mode=pydm_to_deploy.dry_run)
+        # 5.1) Combine output
+        current_output = ""
+        current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
+        deployment_success = True
+        if (return_code != 0):
+            status = 400 # Deployment failed
+            if (stderr != ''):
+                current_output += "\n== Errors ==\n\n" + stderr
+                deployment_success = False
+        deployment_output += current_output
+
+
+        if (not pydm_to_deploy.dry_run):
             # 6) Write new configuration to deployment db for each facility
-            timestamp = datetime.now().isoformat()
-        # TODO: Add checks if any database operations fail, then bail and return to user
-            # Special case - If new then add the new component
-            if (deployment_success):
-                if (deploy_new_component):
-                    logging.debug("Adding new component")
-                    add_new_component(facility, 'pydm', pydm_to_deploy.component_name, pydm_to_deploy.tag)
-                else:
-                    update_component_in_facility(facility, 'pydm', pydm_to_deploy.component_name, pydm_to_deploy.tag, new=pydm_to_deploy.new)
-            add_log_to_component(facility, timestamp, pydm_to_deploy.user, pydm_to_deploy.component_name, current_output)
-        
-        # Error check - If deployment output is empty, then the component can't be found in deployment database
-        if (deployment_output == ""):
-            return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
-        
-        # 6) Generate summary for report
-        summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
-                                deployment_output, status, deployment_report_file)
-        # 7) Return ansible playbook output to user
-        if os.getenv('PYTHON_TESTING') == 'True':
-            content = summary
-            return Response(content=content, media_type="text/plain", status_code=status)
-        else:
-            return FileResponse(path=deployment_report_file, status_code=status)
+            update_db_after_deployment(deployment_success, deploy_new_component, facility, 'pydm', pydm_to_deploy.component_name,
+                                        pydm_to_deploy.tag, pydm_to_deploy.new, pydm_to_deploy.user, current_output)
+    
+    # Error check - If deployment output is empty, then the component can't be found in deployment database
+    if (deployment_output == ""):
+        return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
+    
+    # 6) Generate summary for report
+    summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
+                            deployment_output, status, deployment_report_file)
+    # Add cleanup
+    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+
+    # 7) Return ansible playbook output to user
+    if os.getenv('PYTHON_TESTING') == 'True':
+        content = summary
+        return Response(content=content, media_type="text/plain", status_code=status)
+    else:
+        return FileResponse(path=deployment_report_file, status_code=status)
 
 if __name__ == "__main__":
     uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=180)
