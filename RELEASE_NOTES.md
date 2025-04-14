@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.2 14-Apr-2025 P. Nisperos (pnispero)
+  * Added support for PyDM display workflow
+  * Added deploymentTypes field for config.yaml which works for IOC and now pydm.
+
 * tag:1.0.1 27-Mar-2025 P. Nisperos (pnispero)
   * Added ssh keys and edited configuration for deployment controller to point to adbuild user
   * Added environment variable AD_BUILD_PROD for easy switching from dev to prod clusters
