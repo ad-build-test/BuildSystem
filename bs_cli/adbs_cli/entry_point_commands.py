@@ -477,6 +477,12 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     deployment_request = Request(Component(component), Api.DEPLOYMENT)    
     deployment_request.set_component_name()
 
+    # Get app type
+    user_src_repo = deployment_request.component.git_get_top_dir()
+    manifest_filepath = user_src_repo + '/config.yaml'
+    manifest_data = parse_manifest(manifest_filepath)
+    deployment_type = manifest_data['deploymentType'].lower()
+
     # 1.1) Option - test
     if (test):
         under_development()
@@ -508,9 +514,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 # Print the current master release
                 click.echo(f"Current master release => {details['tag']}")
                 # Loop through the 'dependsOn' list and print each entry
-                if (details['dependsOn']):
-                    for dep in details['dependsOn']:
-                        click.echo(f"IOC: {dep['name']} => {dep['tag']}")
+                if (deployment_type == 'ioc'):
+                    if (details['dependsOn']):
+                        for dep in details['dependsOn']:
+                            click.echo(f"IOC: {dep['name']} => {dep['tag']}")
         return
     # 2) Get fields
     question = [inquirer.Checkbox(
@@ -519,11 +526,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 choices=["DEV", "LCLS", "FACET", "TESTFAC"],
                 default=[],
                 ),]
-    # 3) Get app type
-    user_src_repo = deployment_request.component.git_get_top_dir()
-    manifest_filepath = user_src_repo + '/config.yaml'
-    manifest_data = parse_manifest(manifest_filepath)
-    deployment_type = manifest_data['deploymentType'].lower()
     # 4) Error check
     if (deployment_type == 'ioc'):
         # Get ioc list (if applicable)
