@@ -5,8 +5,8 @@ import logging
 
 logger = logging.getLogger('my_logger')
 
-def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
-                          extra_vars: str, custom_env: dict = None, return_output: bool = False, no_color: bool = False):
+def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str, extra_vars: str, custom_env: dict = None,
+                          return_output: bool = False, no_color: bool = False, check_mode: bool = False):
         if (no_color):
             os.environ['ANSIBLE_NOCOLOR'] = 'True'
         command = ['ansible-playbook']
@@ -24,6 +24,9 @@ def run_ansible_playbook(inventory: str, playbook: str, host_pattern: str,
             # extra_vars_str = json.dumps(extra_vars)
             # extra_vars_str = ' '.join(f'{k}={v}' for k, v in extra_vars.items())
             command += ['--extra-vars', extra_vars]
+
+        if check_mode: # Also known as dry-run
+            command += ['--check']
 
         logger.info(f"Running ansible playbook...\n{command}")
         return run_process(command, custom_env, return_output)

@@ -23,3 +23,12 @@ Then the deployment controller should be able to login to the necessary faciliti
 
 ## Testing
 Please refer to build_deploy_scripts/test_deployment_controller.py
+
+## How to build
+### deployment controller
+Use tag `"dev"` if doing dev work
+1. Go to top of repo and enter command:
+`docker build --tag ghcr.io/ad-build-test/deployment-controller:latest -f deploy_controller/Dockerfile .`
+
+2. Push image
+`docker push ghcr.io/ad-build-test/deployment-controller:latest`
