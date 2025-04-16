@@ -415,7 +415,7 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
             afs_dependencies_bind = "/afs/:/afs/"
             ad_group_bind = "/sdf/group/ad/:/mnt/"
             build_command = ["apptainer", "exec", "--writable-tmpfs", "--bind", afs_dependencies_bind, "--bind", user_src_repo_bind, "--bind", 
-                            dependencies_bind, "--bind", ad_group_bind, build_img, "python3", "/build/local_build.py",
+                            dependencies_bind, "--bind", ad_group_bind, build_img, "bash", "/build/local_build.sh",
                             manifest_data, user_src_repo, request.component.name, request.component.branch_name, build_os]
             run_process_real_time(build_command)
 

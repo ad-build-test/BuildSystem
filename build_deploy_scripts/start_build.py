@@ -188,7 +188,74 @@ endif"""
         with open(file_path, 'w') as file:
             file.writelines(lines)
 
+    def package_ioc(self):
+        """
+        Package IOC components by creating a tarball of necessary files.
+        """
+        try:
+            # Define paths
+            user_src_repo = self.source_dir
+            build_results = os.path.join(user_src_repo, "build_results")
+            target_dir = os.path.join(build_results, f"{self.component}-{self.branch}")
+            tarball_path = os.path.join(build_results, f"{self.component}-{self.branch}.tar.gz")
+            
+            # Create target directory
+            logger.info(f"Creating directory: {target_dir}")
+            os.makedirs(target_dir, mode=0o775, exist_ok=True)
+            
+            # Copy required directories using rsync
+            directories_to_copy = [
+                "bin", "db", "dbd", "iocBoot", "cpuBoot", "conf", 
+                "archive", "restore", "cfg", "firmware", "build.log"
+            ]
+            
+            for item in directories_to_copy:
+                src_path = os.path.join(user_src_repo, item)
+                
+                # Skip if source doesn't exist (instead of failing)
+                if not os.path.exists(src_path):
+                    continue
+                try:
+                    # Use rsync with archive mode to preserve permissions, ownership, timestamps
+                    # --ignore-missing-args to handle missing files/dirs gracefully
+                    result = subprocess.run([
+                        "rsync",
+                        "-a",                      # Archive mode (preserves metadata)
+                        "--ignore-missing-args",   # Don't fail on missing files
+                        src_path,                  # Source
+                        target_dir                 # Destination
+                    ], check=False, capture_output=True, text=True)
+                    
+                    if result.returncode != 0:
+                        logger.warning(f"rsync warning for {src_path}: {result.stderr}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to copy {src_path}: {str(e)}")
+                    # Continue with other items
+            
+            # Create tarball
+            logger.info(f"Creating tarball {tarball_path}")
+            orig_dir = os.getcwd()
+            try:
+                os.chdir(build_results)
+                subprocess.run([
+                    "tar", "czf", tarball_path, 
+                    f"{self.component}-{self.branch}"
+                ], check=True)
+                logger.info(f"Successfully created tarball at {tarball_path}")
+            finally:
+                os.chdir(orig_dir)
+                
+            return tarball_path
+                
+        except Exception as e:
+            logger.error(f"Failed to package IOC: {str(e)}")
+            raise
+
     def run_build(self, config_yaml: dict, verbose: bool=False):
+        """
+        Run the build of the app, then create build_results directory
+        """
         build_method = config_yaml['build']
         if (verbose):
             logger.debug("Build environment:")
@@ -206,16 +273,7 @@ endif"""
             logger.info("Build process FAILED!")
             sys.exit(EXIT_BUILD_FAILURE)
         else:
-            user_src_repo = self.source_dir
-            playbook_args = f'{{"component": "{self.component}", "branch": "{self.branch}", \
-                "user_src_repo": "{user_src_repo}"}}'
-            ioc_playbooks_dir = os.path.join(self.ANSIBLE_PLAYBOOKS_PATH, 'ioc_module')
-            return_code = run_ansible_playbook(self.ANSIBLE_PLAYBOOKS_PATH + '/global_inventory.ini',
-                                    ioc_playbooks_dir + '/ioc_build.yml',
-                                    'localhost',
-                                    playbook_args,
-                                    self.env)
-            logger.info(f"Playbook execution finished with return code: {return_code}")
+            self.package_ioc()
 
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed

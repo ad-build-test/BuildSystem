@@ -20,7 +20,7 @@ spec:
     runAsGroup: 1006
   containers:
   - name: rhel7-dev
-    image: ghcr.io/ad-build-test/rhel7-env:latest
+    image: ghcr.io/ad-build-test/rhel7-env:dev
     imagePullPolicy: Always
     # start the build script
     command: ["/bin/sh"]
