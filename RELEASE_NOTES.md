@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.4 17-Apr-2025 P. Nisperos (pnispero)
+  * Added in changes to fix admin cli to just parse the yaml file instead
+  * Refactor the cli api endpoints to be declared in cli_configuration.py
+
 * tag:1.0.3 16-Apr-2025 P. Nisperos (pnispero)
   * Added proper sourcing dev environment for build containers before starting build
   * Fix bug with admin cli
