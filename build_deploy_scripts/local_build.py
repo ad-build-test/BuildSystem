@@ -7,7 +7,8 @@ from start_test import Test
 
 if __name__ == "__main__":
     if len(sys.argv) != 6:  # Ensure 5 arguments are passed
-        print("Usage: python local_build.py <manifest_data> <user_src_repo> <component> <branch>")
+        print(f"arguments given: {sys.argv}")
+        print("Usage: python3 local_build.py <manifest_data> <user_src_repo> <component> <branch> <build_os>")
         sys.exit(1)
 
     # Deserialize the JSON string back into a dictionary

@@ -1,4 +1,4 @@
-from adbs_cli.cli_configuration import cli_configuration, Api
+from adbs_cli.cli_configuration import cli_configuration, Api, ApiEndpoints
 from adbs_cli.component import Component
 import logging
 import requests
@@ -23,6 +23,15 @@ class Request(object):
 
     def set_endpoint(self, endpoint: str):
         self.endpoint = endpoint
+
+    def set_endpoint(self, endpoint, **kwargs):
+        """ Set the endpoint for the request. """
+        if isinstance(endpoint, ApiEndpoints) and kwargs:
+            self.endpoint = endpoint.format(**kwargs)
+        else:
+            self.endpoint = endpoint
+        
+        return self
 
     def add_to_payload(self, key: str, value: str):
         self.payload[key] = value

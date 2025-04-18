@@ -1,6 +1,5 @@
 import time
 import click
-import yaml
 import os
 import git
 import inquirer
@@ -10,7 +9,7 @@ import subprocess
 import pathlib
 from adbs_cli.component import Component
 from adbs_cli.request import Request
-from adbs_cli.cli_configuration import INPUT_PREFIX, Api, under_development, cli_configuration
+from adbs_cli.cli_configuration import INPUT_PREFIX, Api, ApiEndpoints, under_development, cli_configuration
 from adbs_cli.auto_complete import AutoComplete
 
 def clone_repo(request: Request):
@@ -24,13 +23,6 @@ def clone_repo(request: Request):
         os.chdir(clone_filepath)
         component_info = request.get_component_from_db()
         request.component.git_clone(component_info['url'])
-
-def parse_manifest(filename: str) -> dict:
-    # Parse manifest - filepath is only here, so if ever need to change its only one location
-    with open(filename, 'r') as file:
-        yaml_data = yaml.safe_load(file)
-    # logging.info(yaml_data)
-    return yaml_data
 
 def find_tarball(base_path):
     # Define the base directory
@@ -90,7 +82,8 @@ def get_remote_build_log(build_id: str, verbose: bool=False):
 
     # 2) Get the log, if live then stream, otherwise compelete log will be returned
     request = Request()
-    request.set_endpoint(f"build/{build_id}/log/tail")
+    request.set_endpoint(ApiEndpoints.BUILD_LOG,
+                         id=build_id)
     response = request.get_streaming_request(log=verbose)
     try:
         response.raise_for_status()
@@ -283,8 +276,7 @@ def clone(component: str, branch: str="main", verbose: bool=False):
     # request.set_component_fields()
 
     # 2) Request for all components
-    endpoint = 'component'
-    request.set_endpoint(endpoint)
+    request.set_endpoint(ApiEndpoints.COMPONENT)
     response = request.get_request(log=verbose)
 
     component_list_payload = response.json()['payload']
@@ -339,7 +331,9 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
         else:
             # Get all the build ids available, then show the top 5 most recent ones 
             # and ask user to select which one they want to view
-            request.set_endpoint(f"build/component/{request.component.name}/branch/{request.component.branch_name}")
+            request.set_endpoint(ApiEndpoints.BUILD_BRANCH,
+                                 component_name=request.component.name,
+                                 branch_name=request.component.branch_name)
             response = request.get_request(log=verbose).json()
             builds = response['payload']
             
@@ -399,7 +393,7 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
         # 2) Parse manifest
         user_src_repo = request.component.git_get_top_dir()
         manifest_filepath = user_src_repo + '/config.yaml'
-        manifest_data = parse_manifest(manifest_filepath)
+        manifest_data = request.component.parse_manifest(manifest_filepath)
         build_os_list = manifest_data["environments"]
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
         # 3) shell into the build environment, and run local_build() in there
@@ -422,8 +416,9 @@ def build(component: str, branch: str, log: bool, local: bool, remote: bool, con
     ## Remote build
     elif (build_type == "REMOTE"):
         # 2) Send request to backend
-        endpoint = 'build/component/' + request.component.name + '/branch/' + request.component.branch_name
-        request.set_endpoint(endpoint)
+        request.set_endpoint(ApiEndpoints.BUILD_BRANCH,
+                        component_name=request.component.name,
+                        branch_name=request.component.branch_name)
         request.add_to_payload("ADBS_BUILD_TYPE", "normal")
         payload = request.post_request(log=verbose, msg="Start remote build id")
         build_id = payload.json()['payload'][0] # TODO: This payload returns list of build ids, but since we only expect one os for now, get the first item
@@ -457,7 +452,7 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
-@click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate iocs by comma, ex: dev,lcls")
+@click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate facilties by comma, ex: dev,lcls")
 @click.option("-ts", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
 @click.option("-t", "--tag", required=False, help="Component tag to deploy")
@@ -480,7 +475,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # Get app type
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
-    manifest_data = parse_manifest(manifest_filepath)
+    manifest_data = deployment_request.component.parse_manifest(manifest_filepath)
     deployment_type = manifest_data['deploymentType'].lower()
 
     # 1.1) Option - test
@@ -498,7 +493,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # 1.2) Option - list
     if (list):
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
-        deployment_request.set_endpoint('deployment/info')
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_INFO)
         response = deployment_request.get_request(log=verbose)
         if (not response.ok):
             click.echo(f"== ADBS == Error - {response.json()}")
@@ -592,7 +587,9 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             iocs_in_db = [] 
             for facility in ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]: # Get every ioc from each facility
                 active_deployment_request = Request(deployment_request.component.name)
-                active_deployment_request.set_endpoint(f"deployments/{deployment_request.component.name}/{facility}")
+                active_deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_FACILITIY,
+                                                       component_name=deployment_request.component.name,
+                                                       facility=facility)
                 response = active_deployment_request.get_request(log=verbose)
                 if (not response.ok): # Skip if no ioc found in facility
                     continue
@@ -622,10 +619,12 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # 7) If revert then send deployment revert request to deployment controller
     if (revert):
         # TODO: Revert endpoint
-        deployment_request.set_endpoint(deployment_type + '/deployment/revert')
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
+                                        deployment_Type=deployment_type)
     else:
         # 8) Send deployment request to deployment controller
-        deployment_request.set_endpoint(deployment_type + '/deployment')
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
+                                        deployment_Type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)

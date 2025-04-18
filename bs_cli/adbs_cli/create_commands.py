@@ -3,7 +3,7 @@ from adbs_cli.request import Request
 from adbs_cli.auto_complete import AutoComplete
 from adbs_cli.component import Component
 import inquirer
-from adbs_cli.cli_configuration import INPUT_PREFIX
+from adbs_cli.cli_configuration import INPUT_PREFIX, ApiEndpoints
 
 
 @click.group()
@@ -98,8 +98,8 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
             click.echo('Successfully created branch: ' + full_branch_name)
 
     # 5) Write to database
-    endpoint = 'component/' + component_obj.name.lower() + '/branch'
-    request.set_endpoint(endpoint)
+    request.set_endpoint(ApiEndpoints.COMPONENT_BRANCH,
+                         component_name=component_obj.name.lower())
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)
     request.add_to_payload("branchName", full_branch_name)
@@ -151,8 +151,9 @@ def issue(component: str, cater_id: int, issue_title: str, issue_body: str, verb
     request.add_to_payload("issueBody", issue_body)
 
     # 4) Send request to backend
-    endpoint = 'component/' + request.component.name + '/issue/' + issue_tracker
-    request.set_endpoint(endpoint)
+    request.set_endpoint(ApiEndpoints.COMPONENT_ISSUE,
+                         component_name=request.component.name,
+                         issue_tracker=issue_tracker)
     request.post_request(log=verbose, msg="Create issue")
 
     
