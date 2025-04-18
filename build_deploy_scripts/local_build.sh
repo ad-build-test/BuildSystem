@@ -6,4 +6,4 @@
 source /afs/slac/g/lcls/tools/script/ENVS64.bash
 
 # Call the main python script to do the build
-python3 /build/local_build.py $1 $2 $3 $4 $5
+python3 /build/local_build.py "$1" "$2" "$3" "$4" "$5"

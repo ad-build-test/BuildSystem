@@ -1,5 +1,6 @@
 import os
 from git import Repo, exc
+import yaml
 from adbs_cli.auto_complete import AutoComplete
 
 class Component(object):
@@ -109,6 +110,13 @@ class Component(object):
                 if (self.set_cur_dir_component() == False):
                     # 3) Else prompt user for component
                     self.prompt_branch_name()
+
+    def parse_manifest(self, filename: str) -> dict:
+        # Parse manifest - filepath is only here, so if ever need to change its only one location
+        with open(filename, 'r') as file:
+            yaml_data = yaml.safe_load(file)
+        # logging.info(yaml_data)
+        return yaml_data
                     
 
                 
