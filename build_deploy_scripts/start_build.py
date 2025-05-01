@@ -260,13 +260,13 @@ endif"""
         if (verbose):
             logger.debug("Build environment:")
             logger.debug("self.env=" + str(self.env))
-        logger.info("Running Build:")
         if build_method.endswith('.sh'): # Run the repo-defined build-script
             build_script = './' + config_yaml['build']
             command = ['sh', build_script]
         else:  # Run the build command
             command = [build_method]
             
+        logger.info("Running Build with command: " + command)
         return_code = run_process(command, self.env)
 
         if (return_code != 0):

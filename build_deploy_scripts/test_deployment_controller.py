@@ -1,5 +1,6 @@
 """
-Desc: TEST Deployment controller, handles deployments
+Desc: TEST Deployment controller, handles deployments. Please follow each directions below to ensure
+correct testing:
 
 SETUP: This test deployment controller needs the working
 mongodb running on kubernetes, and would require your home directory
@@ -20,16 +21,16 @@ POST TEST:
 
     name: "test-ioc"
     facility: "test"
-    tag: "1.0.58"
+    tag: "1.0.66"
     type: "ioc"
     dependsOn: Array (2)
     0: Object
         name: "sioc-b34-gtest01"
-        tag: "1.0.58"
+        tag: "1.0.66"
 
     1: Object
         name: "sioc-b34-gtest02"
-        tag: "1.0.58"
+        tag: "1.0.66"
 2) Please delete the new deployment you made which is test-ioc at facility 'test'
     and pydm-mps at facility 'test' and
     then can rerun test
@@ -65,7 +66,8 @@ def mock_paths():
          patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
          patch('deployment_controller.APP_PATH', '/home/pnispero/test-deployment-controller/app'), \
-         patch('deployment_controller.FACILITIES', ['test', 'LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']):
+         patch('deployment_controller.FACILITIES_OS', {"test": "RHEL7","LCLS": "RHEL7", "FACET": "RHEL7", "TESTFAC": "RHEL7",
+                  "DEV": "ROCKY9", "S3DF": "ROCKY9"}):
         yield
 
 ####### Tests for get_deployment_component_info
@@ -80,11 +82,11 @@ def test_get_ioc_component_info_not_found(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_component_success(mock_paths):
     print("Starting test_deploy_ioc_new_component_success - add a new component entirely\n \
-          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.57 -u")
+          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.65 -u")
     
     test_facility = "test"
     test_component = "test-ioc"
-    test_tag = "1.0.57"
+    test_tag = "1.0.65"
     test_ioc_list = "sioc-b34-gtest01"
     test_user = "test_user"
     test_new = True
@@ -129,12 +131,12 @@ async def test_deploy_ioc_new_component_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component\n \
-          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.57 -u")
+          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.65 -u")
     
     ioc_request = IocDict(
         facilities=["test"],
         component_name="test-ioc",
-        tag="1.0.57",
+        tag="1.0.65",
         ioc_list=["sioc-b34-gtest02"],
         user="test_user",
         new=True
@@ -153,11 +155,11 @@ async def test_deploy_ioc_new_ioc_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
     print("Starting test_deploy_ioc_new_tag_all_success_dry_run - deploy new tag to an existing component with ALL iocs entirely in check mode\n \
-          bs deploy --facility test -i ALL -t 1.0.58 -n")
+          bs deploy --facility test -i ALL -t 1.0.66 -n")
     
     test_facility = "test"
     test_component = "test-ioc"
-    test_tag = "1.0.58"
+    test_tag = "1.0.66"
     test_ioc_list = "ALL"
     test_user = "test_user"
     test_new = False
@@ -199,11 +201,11 @@ async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_all_success(mock_paths):
     print("Starting test_deploy_ioc_new_tag_all_success - deploy new tag to an existing component with ALL iocs\n \
-          bs deploy --facility test -i ALL -t 1.0.58")
+          bs deploy --facility test -i ALL -t 1.0.66")
     
     test_facility = "test"
     test_component = "test-ioc"
-    test_tag = "1.0.58"
+    test_tag = "1.0.66"
     test_ioc_list = "ALL"
     test_user = "test_user"
     test_new = False
