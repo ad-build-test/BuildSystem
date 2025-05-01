@@ -128,7 +128,7 @@ def configure_user():
     if os.path.exists(conf_file):
         os.remove(conf_file)
 
-    github_uname = input(f"{INPUT_PREFIX}Specify github username: ")
+    github_uname = input(f"{INPUT_PREFIX}Specify GitHub username: ")
 
     # Content to write
     write_env = f"""# Build System CLI Configuration\nexport AD_BUILD_GH_USER={github_uname}\n
@@ -189,7 +189,7 @@ def generate_config():
             click.echo(f"Error: The specified path '{top_level}' does not exist.")
             return
 
-    org_name = input(INPUT_PREFIX + "Specify name of org: ")
+    org_name = input(INPUT_PREFIX + "Specify name of GitHub organization: ")
     description = input(INPUT_PREFIX + "Specify repo description: ")
     build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
     question = [
@@ -216,7 +216,7 @@ def generate_config():
     inquirer.List(
         "deploymentType",
         message="What type of deployment will this app use?",
-        choices=["ioc", "hla", "tools", "matlab", "pydm"]
+        choices=["ioc", "hla", "tools", "matlab", "pydm", "container"]
         ),
     ]
     deployment_type = inquirer.prompt(question)['deploymentType']
@@ -243,7 +243,7 @@ environments:
 
 # [Required]
 # Type of deployment
-# Types: [ioc, hla, tools, matlab, pydm]
+# Types: [ioc, hla, tools, matlab, pydm, container]
 deploymentType: {deployment_type}
 
 # [Optional] 
@@ -314,12 +314,13 @@ def clone(component: str, branch: str="main", verbose: bool=False):
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
 @click.option("-l", "--log", is_flag=True, required=False, help="Retrieve log of a remote build")
-@click.option("-lc", "--local", is_flag=True, required=False, help="Local build")
-@click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
-@click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
+# @click.option("-lc", "--local", is_flag=True, required=False, help="Local build")
+# @click.option("-r", "--remote", is_flag=True, required=False, help="Remote build")
+# @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
-def build(component: str, branch: str, log: bool, local: bool, remote: bool, container: bool, verbose: bool=False):
+def build(component: str, branch: str, log: bool, remote: bool=True, local: bool=False, container: bool=False, verbose: bool=False):
     """Trigger a build [local | remote | container]"""
+    ## Commented out Local and Container options for now, just default to remote builds
     request = Request(Component(component, branch))
     request.set_component_fields()
     # 0) Special case, if log only

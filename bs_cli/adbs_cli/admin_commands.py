@@ -15,13 +15,12 @@ def admin():
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def add_repo(verbose: bool=False):
     """Add a component to the component database"""
-    component_obj = Component()
-    request = Request(Component(component_obj))
+    request = Request(Component())
 
     # === Lets make sure the admin is in a checked out copy of the repo,
     # then we can parse the manifest and only question to ask is the automated test part
     # 1) First check that user is in repo
-    if (not component_obj.set_cur_dir_component()):
+    if (not request.component.set_cur_dir_component()):
         click.echo('fatal: not a git repository (or any of the parent directories)')
         return
     
@@ -54,14 +53,14 @@ def add_repo(verbose: bool=False):
     request.post_request(verbose, msg="Add component to component database")
 
     # Create another put request but to enable permissions for backend to receive events
-    request = Request(Component(request.component))
+    request = Request(request.component)
     request.set_endpoint(ApiEndpoints.COMPONENT_EVENT, 
                          component_name=request.component.name.lower(),
                          enable="true")
     request.put_request(log=verbose, msg="Enable events for component")
 
     # Add the main branch automatically
-    request = Request(Component(request.component))
+    request = Request(request.component)
     branches = request.component.git_get_branches()
     if ("main" in branches):
         main_branch = "main"
