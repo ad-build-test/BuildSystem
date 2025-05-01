@@ -40,7 +40,8 @@ is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes
 if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
-FACILITIES = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
+FACILITIES_OS = {"LCLS": "RHEL7", "FACET": "RHEL7", "TESTFAC": "RHEL7",
+                  "DEV": "ROCKY9", "S3DF": "ROCKY9"}
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -154,7 +155,7 @@ def find_component_in_facility(facility: str, component_to_find: str) -> dict:
 
 def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
     """ Function to return the facility that the ioc is in """
-    for facility in FACILITIES: # Loop through each facility
+    for facility in FACILITIES_OS.keys(): # Loop through each facility
         component = find_component_in_facility(facility, component_with_ioc)
         if (component):
             for ioc in component['dependsOn']: # Loop through each ioc
@@ -261,14 +262,20 @@ def cleanup_temp_deployment_dir(directory: str):
     except Exception as e:
         logging.error(f"Error cleaning up directory {directory}: {str(e)}")
 
-def download_release(component_name: str, tag: str, download_dir: str, extract_tarball: bool = False):
+def download_release(component_name: str, tag: str, download_dir: str, tag_os: str, extract_tarball: bool = False):
     """ Download a components tagged release from the backend -> github """
+
     endpoint = BACKEND_URL + f'component/{component_name}/release/{tag}'
-    tarball = f'{tag}.tar.gz'
+    # Add OS as a query parameter if provided
+    if tag_os:
+        endpoint += f'?os={tag_os}'
+    # Name the tarball based on tag and OS if provided
+    tarball_name = f'{tag}-{tag_os}.tar.gz' if tag_os else f'{tag}.tar.gz'
+
     response = requests.get(endpoint)
     # Download file from api, and extract to download_dir
     # Download the .tar.gz file
-    tarball_filepath = os.path.join(download_dir, tarball)
+    tarball_filepath = os.path.join(download_dir, tarball_name)
     if response.status_code == 200:
         # Download response to tarball file
         stream_size = 1024*1024 # Write in chunks (1MB) since tarball can be big
@@ -346,7 +353,7 @@ async def get_deployment_component_info(component: Component):
     """
     # 1) Return dictionary of information for an App
     error_msg = "Deployment not found in deployment database, name or facility is wrong or missing. Or it has never been deployed"
-    facilities = FACILITIES
+    facilities = FACILITIES_OS.keys()
     component_info_list = []
     try:
         found_ioc = False
@@ -443,9 +450,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
     os.makedirs(temp_download_dir, exist_ok=True)
     logging.info(f"New deployment request data: {ioc_to_deploy}")
     ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
-    # 2) Call to backend to get component/tag from github releases
-    if (not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, extract_tarball=True)):
-        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
 
     # Special case - if adding new deployment
     deploy_new_iocs = False
@@ -491,51 +495,64 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
                 if (facility == None): # Means ioc doesnt exist (typo on user end)
                     return JSONResponse(content={"payload": {"Error": "ioc not found - " + ioc}}, status_code=400)
                 facilities_ioc_dict[facility].append(ioc)
-    # 3.2) Find the info needed to create the startup.cmd for each ioc
-    extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
-    ioc_info = extract_ioc_cpu_shebang_info(extracted_tarball_filepath)
-    tarball_filepath = extracted_tarball_filepath + '.tar.gz'
-    # 3.3) Figure out which startup.cmd to use for each ioc,
-    ioc_info_list_dict = []
-    for ioc in ioc_info:
-        if ('linuxrt' in ioc['architecture'].lower()):
-            if ('ioc' in ioc['folder_name']):
-                startup_cmd_template = 'startup.cmd.linuxRT'
-            else:
-                startup_cmd_template = 'startup.cmd.cpu'
-        elif ('rtems' in ioc['architecture'].lower()):
-            startup_cmd_template = 'startup.cmd.rtems'
-        else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
-            if ('ioc' in ioc['folder_name'].lower()):
-                startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
-            else:
-                startup_cmd_template = 'startup.cmd.soft.cpu'
-        ioc_dict = {
-            'name': ioc['folder_name'],
-            'architecture': ioc['architecture'],
-            'binary': ioc['binary'],
-            'startup_cmd_template': startup_cmd_template
-        }
-        ioc_info_list_dict.append(ioc_dict)
     # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
     # 4) Call the appropriate ansible playbook for each applicable facility 
     playbook_args_dict = ioc_to_deploy.model_dump()
-    playbook_args_dict['tarball'] = tarball_filepath
     playbook_args_dict['playbook_path'] = ioc_playbooks_path
     playbook_args_dict['user_src_repo'] = None
     status = 200
     deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
+    extracted_ioc_info = False
     for facility in facilities:
         logging.info(f"facility: {facility}")
         logging.info(f"facilities_ioc_dict: {facilities_ioc_dict}")
-        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        # If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
         if (not deploy_new_component and find_component_in_facility(facility, ioc_to_deploy.component_name) is None):
             continue
         if (ioc_to_deploy.ioc_list[0].upper() == 'ALL'):
-            # 3.2) If ioc = 'ALL' then create list of iocs based on facility
+            # If ioc = 'ALL' then create list of iocs based on facility
             component_info = find_component_in_facility(facility, ioc_to_deploy.component_name)
             facilities_ioc_dict[facility].extend([ioc['name'] for ioc in component_info['dependsOn']])
+
+        # Call to backend to get component/tag from github releases
+        facility_os = FACILITIES_OS[facility]
+        if (not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, tag_os=facility_os, extract_tarball=True)):
+            return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
+
+
+        # Find the info needed to create the startup.cmd for each ioc
+        if (not extracted_ioc_info):
+            extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
+            ioc_info = extract_ioc_cpu_shebang_info(extracted_tarball_filepath)
+            # 3.3) Figure out which startup.cmd to use for each ioc,
+            ioc_info_list_dict = []
+            for ioc in ioc_info:
+                if ('linuxrt' in ioc['architecture'].lower()):
+                    if ('ioc' in ioc['folder_name']):
+                        startup_cmd_template = 'startup.cmd.linuxRT'
+                    else:
+                        startup_cmd_template = 'startup.cmd.cpu'
+                elif ('rtems' in ioc['architecture'].lower()):
+                    startup_cmd_template = 'startup.cmd.rtems'
+                else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
+                    if ('ioc' in ioc['folder_name'].lower()):
+                        startup_cmd_template = 'startup.cmd.soft.ioc' # TODO: or soft?
+                    else:
+                        startup_cmd_template = 'startup.cmd.soft.cpu'
+                ioc_dict = {
+                    'name': ioc['folder_name'],
+                    'architecture': ioc['architecture'],
+                    'binary': ioc['binary'],
+                    'startup_cmd_template': startup_cmd_template
+                }
+                ioc_info_list_dict.append(ioc_dict)
+            extracted_ioc_info = True
+
+        # Add the tarball path
+        tarball_filepath = extracted_tarball_filepath + "-" + facility_os + '.tar.gz'
+        logging.info(f"tarball_filepath: {tarball_filepath}")
+        playbook_args_dict['tarball'] = tarball_filepath
 
         # Iterate over ioc_list_dict and add matching items to facility_ioc_dict
         facility_ioc_dict = []
@@ -598,7 +615,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     logging.info(f"New deployment request data: {pydm_to_deploy}")
     pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
     # 2) Call to backend to get component/tag from github releases
-    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir)):
+    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir, tag_os="", )):
         return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
 
     # 3) Logic for special cases
