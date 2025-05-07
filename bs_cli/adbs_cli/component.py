@@ -85,9 +85,8 @@ class Component(object):
         self.name = input(prompt)
 
     def prompt_branch_name(self, prompt: str=None):
-        AutoComplete.set_auto_complete_vals("branch")
         if (not prompt):
-            prompt = 'What is the branch name? (<tab>-complete) '
+            prompt = 'What is the branch name? '
         self.branch_name = input(prompt)
 
     # logic does 3 seperate steps to set a field
