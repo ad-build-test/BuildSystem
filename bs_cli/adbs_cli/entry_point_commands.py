@@ -319,7 +319,7 @@ def clone(component: str, branch: str="main", verbose: bool=False):
 # @click.option("-cn", "--container", is_flag=True, required=False, help="Container build")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def build(component: str, branch: str, log: bool, remote: bool=True, local: bool=False, container: bool=False, verbose: bool=False):
-    """Trigger a build [local | remote | container]"""
+    """Trigger a remote build"""
     ## Commented out Local and Container options for now, just default to remote builds
     request = Request(Component(component, branch))
     request.set_component_fields()
