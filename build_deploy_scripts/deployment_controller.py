@@ -66,6 +66,14 @@ class PydmDict(Component):
     dry_run: bool = False # Optional
     subsystem: str # Ex: [mps, mgnt, vac, prof, etc.]
 
+class InitialDeploymentDict(Component):
+# Used for the initial deployment endpoint
+    facility: str
+    tag: str
+    ioc_list: list = None # Optional
+    user: str
+    type: str
+
 class TagDict(Component):
     branch: str
     results: str
@@ -107,7 +115,7 @@ def add_new_component(facility: str, app_type: str, component_name: str,
         new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
         logging.debug(f"new_depends_on_list: {new_depends_on_list}")
         new_component['dependsOn'] = new_depends_on_list
-    
+
     logging.debug(f"new_component: {new_component}")
     endpoint = BACKEND_URL + 'deployments'
     response = requests.post(endpoint, json=new_component)
@@ -690,6 +698,31 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
         return Response(content=content, media_type="text/plain", status_code=status)
     else:
         return FileResponse(path=deployment_report_file, status_code=status)
+    
+@app.put("/initial/deployment")
+async def initial_deployment(initial_deployment: InitialDeploymentDict):
+    """
+    Function to add an initial deployment to the database (Does not deploy - only adds to database)
+    This endpoint is intended to be used by software factory admins only
+    """
+    # Check if component already exists in deployment database
+    component = find_component_in_facility(initial_deployment.facility, initial_deployment.component_name)
+    if (component): return JSONResponse(content={"payload": {"Error": "Deployment already exists in deployment configuration/database"}}, status_code=400)
+
+    # add an entry to deployment database
+    timestamp = datetime.now().isoformat()
+    new_component = { "name": initial_deployment.component_name,
+        "facility": initial_deployment.facility,
+        "tag": initial_deployment.tag,
+        "type": initial_deployment.type,
+    }
+    new_component['dependsOn'] = initial_deployment.ioc_list
+    logging.debug(f"new_component: {new_component}")
+    endpoint = BACKEND_URL + 'deployments'
+    response = requests.post(endpoint, json=new_component)
+    add_log_to_component(initial_deployment.facility, timestamp, initial_deployment.user,
+                          initial_deployment.component_name, "Initial deployment entry added by software factory admins")
+    return JSONResponse(content={"payload": {"Success": "Deployment added to database"}}, status_code=200)
 
 if __name__ == "__main__":
     uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=180)

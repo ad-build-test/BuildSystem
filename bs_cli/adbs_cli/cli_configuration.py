@@ -23,6 +23,7 @@ class ApiEndpoints(str, Enum):
     DEPLOYMENT_REVERT = "{deployment_type}/deployment/revert" 
     DEPLOYMENT_INFO = "deployment/info"
     DEPLOYMENT_FACILITIY = "deployments/{component_name}/{facility}"
+    DEPLOYMENT_INITIAL = "initial/deployment"
     
     def format(self, **kwargs):
         """Format the endpoint with the provided parameters. (If applicable)"""
