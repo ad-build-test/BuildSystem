@@ -158,7 +158,7 @@ def parse_ioc_deployments(file_path):
             # ex: Current versions on facility: LCLS
             facility_match = re.match(r'Current versions on facility: (\w+)', line)
             if facility_match:
-                current_facility = facility_match.group(1)
+                current_facility = facility_match.group(1).upper()
                 facilities[current_facility] = {
                     "facility": current_facility,
                     "tag": None,
@@ -231,6 +231,7 @@ def add_initial_deployment(component: str, verbose: bool):
                 ),
             ]
             deployment_type = inquirer.prompt(question)['deploymentType']
+            component = component.lower()
             for facility, facility_data in result.items():
                 data_to_write = {
                     "facility": facility,
