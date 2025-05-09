@@ -512,7 +512,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 # Loop through the 'dependsOn' list and print each entry
                 if (deployment_type == 'ioc'):
                     if (details['dependsOn']):
-                        for dep in details['dependsOn']:
+                        sorted_deps = sorted(details['dependsOn'], key=lambda ioc: ioc['name'])
+                        for dep in sorted_deps:
                             click.echo(f"IOC: {dep['name']} => {dep['tag']}")
         return
     # 2) Get fields
