@@ -1,10 +1,11 @@
 import click
+import re
+import json
 import inquirer
 from adbs_cli.request import Request
 from adbs_cli.component import Component
 from adbs_cli.auto_complete import AutoComplete
-from adbs_cli.cli_configuration import under_development,  Api, ApiEndpoints
-from adbs_cli.cli_configuration import INPUT_PREFIX
+from adbs_cli.cli_configuration import cli_configuration, Api, ApiEndpoints, INPUT_PREFIX
 
 @click.group(hidden=True)
 def admin():
@@ -142,6 +143,110 @@ def delete_repo(component: str, verbose: bool):
                          id=component_id)
     request.delete_request(log=verbose, msg="Delete component from component database")
 
+def parse_ioc_deployments(file_path):
+    # Initialize variables
+    facilities = {}
+    current_facility = None
+    current_master_release = None
+    
+    # Read the file
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            
+            # Check for facility line
+            # ex: Current versions on facility: LCLS
+            facility_match = re.match(r'Current versions on facility: (\w+)', line)
+            if facility_match:
+                current_facility = facility_match.group(1)
+                facilities[current_facility] = {
+                    "facility": current_facility,
+                    "tag": None,
+                    "dependsOn": []
+                }
+                continue
+            
+            # Check for master release line
+            # ex: Current master release => l2MpsLN-R5-4-6
+            master_match = re.match(r'Current master release => ([\w\-\.]+)', line)
+            if master_match and current_facility:
+                current_master_release = master_match.group(1)
+                facilities[current_facility]["tag"] = current_master_release
+                continue
+            
+            # Check for IOC line
+            # ex: IOC: sioc-b084-mp05 => l2MpsLN-R3-14-0
+            ioc_match = re.match(r'IOC: ([\w\-]+) => ([\w\-\.]+)', line)
+            if ioc_match and current_facility:
+                ioc_name = ioc_match.group(1)
+                ioc_tag = ioc_match.group(2)
+                
+                facilities[current_facility]["dependsOn"].append({
+                    "name": ioc_name,
+                    "tag": ioc_tag
+                })
+    
+    # Remove empty facilities or those without IOCs
+    # Expanded version of the one-liner
+    filtered_facilities = {}
+    for facility_name, facility_data in facilities.items():
+        if facility_data["dependsOn"]:  # If the dependsOn list is not empty
+            filtered_facilities[facility_name] = facility_data
+
+    return filtered_facilities
+
+@admin.command()
+@click.option("-c", "--component", required=False, help="Component Name", prompt=INPUT_PREFIX + "Specify component name")
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def add_initial_deployment(component: str, verbose: bool):
+    """Add an initial deployment configuration in the database (Useful for IOCS only at the moment) (CAUTION)"""
+
+    # The logic is done through the deployment controller,
+    # so if api ever changes, you don't need to update this function. 
+
+    # Grab deployment info from cram ls
+    steps = """Instructions (Please read all first): 
+    Go to dev3 and run "cram ls | sed -e 's/\x1b\[[0-9;]*m//g' > cram_deployment.txt"
+    Then go to where you have access to bs cli and wherever you call
+    bs admin add-initial-deployment, add the cram_deployment.txt there
+    it'll be parsed, then added to software factory db, then you can delete the file.
+            """
+    click.echo(steps)
+    if (click.confirm("Have you completed the steps?")):
+        # Parse the cram output
+        # Transform the data and send to deployment controller to add to db
+        result = parse_ioc_deployments("cram_deployment.txt")
+    
+        # Print each facility as a separate JSON object
+        for facility_name, facility_data in result.items():
+            print(f"Facility: {facility_name}")
+            print(json.dumps(facility_data, indent=2))
+            print("\n" + "-"*50 + "\n")
+        if (click.confirm("Does the above deployment info look correct")):
+            question = [
+            inquirer.List(
+                "deploymentType",
+                message="What type of deployment will this app use?",
+                choices=["ioc", "hla", "tools", "matlab", "pydm", "container"]
+                ),
+            ]
+            deployment_type = inquirer.prompt(question)['deploymentType']
+            for facility, facility_data in result.items():
+                data_to_write = {
+                    "facility": facility,
+                    "component_name": component,
+                    "tag": facility_data['tag'],
+                    "user": cli_configuration['github_uname'],
+                    "type": deployment_type
+                }
+                if (deployment_type == 'ioc'):
+                    data_to_write["ioc_list"] = facility_data['dependsOn']
+                request = Request(Component(component), Api.DEPLOYMENT)
+                request.set_endpoint(ApiEndpoints.DEPLOYMENT_INITIAL)
+                request.add_dict_to_payload(data_to_write)
+                request.put_request(log=verbose, msg="Add initial deployment for component in facility: " + facility)
+    else:
+        click.echo("Please complete the instructions")
 
 
 

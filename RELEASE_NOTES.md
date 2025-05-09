@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.6 9-May-2025 P. Nisperos (pnispero)
+  * Added admin cli command to add an initial deployment configuration easier
+  * Fix some typos with deployment command
+
 * tag:1.0.5 7-May-2025 P. Nisperos (pnispero)
   * Added support for multiple os deployments
   * Made cli - build more simple (removed local and container builds for now)

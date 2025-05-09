@@ -266,7 +266,7 @@ endif"""
         else:  # Run the build command
             command = [build_method]
             
-        logger.info("Running Build with command: " + command)
+        logger.info("Running Build with command: " + str(command))
         return_code = run_process(command, self.env)
 
         if (return_code != 0):
