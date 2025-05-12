@@ -622,11 +622,11 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (revert):
         # TODO: Revert endpoint
         deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
-                                        deployment_Type=deployment_type)
+                                        deployment_type=deployment_type)
     else:
         # 8) Send deployment request to deployment controller
         deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
-                                        deployment_Type=deployment_type)
+                                        deployment_type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
