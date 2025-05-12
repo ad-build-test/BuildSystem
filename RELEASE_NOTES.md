@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.8 12-May-2025 P. Nisperos (pnispero)
+  * Fix bug with deployment cli. Deployment type had a typo.
+
 * tag:1.0.7 9-May-2025 P. Nisperos (pnispero)
   * Fix bug with word casing on initial deployment configuration
   * Sorted iocs by alphabetical order before displaying to user bs deploy --list
