@@ -47,6 +47,7 @@ def add_repo(verbose: bool=False):
     build_os = {"buildOs": manifest_data["environments"]}
     request.add_dict_to_payload(build_os)
     request.add_to_payload("url", f"https://github.com/{organization}/{request.component.name}")
+    request.add_to_payload("ssh", f"git@github.com:{organization}/{request.component.name}.git")
     if (not click.confirm("Do you want to add automated build and tests?")):
         request.add_to_payload("skipBuildAndTests", True)
     
@@ -116,6 +117,7 @@ def update_repo(component: str, organization: str, testing_criteria: str, approv
     build_os_list = inquirer.prompt(question)
     request.add_dict_to_payload(build_os_list)
     request.add_to_payload("url", f"https://github.com/{organization}/{request.component.name}")
+    request.add_to_payload("ssh", f"git@github.com:{organization}/{request.component.name}.git")
     if (not click.confirm("Do you want to add automated build and tests?")):
         request.add_to_payload("skipBuildAndTests", True)
     
