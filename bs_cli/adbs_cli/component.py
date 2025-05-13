@@ -1,5 +1,6 @@
 import os
-from git import Repo, exc
+import sys
+from git import Repo, exc, RemoteProgress
 import yaml
 from adbs_cli.auto_complete import AutoComplete
 
@@ -117,5 +118,10 @@ class Component(object):
         # logging.info(yaml_data)
         return yaml_data
                     
-
+class SimpleProgress(RemoteProgress):
+    def update(self, op_code, cur_count, max_count=None, message=''):
+        if max_count:
+            percentage = cur_count / max_count * 100
+            sys.stdout.write(f"\rCloning: {percentage:.1f}% ({cur_count}/{max_count}) {message}")
+            sys.stdout.flush()
                 

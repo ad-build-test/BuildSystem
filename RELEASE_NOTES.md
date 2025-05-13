@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.9 13-May-2025 P. Nisperos (pnispero)
+  * Made bs clone use ssh not https. Updated bs generate-config to add the ssh url.
+
 * tag:1.0.8 12-May-2025 P. Nisperos (pnispero)
   * Fix bug with deployment cli. Deployment type had a typo.
 
