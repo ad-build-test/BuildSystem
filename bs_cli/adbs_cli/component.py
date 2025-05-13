@@ -1,8 +1,6 @@
 import os
 import sys
-
 from git import Repo, exc, RemoteProgress
-from tqdm import tqdm
 import yaml
 from adbs_cli.auto_complete import AutoComplete
 
