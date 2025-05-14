@@ -99,7 +99,7 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
 
     # 5) Write to database
     request.set_endpoint(ApiEndpoints.COMPONENT_BRANCH,
-                         component_name=component_obj.name.lower())
+                         component_name=component_obj.name)
     request.add_to_payload("type", branch_point_type)
     request.add_to_payload("branchPoint", branch_point_value)
     request.add_to_payload("branchName", full_branch_name)

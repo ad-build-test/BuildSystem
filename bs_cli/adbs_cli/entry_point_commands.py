@@ -399,7 +399,7 @@ def build(component: str, branch: str, log: bool, remote: bool=True, local: bool
         manifest_data = json.dumps(manifest_data) # Serialize dictionary to JSON string to pass
         # 3) shell into the build environment, and run local_build() in there
         for build_os in build_os_list:
-            build_os = build_os.lower()
+            build_os = build_os
             click.echo(f"== ADBS == Building for architecture: {build_os}")
             if (build_os == "rocky9"):
                 build_os == "rhel9"

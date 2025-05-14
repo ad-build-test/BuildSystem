@@ -42,14 +42,12 @@ class Request(object):
     def add_to_params(self, key: str, value: str):
         self.params[key] = value
 
-    def set_component_fields(self, lower_case: bool=True):
-        self.set_component_name(lower_case)
+    def set_component_fields(self):
+        self.set_component_name()
         self.set_component_branch_name()
     
-    def set_component_name(self, lower_case: bool=True):
+    def set_component_name(self):
         self.component.set_component_field_logic("name")
-        if (lower_case):
-            self.component.name = self.component.name.lower()
 
     def set_component_branch_name(self):
         self.component.set_component_field_logic("branch")
