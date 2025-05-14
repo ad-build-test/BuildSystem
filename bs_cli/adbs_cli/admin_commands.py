@@ -86,7 +86,7 @@ def add_repo(verbose: bool=False):
 def update_repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, verbose: bool=False):
     """Update a component in the component database"""
     get_component_request = Request(Component(component))
-    get_component_request.set_component_name(lower_case=True)
+    get_component_request.set_component_name()
     component_id = get_component_request.get_component_from_db()['id']
     
     request = Request(Component(component))
