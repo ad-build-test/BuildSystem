@@ -200,7 +200,6 @@ endif"""
             tarball_path = os.path.join(build_results, f"{self.component}-{self.branch}.tar.gz")
             
             # Create target directory
-            logger.info(f"Creating directory: {target_dir}")
             os.makedirs(target_dir, mode=0o775, exist_ok=True)
             
             # Copy required directories using rsync
@@ -234,7 +233,8 @@ endif"""
                     # Continue with other items
             
             # Create tarball
-            logger.info(f"Creating tarball {tarball_path}")
+            tarball_path_user = tarball_path.replace("/mnt/eed/ad-build/scratch", "$AD_BUILD_SCRATCH")
+            logger.info(f"Creating tarball {tarball_path_user}")
             orig_dir = os.getcwd()
             try:
                 os.chdir(build_results)
@@ -242,7 +242,7 @@ endif"""
                     "tar", "czf", tarball_path, 
                     f"{self.component}-{self.branch}"
                 ], check=True)
-                logger.info(f"Successfully created tarball at {tarball_path}")
+                logger.info(f"Successfully created tarball at {tarball_path_user}")
             finally:
                 os.chdir(orig_dir)
                 
