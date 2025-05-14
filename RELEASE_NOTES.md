@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.10 14-May-2025 P. Nisperos (pnispero)
+  * Removed forced lower casing on component names.
+
 * tag:1.0.9 13-May-2025 P. Nisperos (pnispero)
   * Made bs clone use ssh not https. Updated bs generate-config to add the ssh url.
 

@@ -57,7 +57,7 @@ def add_repo(verbose: bool=False):
     # Create another put request but to enable permissions for backend to receive events
     request = Request(request.component)
     request.set_endpoint(ApiEndpoints.COMPONENT_EVENT, 
-                         component_name=request.component.name.lower(),
+                         component_name=request.component.name,
                          enable="true")
     request.put_request(log=verbose, msg="Enable events for component")
 
@@ -69,7 +69,7 @@ def add_repo(verbose: bool=False):
     elif ("master" in branches):
         main_branch = "master"
     request.set_endpoint(ApiEndpoints.COMPONENT_BRANCH,
-                         component_name=request.component.name.lower())
+                         component_name=request.component.name)
     request.add_to_payload("type", "branch")
     request.add_to_payload("branchName", main_branch)
     request.put_request(log=verbose, msg="Add branch to component database")
@@ -86,7 +86,7 @@ def add_repo(verbose: bool=False):
 def update_repo(component: str, organization: str, testing_criteria: str, approval_rule: str, desc: str, issue_tracker: str, jira_project_key: str, verbose: bool=False):
     """Update a component in the component database"""
     get_component_request = Request(Component(component))
-    get_component_request.set_component_name(lower_case=True)
+    get_component_request.set_component_name()
     component_id = get_component_request.get_component_from_db()['id']
     
     request = Request(Component(component))
@@ -131,7 +131,6 @@ def delete_repo(component: str, verbose: bool):
     """Delete a component from the database (CAUTION)"""
 
     # Request to disable permissions for backend to receive events
-    component = component.lower()
     request = Request(Component(component))
     request.set_endpoint(ApiEndpoints.COMPONENT_EVENT,
                          component_name=component,
@@ -233,7 +232,6 @@ def add_initial_deployment(component: str, verbose: bool):
                 ),
             ]
             deployment_type = inquirer.prompt(question)['deploymentType']
-            component = component.lower()
             for facility, facility_data in result.items():
                 data_to_write = {
                     "facility": facility,
