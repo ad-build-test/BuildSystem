@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.11 14-May-2025 P. Nisperos (pnispero)
+  * Updated log of build container to use $AD_BUILD_SCRATCH instead of /mnt
+
 * tag:1.0.10 14-May-2025 P. Nisperos (pnispero)
   * Removed forced lower casing on component names.
 
