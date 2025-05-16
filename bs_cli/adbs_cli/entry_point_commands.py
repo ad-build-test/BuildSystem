@@ -608,7 +608,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 Change this to, to deploy new iocs use this command. but do you want to 
                 proceed deploying the existing iocs?
             if click.confirm("Do you want to deploy the new iocs too? (If yes, they will be deployed and added to database)"):
-
+                
             else:
                 playbook_args_dict["ioc_list"] = iocs_in_db
     else: # Set the ioc list to what user specified
