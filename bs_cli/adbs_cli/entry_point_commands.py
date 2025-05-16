@@ -456,7 +456,7 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate facilties by comma, ex: dev,lcls")
 @click.option("-ts", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
-@click.option("-t", "--tag", required=False, help="Component tag to deploy")
+@click.argument("tag")
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 # @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
@@ -531,7 +531,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         if (not facility and not ioc):
             click.echo("== ADBS == Please supply the facility and/or the iocs")
             return
-        Patrick remove this update_db option
+        # TODO: Patrick remove this update_db option
         if (ioc.upper() == "ALL" and update_db):
             click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
             return
@@ -605,10 +605,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             click.echo("== ADBS == The following IOCs are not in the deployment database:")
             for ioc in new_iocs:
                 click.echo(f"  - {ioc}")
-                Change this to, to deploy new iocs use this command. but do you want to 
-                proceed deploying the existing iocs?
+                # TODO: Change this to, to deploy new iocs use this command. but do you want to 
+                # proceed deploying the existing iocs?
             if click.confirm("Do you want to deploy the new iocs too? (If yes, they will be deployed and added to database)"):
-                
+                pass
             else:
                 playbook_args_dict["ioc_list"] = iocs_in_db
     else: # Set the ioc list to what user specified

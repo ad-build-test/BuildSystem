@@ -21,7 +21,7 @@ POST TEST:
 
     name: "test-ioc"
     facility: "test"
-    tag: "1.0.66"
+    tag: "1.0.67"
     type: "ioc"
     dependsOn: Array (2)
     0: Object
@@ -30,7 +30,7 @@ POST TEST:
 
     1: Object
         name: "sioc-b34-gtest02"
-        tag: "1.0.66"
+        tag: "1.0.67"
 2) Please delete the new deployment you made which is test-ioc at facility 'test'
     and pydm-mps at facility 'test' and
     then can rerun test

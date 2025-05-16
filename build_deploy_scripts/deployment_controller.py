@@ -122,7 +122,7 @@ def add_new_component(facility: str, app_type: str, component_name: str,
     return True
 
 def update_component_in_facility(facility: str, app_type: str, component_to_update: str,
-                                  tag: str, iocs_to_update: list = None, new_iocs: bool = False) -> bool:
+                                  tag: str, iocs_to_update: list = None) -> bool:
     """
     Function to update an existing component in the deployment db
     """
@@ -133,6 +133,7 @@ def update_component_in_facility(facility: str, app_type: str, component_to_upda
     # 2) Update tag in original config dict
     component['tag'] = tag
     # 3) Update iocs (if applicable)
+    logging.debug(component)
     if (app_type == 'ioc'):
         # TODO: New logic to add - basically update the tags that do exist, then for ones that don't
                 # exist, add them.
@@ -147,15 +148,7 @@ def update_component_in_facility(facility: str, app_type: str, component_to_upda
                 add_ioc = {"name": ioc_to_update, "tag": tag}
                 component["dependsOn"].append(add_ioc)
             ioc_to_update_exists = False # Reset
-                            
-        # if (new_iocs):
-        #     new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in iocs_to_update]
-        #     component['dependsOn'].extend(new_depends_on_list) # add new iocs onto existing list of iocs
-        #     logging.debug(new_depends_on_list)
-        # else:
-        #     for ioc in component['dependsOn']: # Update the tag for each existing ioc that we want
-        #         if (ioc['name'] in iocs_to_update):
-        #             ioc['tag'] = tag
+
     # 4) Update component in db
     logging.debug(component)
     endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
@@ -317,7 +310,7 @@ def download_release(component_name: str, tag: str, download_dir: str, tag_os: s
         return False
     
 def update_db_after_deployment(deployment_success: bool, new_component: bool, facility: str, app_type: str, component_name: str,
-                               tag: str, new_iocs: bool, user: str, current_output: str, ioc_list: list = None):
+                               tag: str, user: str, current_output: str, ioc_list: list = None):
     # 6) Write new configuration to deployment db for each facility
     timestamp = datetime.now().isoformat()
     # TODO: Add checks if any database operations fail, then bail and return to user
@@ -328,7 +321,7 @@ def update_db_after_deployment(deployment_success: bool, new_component: bool, fa
             add_new_component(facility, app_type, component_name, tag, ioc_list)
         else:
             # case - If new ioc but existing component then update_component_in_facility
-            update_component_in_facility(facility, app_type, component_name, tag, ioc_list, new_iocs)
+            update_component_in_facility(facility, app_type, component_name, tag, ioc_list)
     add_log_to_component(facility, timestamp, user, component_name, current_output)
 
 
@@ -466,22 +459,22 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
     Handles these deployment scenarios:
     1. Deploy tag to select existing IOCs 
         (IOCs specified, facility not required)
-        ex: bs deploy -i sioc-sys0-tg01, sioc-sys0-tg02 -t R1.3.4
+        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 R1.3.4
     2. Deploy tag to all existing IOCs 
         (IOCs specified, facility not required)
         2.1. Deploy tag to all existing IOCs but user specified which facilities they want to update. 
         This would end up being case 2, but the cli would need logic 
         to figure out which IOCs in the facilities to deploy
-        ex: bs deploy -i ALL -f LCLS, TESTFAC -t R1.3.4
+        ex: bs deploy -i ALL -f LCLS, FACET R1.3.4
     3. Deploy tag to new IOCs 
         (IOCs specified, facility required)
-        ex: bs deploy -i sioc-sys0-tg01, sioc-sys0-tg02 -f LCLS -t R1.3.4
+        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 -f LCLS R1.3.4
     4. Deploy tag to component 
         (no IOCs, facility required) - works for both new and existing components
-        ex: bs deploy -f LCLS -t R1.3.4
+        ex: bs deploy -f LCLS R1.3.4
     5. Deploy tag to new component AND new IOCs 
         (IOCs specified, facility required)
-        ex: bs deploy -i sioc-sys0-tg01, sioc-sys0-tg02 -f LCLS -t R1.3.4
+        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 -f LCLS R1.3.4
     """
     # Setup temporary directory for deployment contents
     request_id = str(uuid.uuid4())
@@ -494,14 +487,14 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
     
     # Handle component-only deployment
     if not ioc_to_deploy.ioc_list:
-        logging.info("Component-only deployment (Case 4)")
+        logging.info("Component-only deployment")
         return deploy_component(ioc_to_deploy, temp_download_dir, background_tasks)
     
     # Handle IOC deployments
     if ioc_to_deploy.facilities:
         # Case 3: Deploy tag to new IOCs (IOCs specified, facility required)
         # Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
-        logging.info("Deploy tag to new IOCs (Case 3)")
+        logging.info("Deploy tag to new IOCs")
         return deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, background_tasks)
     else:
         # Cases 1 & 2: Deploy tag to existing IOCs (facility not required)
@@ -511,11 +504,11 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
 
 def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
     """
-    Handle component-only deployment (Case 4).
+    Handle component-only deployment
     - Deploy tag to component (either new or existing) with facility specified
     - No IOCs are deployed
     """
-    I think ioc_to_deploy will always only have one facility specified. if the facility field is used. 
+    # I think ioc_to_deploy will always only have one facility specified. if the facility field is used. 
 
     facilities_ioc_dict = {facility: [] for facility in ioc_to_deploy.facilities}
     
@@ -537,12 +530,12 @@ def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_
     # Execute deployment with empty IOC lists - component only
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, False, background_tasks
+        facilities_ioc_dict, new_component, background_tasks
     )
 
 def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
     """
-    Handle deployments to existing IOCs (Cases 1 & 2).
+    Handle deployments to existing IOCs
     - Case 1: Deploy tag to select existing IOCs 
     - Case 2: Deploy tag to all existing IOCs
     
@@ -566,13 +559,14 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, backgro
     # Execute deployment with the IOCs we found
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, False, False, background_tasks  # No new components
+        facilities_ioc_dict, False, background_tasks  # No new components
     )
 
 def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
     """
-    Handle deployment of IOCs with facility specified (Case 3).
+    Handle deployment of IOCs with facility specified
     - Case 3: Deploy tag to new IOCs (facility required)
+    - Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
     """
     facilities_ioc_dict = {facility: [] for facility in ioc_to_deploy.facilities}
 
@@ -591,32 +585,17 @@ def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, ba
             facilities_ioc_dict[facility] = ioc_to_deploy.ioc_list
 
     if new_component:
-        logging.info(f"Creating new component {ioc_to_deploy.component_name} with IOCs in facilities: {new_component_facilities}")
-    
-    # check to make sure that the iocs don't already exist
-    new_iocs = True
-    for ioc in ioc_to_deploy.ioc_list:
-        facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-        if facility is None:
-            new_iocs = False
-            New problem:
-            If iocs already exist, and user still specified facility, that means
-            # now you gotta call add_new_component() and update_component_in_facility() at the same time
-            Solution: in update_component_in_facility(), we can omit the new_iocs, and instead, when
-            we are looping over the existing component, if there are any iocs in user specified list 
-            that don't exist in existing component, then you can just add the new ones. 
-            TODO: Then we can get rid of the new_iocs boolean everywhere here.
-            It'll just automatically add the new iocs anyways. This makes more sense when you look inside update_component_in_facility()
+        logging.info(f"Creating new component {ioc_to_deploy.component_name} with IOCs in facilities: {facilities_ioc_dict}")
 
     # Execute deployment
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, new_iocs, background_tasks
+        facilities_ioc_dict, new_component, background_tasks
     )
 
 
 def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str, 
-                      facilities_ioc_dict: dict, new_component: bool, new_iocs: bool, background_tasks: BackgroundTasks):
+                      facilities_ioc_dict: dict, new_component: bool, background_tasks: BackgroundTasks):
     """
     Called by the specific deployment functions after they determine what to deploy.
     """
@@ -713,7 +692,6 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
                 'ioc', 
                 ioc_to_deploy.component_name,
                 ioc_to_deploy.tag, 
-                new_iocs,
                 ioc_to_deploy.user, 
                 current_output, 
                 facilities_ioc_dict[facility]
