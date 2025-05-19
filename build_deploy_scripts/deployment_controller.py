@@ -42,7 +42,7 @@ if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 FACILITIES_OS = {"LCLS": "RHEL7", "FACET": "RHEL7", "TESTFAC": "RHEL7",
-                  "DEV": "ROCKY9", "S3DF": "ROCKY9"}
+                  "DEV": "ROCKY9", "S3DF": "RHEL7"}
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -54,12 +54,12 @@ class Component(BaseModel):
 class IocDict(Component):
     facilities: Optional[list] = None  # Optional, defaults to None
     tag: str
-    ioc_list: list
+    ioc_list: Optional[list] = None
     user: str
     dry_run: Optional[bool] = False # Optional
 
 class PydmDict(Component):
-    facilities: list = None # Optional
+    facilities: Optional[list] = None # Optional
     tag: str
     user: str
     new: bool
@@ -70,7 +70,7 @@ class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
     facility: str
     tag: str
-    ioc_list: list = None # Optional
+    ioc_list: Optional[list] = None # Optional
     user: str
     type: str
 
@@ -111,10 +111,15 @@ def add_new_component(facility: str, app_type: str, component_name: str,
         "tag": tag,
         "type": app_type,
     }
+    logging.debug(app_type)
+    logging.debug(ioc_list)
     if (ioc_list):
         new_depends_on_list = [{'name': ioc, 'tag': tag} for ioc in ioc_list]
         logging.debug(f"new_depends_on_list: {new_depends_on_list}")
         new_component['dependsOn'] = new_depends_on_list
+    if (app_type == 'ioc' and ioc_list == []): # Initialize an empty list for dependsOn if ioc app
+        new_component['dependsOn'] = []
+        logging.debug("Adding empty dependsOn list")
 
     logging.debug(f"new_component: {new_component}")
     endpoint = BACKEND_URL + 'deployments'
@@ -607,6 +612,8 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
     deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     extracted_ioc_info = False
+    # Track which OS versions have been downloaded
+    downloaded_os = set()
     
     for facility in facilities_ioc_dict.keys():
         logging.info(f"Deploying to facility: {facility}")
@@ -617,9 +624,12 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         
         # Download release for all deployments
         facility_os = FACILITIES_OS[facility]
-        if not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, tag_os=facility_os, extract_tarball=True):
-            return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
-
+        # Download only if this OS hasn't been downloaded yet
+        if facility_os not in downloaded_os:
+            if not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, tag_os=facility_os, extract_tarball=True):
+                return JSONResponse(content={"payload": {"Error": f"Deployment tag may not exist for app: {ioc_to_deploy.component_name}, tag: {ioc_to_deploy.tag} \
+                                                        , os: {facility_os}. Or software factory backend is broken"}}, status_code=400)
+            downloaded_os.add(facility_os)
         # Extract IOC info (needed even for component-only to record component in DB)
         if not extracted_ioc_info:
             extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)

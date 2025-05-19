@@ -81,8 +81,49 @@ def test_get_ioc_component_info_not_found(mock_paths):
 ####### Tests for deploy_ioc ######################################
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_component_success(mock_paths):
-    print("Starting test_deploy_ioc_new_component_success - add a new component and new ioc entirely\n \
-          bs deploy --facility test -i sioc-b34-gtest01 -t 1.0.65")
+    print("Starting test_deploy_ioc_new_component_success - add a new component entirely\n \
+          bs deploy --facility test 1.0.65")
+    
+    test_facility = "test"
+    test_component = "test-ioc"
+    test_tag = "1.0.65"
+    test_user = "test_user"
+
+    ioc_request = IocDict(
+        facilities=[test_facility],
+        component_name=test_component,
+        tag=test_tag,
+        user=test_user,
+    )
+    
+    print("Sending request to /ioc/deployment")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+    print("Confirm deployment database contents are correct...")
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
+    payload = response.json()['payload']
+    print(f"payload: {payload}")
+    details = []
+    # Loop through the list of deployment entries (one for each facility if exists)
+    for deployment in payload:
+        # Extract the inner dictionary (assuming there's only one item at the top level)
+        for facility, details in deployment.items():
+            if (facility == test_facility):
+                assert details['name'] == test_component
+                assert details['tag'] == test_tag
+                assert details['type'] == 'ioc'
+
+@pytest.mark.asyncio
+async def test_deploy_ioc_new_component_and_ioc_success(mock_paths):
+    print("Starting test_deploy_ioc_new_component_and_ioc_success - add a new component and new ioc entirely\n \
+          bs deploy --facility test -i sioc-b34-gtest01 1.0.65")
     
     test_facility = "test"
     test_component = "test-ioc"
@@ -129,7 +170,7 @@ async def test_deploy_ioc_new_component_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component\n \
-          bs deploy --facility test -i sioc-b34-gtest02 -t 1.0.65")
+          bs deploy --facility test -i sioc-b34-gtest02 1.0.65")
     
     ioc_request = IocDict(
         facilities=["test"],
@@ -153,7 +194,7 @@ async def test_deploy_ioc_new_ioc_success(mock_paths):
 async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
     print("Starting test_deploy_ioc_new_tag_all_success_dry_run - deploy new tag to an existing \
           component with ALL iocs. No facility specified (api should know what facility to use) - entirely in check mode\n \
-          bs deploy -i ALL -t 1.0.66 -n")
+          bs deploy -i ALL -n 1.0.66")
     # In this test case, we can assume the CLI has logic to figure out what "ALL" the iocs are.
 
     test_component = "test-ioc"
@@ -198,7 +239,7 @@ async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
 async def test_deploy_ioc_new_tag_all_success(mock_paths):
     print("Starting test_deploy_ioc_new_tag_all_success - deploy new tag to an existing \
           component with ALL iocs. No facility specified (api should know what facility to use) \n \
-          bs deploy -i ALL -t 1.0.66")
+          bs deploy -i ALL 1.0.66")
     # In this test case, we can assume the CLI has logic to figure out what "ALL" the iocs are.
 
     test_component = "test-ioc"
@@ -246,7 +287,7 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_tag_specific_ioc_success - deploy a new tag to an existing ioc in an existing component\n \
-          bs deploy -i sioc-b34-gtest02 -t 1.0.67")
+          bs deploy -i sioc-b34-gtest02 1.0.67")
     
     ioc_request = IocDict(
         component_name="test-ioc",
