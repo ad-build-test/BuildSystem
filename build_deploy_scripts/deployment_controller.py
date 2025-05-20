@@ -336,12 +336,8 @@ def write_file(filepath: str, content: str):
 
 def generate_report(component_name: str, tag: str, user: str, deployment_output: str, status: int, deployment_report_file: str, facilities_ioc_dict: dict=None):
     """ Generate a deployment report """
-    timezone_offset = -8.0  # Pacific Standard Time (UTC−08:00)
-    tzinfo = timezone(timedelta(hours=timezone_offset))
-    timestamp = datetime.now(tzinfo).isoformat()
     summary = \
 f"""#### Deployment report for {component_name} - {tag} ####
-#### Date: {timestamp}
 #### User: {user}"""
     if (facilities_ioc_dict):
         summary += f"\n#### IOCs deployed: {facilities_ioc_dict}"
