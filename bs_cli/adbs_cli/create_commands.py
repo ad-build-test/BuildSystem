@@ -18,7 +18,8 @@ def create():
 @click.option("-a", "--add", is_flag=True, required=False, help="Add an EXISTING branch to database")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
-    """Create a new branch"""
+    """Create a new branch. If you do not provide any options, a branch will be
+      created based off the branch you are currently sitting in."""
     component_obj = Component()
     request = Request(component_obj)
 
@@ -31,6 +32,9 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
     branches = component_obj.git_get_branches()
     tags = component_obj.git_get_tags()
     # commits = component_obj.git_get_commits() # TODO: query branch for commit OR get the list of commits from every branch
+    # Default branch point to branch user is currently sitting in
+    branch_point_value = component_obj.git_get_current_branch()
+    branch_point_type = 'branch'
     if (branch): 
         if (branch in branches):
             branch_point_type = 'branch'
@@ -58,20 +62,17 @@ def branch(branch: str, tag: str, commit: str, add: bool, verbose: bool=False):
         # Change prompt if adding an existing branch
         if (add):
             prompt_branch_from = "Specify branch point you branched off of"
-        else:
-            prompt_branch_from = "Specify what to branch from"
+            question = [inquirer.List(
+            "branch_point",
+            message=prompt_branch_from,
+            choices=["branch", "tag", "commit"])]
+            branch_point_type = inquirer.prompt(question)['branch_point']
+            if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
+            elif (branch_point_type == 'tag'): AutoComplete.set_auto_complete_vals('tag', tags)
+            
+            branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
-        question = [inquirer.List(
-                    "branch_point",
-                    message=prompt_branch_from,
-                    choices=["branch", "tag", "commit"])]
-        branch_point_type = inquirer.prompt(question)['branch_point']
-        if (branch_point_type == 'branch'): AutoComplete.set_auto_complete_vals('branch', branches)
-        elif (branch_point_type == 'tag'): AutoComplete.set_auto_complete_vals('tag', tags)
-        
-        branch_point_value = input("Specify name of " + branch_point_type + ": ")
 
-    # 3) 
     full_branch_name = None
     # If adding existing branch, skip asking type of branch to create
     if (add):
