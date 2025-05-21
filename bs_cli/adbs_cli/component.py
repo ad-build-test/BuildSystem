@@ -66,6 +66,9 @@ class Component(object):
         commits = self.git_repo.commits
         commit_names = [commit.name for commit in commits]
         return commit_names
+    
+    def git_get_current_branch(self):
+        return Repo(os.getcwd()).active_branch.name
 
     def set_cur_dir_component(self):
         # Safe to assume that if the current directory is a git repo 

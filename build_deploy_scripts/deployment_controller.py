@@ -62,8 +62,7 @@ class PydmDict(Component):
     facilities: Optional[list] = None # Optional
     tag: str
     user: str
-    new: bool
-    dry_run: bool = False # Optional
+    dry_run: Optional[bool] = False # Optional
     subsystem: str # Ex: [mps, mgnt, vac, prof, etc.]
 
 class InitialDeploymentDict(Component):
@@ -739,19 +738,18 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
 
     # Special case - if adding new deployment
     deploy_new_component = False
-    if (pydm_to_deploy.new):
-        # If adding to multiple facilities, loop through them
-        for facility in facilities:
-            # Check if deployment already exists
-            component = find_component_in_facility(facility, pydm_to_deploy.component_name)
-            logging.debug(f"component: {component}")
-            if (component):
-                # then return error to user.
-                return JSONResponse(content={"payload": {"Error": "Deployment already exists in deployment configuration/database"}}, status_code=400)
-            else:
-                # Otherwise create a new entry to deployment database
-                deploy_new_component = True
+    # If adding to multiple facilities, loop through them
+    for facility in facilities:
+        # Check if deployment already exists
+        component = find_component_in_facility(facility, pydm_to_deploy.component_name)
+        logging.debug(f"component: {component}")
+        if (component):
+            deploy_new_component = False
+        else:
+            # Otherwise create a new entry to deployment database
+            deploy_new_component = True
     logging.debug(f"deploy_new_component: {deploy_new_component}")
+
     tarball = f'{pydm_to_deploy.tag}.tar.gz'
     tarball_filepath = os.path.join(temp_download_dir, tarball)
     
@@ -764,7 +762,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     deployment_output = ""
     for facility in facilities:
         logging.info(f"facility: {facility}")
-        # 5) If component doesn't exist in facility, then skip. This assumes that the component exists in at least ONE facility                                     
+        # 5) If component doesn't exist in facility and not a new component, then skip.
         if (not deploy_new_component and find_component_in_facility(facility, pydm_to_deploy.component_name) is None):
             continue
 
@@ -788,11 +786,11 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
         if (not pydm_to_deploy.dry_run):
             # 6) Write new configuration to deployment db for each facility
             update_db_after_deployment(deployment_success, deploy_new_component, facility, 'pydm', pydm_to_deploy.component_name,
-                                        pydm_to_deploy.tag, pydm_to_deploy.new, pydm_to_deploy.user, current_output)
+                                        pydm_to_deploy.tag, pydm_to_deploy.user, current_output)
     
     # Error check - If deployment output is empty, then the component can't be found in deployment database
     if (deployment_output == ""):
-        return JSONResponse(content={"payload": {"Error": "component not found in deployment database, name or facility is wrong or missing. Or component has never been deployed"}}, status_code=400)
+        return JSONResponse(content={"payload": {"No deployments performed. This may be due to invalid component/facility combinations"}}, status_code=400)
     
     # 6) Generate summary for report
     summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,

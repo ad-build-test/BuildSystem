@@ -677,6 +677,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (deployment_type == 'pydm'):
         subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
         playbook_args_dict["subsystem"] = subsystem
+        # Error check - For pydm deployments, there can be a pydm subsystem for more than one facility
+        # So user_specified_facilities is required.
+        if (len(user_specified_facilities) < 1):
+            click.echo("== ADBS == ERROR: Please specify the facility(s)")
 
     # 7) If revert then send deployment revert request to deployment controller
     if (revert):

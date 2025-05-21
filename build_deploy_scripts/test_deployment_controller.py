@@ -319,14 +319,13 @@ def test_get_deployment_component_info_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_pydm_new_component_success(mock_paths):
     print("Starting test_deploy_pydm_new_component_success - add a new component entirely\n \
-          bs deploy --facility test -t 1.0.0 -u")
+          bs deploy --facility test 1.0.0")
     
     pydm_request = PydmDict(
         facilities=["test"],
         component_name="pydm-mps",
         tag="R1.0.0",
         user="test_user",
-        new=True,
         subsystem="mps"
     )
     
@@ -343,13 +342,12 @@ async def test_deploy_pydm_new_component_success(mock_paths):
 @pytest.mark.asyncio
 async def test_deploy_pydm_new_tag_success(mock_paths):
     print("Starting test_deploy_pydm_new_tag_success - deploy new tag to an existing component\n \
-          bs deploy --facility test -t 1.0.1")
+          bs deploy --facility test 1.0.1")
     
     test_facility = "test"
     test_component = "pydm-mps"
     test_tag = "R1.0.1"
     test_user = "test_user"
-    test_new = False
     test_subsystem="mps"
 
     ioc_request = PydmDict(
@@ -357,7 +355,6 @@ async def test_deploy_pydm_new_tag_success(mock_paths):
         component_name=test_component,
         tag=test_tag,
         user=test_user,
-        new=test_new,
         subsystem=test_subsystem
     )
     
