@@ -3,6 +3,12 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.12 20-May-2025 P. Nisperos (pnispero)
+  * EEDSWCM-134
+  * Redesigned deployment controller for IOC deployments, more robust.
+  * Added a bunch of error checks, and ommitted the update-db option for easier usage
+  * Created testing module for the cli, specifically bs deploy.
+
 * tag:1.0.11 14-May-2025 P. Nisperos (pnispero)
   * Updated log of build container to use $AD_BUILD_SCRATCH instead of /mnt
 

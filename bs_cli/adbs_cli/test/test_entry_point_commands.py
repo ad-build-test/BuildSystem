@@ -11,12 +11,12 @@ from adbs_cli.entry_point_commands import deploy
 """
 Test module for deployment command using click.testing
 Tests against real repositories and services on development server
-This tests end-to-end
+This tests end-to-end (meaning everything has to be running for this to work)
 
 Pre-reqs:
 1. be on development server and point your cli to dev cluster.
 2. make sure build system backend is running
-3. ensure oscilloscope deployment entry does not exist
+3. ensure oscilloscope deployment entry exists for other facilities except for S3DF
 
 How to run:
 pytest -v -s test_entry_point_commands.py
@@ -76,7 +76,9 @@ class TestDeployCommand:
         $ bs deploy -f S3DF R1.3.0
         """
         # Execute the command
-        result = runner.invoke(deploy, ["-f", "S3DF", "R1.3.0"], input='\n')
+        command = ["-f", "S3DF", "R1.3.0"]
+        print(f"Command to invoke: bs deploy {command}")
+        result = runner.invoke(deploy, command, input='\n')
         
         # Print output for debugging
         print(f"Command output:\n{result.output}")
@@ -93,7 +95,9 @@ class TestDeployCommand:
         $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 -f S3DF R1.3.0
         """
         # Execute the command
-        result = runner.invoke(deploy, ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "S3DF", "R1.3.0"], input='\n')
+        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "S3DF", "R1.3.0"]
+        print(f"Command to invoke: bs deploy {command}")
+        result = runner.invoke(deploy, command, input='\n')
         
         # Print output for debugging
         print(f"Command output:\n{result.output}")
@@ -110,7 +114,9 @@ class TestDeployCommand:
         $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 R1.3.1
         """
         # Execute the command
-        result = runner.invoke(deploy, ["-i", "sioc-b34-sc01,sioc-b34-sc02", "R1.3.1"], input='\n')
+        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "R1.3.1"]
+        print(f"Command to invoke: bs deploy {command}")
+        result = runner.invoke(deploy, command, input='\n')
         
         # Print output for debugging
         print(f"Command output:\n{result.output}")
@@ -126,7 +132,9 @@ class TestDeployCommand:
         $ bs deploy -i ALL -f S3DF R1.3.2
         """
         # Execute the command
-        result = runner.invoke(deploy, ["-i", "ALL", "-f", "S3DF", "R1.3.2"], input='n\ny\n\n')
+        command = ["-i", "ALL", "-f", "S3DF", "R1.3.2"]
+        print(f"Command to invoke: bs deploy {command}")
+        result = runner.invoke(deploy, command, input='n\ny\n\n')
         
         # Print output for debugging
         print(f"Command output:\n{result.output}")
@@ -136,3 +144,23 @@ class TestDeployCommand:
         assert "Deploying to ['S3DF']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output
+
+    def test_deploy_new_tag_to_new_iocs_that_already_exist(self, runner: CliRunner, setup_test_repo):
+        """
+        Test Case 5: Deploy a new tag to new IOC (but exists already in another facility)
+        (This should show an error saying that the IOCs already exist)
+        $ bs deploy -i sioc-as01-sc01,sioc-sys1-sc01 -f S3DF R1.3.1
+        """
+        # Execute the command
+        command = ["-i", "sioc-as01-sc01,sioc-sys1-sc01", "-f", "S3DF", "R1.3.2"]
+        print(f"Command to invoke: bs deploy {command}")
+        result = runner.invoke(deploy, command)
+        
+        # Print output for debugging
+        print(f"Command output:\n{result.output}")
+
+        # Assertions
+        assert result.exit_code == 0, f"Command failed with output: {result.output}"
+        assert "== ADBS == ERROR" in result.output
+        assert "sioc-as01-sc01" in result.output
+        assert "sioc-sys1-sc01" in result.output

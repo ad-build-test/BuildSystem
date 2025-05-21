@@ -549,7 +549,8 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, backgro
     for ioc in ioc_to_deploy.ioc_list:
         facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
         logging.info(f"ioc: {ioc}, facility: {facility}")
-        if not facility: continue
+        if not facility:
+            return JSONResponse(content={"payload": {"Error": f"IOC not found in deployment database: {ioc}. (If new IOC then please deploy with a facility)"}}, status_code=400)
         if facility not in facilities_ioc_dict:
             facilities_ioc_dict[facility] = []
         facilities_ioc_dict[facility].append(ioc)

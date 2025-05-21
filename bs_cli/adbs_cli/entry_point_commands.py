@@ -531,15 +531,15 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         click.echo("== ADBS == Please provide a tag")
         return
     # 5) Get facilities (if applicable)
-    facilities = None
+    user_specified_facilities = []
     if (facility):
-        facilities = facility.split(',')
-        facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+        user_specified_facilities = facility.split(',')
+        user_specified_facilities = [facility.upper() for facility in user_specified_facilities] # Uppercase every facility
 
     # 6) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
-        "facilities": facilities,
+        "facilities": user_specified_facilities,
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
@@ -570,45 +570,85 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                                     item.startswith('vioc')):
                 all_ioc_dirs.append(item)
 
-        if (ioc.upper() != "ALL"):
+        facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]    
+        all_iocs_in_db = []
+        all_iocs_and_facility_in_db = {}
+        user_specified_facilities_iocs_in_db = [] 
+        for facility in facilities_to_loop: # Get every ioc from each facility
+            iocs_in_db = []
+            active_deployment_request = Request(deployment_request.component.name)
+            active_deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_FACILITIY,
+                                                    component_name=deployment_request.component.name,
+                                                    facility=facility)
+            response = active_deployment_request.get_request(log=verbose)
+            if (not response.ok): # Skip if no ioc found in facility
+                continue
+
+            payload = response.json()['payload']
+            # Extract IOCs from the dependsOn list in the payload
+            for entry in payload.get('dependsOn', []):
+                iocs_in_db.append(entry.get('name'))
+
+            all_iocs_in_db += iocs_in_db
+            if (len(user_specified_facilities) > 0):
+                if (facility in user_specified_facilities): # If user specified facilities, then only deploy to all IOCs in those facilities
+                    user_specified_facilities_iocs_in_db += iocs_in_db
+            all_iocs_and_facility_in_db[facility] = iocs_in_db
+
+        if (ioc.upper() != "ALL"): # User specified IOCs
             ioc_list = ioc.split(',')
-            missing_iocs = [ioc for ioc in ioc_list if ioc not in all_ioc_dirs]
+            missing_iocs = [user_specified_ioc for user_specified_ioc in ioc_list if user_specified_ioc not in all_ioc_dirs]
             if (missing_iocs):
-                # Error here, there is an ioc that user specified that does not exist in the source tree
+                # Error check - there is an ioc that user specified that does not exist in the source tree
                 click.echo("== ADBS == ERROR: The following IOCs are not in your application iocBoot/ dir:")
                 for ioc in missing_iocs:
                     click.echo(f"  - {ioc}")
                 click.echo("== ADBS == Please double check if you made a typo.")
                 return
+            
+            # Error check - If IOC specified but no facility (then its an existing IOC). Make sure it exists in the db
+            if (len(user_specified_facilities) < 1):
+                new_iocs = [user_specified_ioc for user_specified_ioc in ioc_list if user_specified_ioc not in all_iocs_in_db]
+                if new_iocs:
+                    click.echo("== ADBS == The following IOCs are not in the deployment database:")
+                    for ioc in new_iocs:
+                        click.echo(f"  - {ioc}")
+                    click.echo("== ADBS == The new IOCs need to be deployed seperately with only one facility specified")
+                    return
+
+            # Error check - If user is deploying a new ioc to specific facility
+            if (len(user_specified_facilities) == 1):
+                iocs_that_already_exist_in_another_facility = {}
+                for user_specified_ioc in ioc_list:
+                    # Compare the user specified IOCs to the ones that already exist in the db
+                    for facility_in_db, iocs_in_db in all_iocs_and_facility_in_db.items():
+                        if (user_specified_facilities[0] == facility_in_db):
+                            continue # skip user facility
+                        if (user_specified_ioc in iocs_in_db):
+                            iocs_that_already_exist_in_another_facility.setdefault(facility_in_db, [])
+                            iocs_that_already_exist_in_another_facility[facility_in_db].append(user_specified_ioc) 
+                if (iocs_that_already_exist_in_another_facility != {}):
+                    click.echo("== ADBS == ERROR: IOCs you want to deploy already exist in another facility:")
+                    for facility, iocs in iocs_that_already_exist_in_another_facility.items():
+                        click.echo(f"Facility: {facility}")
+                        click.echo(f"- IOCs: {iocs}")
+                    click.echo("== ADBS == If you would like to delete/move IOCs from a facility, please contact software factory admins.")
+                    return
+                
+            elif (len(user_specified_facilities) > 1):
+                # Can't have more than one facility for new IOCs.
+                click.echo("== ADBS == ERROR: Can't deploy new IOC(s) to more than one facility. Please specify only one facility for your new IOC(s)")
+                return
             playbook_args_dict["ioc_list"] = ioc_list
 
         # If user specified ALL iocs, then check if facilities specified
         if (ioc.upper() == "ALL"):
-            facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]    
-            all_iocs_in_db = []
-            user_specified_facilities_iocs_in_db = [] 
-            for facility in facilities_to_loop: # Get every ioc from each facility
-                active_deployment_request = Request(deployment_request.component.name)
-                active_deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_FACILITIY,
-                                                        component_name=deployment_request.component.name,
-                                                        facility=facility)
-                response = active_deployment_request.get_request(log=verbose)
-                if (not response.ok): # Skip if no ioc found in facility
-                    continue
-
-                payload = response.json()['payload']
-                # Extract IOCs from the dependsOn list in the payload
-                for entry in payload.get('dependsOn', []):
-                    all_iocs_in_db.append(entry.get('name'))
-                    if (facility in facilities): # If user specified facilities, then only deploy to all IOCs in those facilities
-                        user_specified_facilities_iocs_in_db.append(entry.get('name'))
-
             # 6.6) Find IOCs that are in our directory but not in the deployment database
                 # Which means these are new IOCs
             new_iocs = [ioc for ioc in all_ioc_dirs if ioc not in all_iocs_in_db]
 
             # Set the ioc_list to deploy
-            if (facilities):
+            if (len(user_specified_facilities) > 0):
                 ioc_list = user_specified_facilities_iocs_in_db
             else:
                 ioc_list = all_iocs_in_db
@@ -617,17 +657,16 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 click.echo("== ADBS == The following IOCs are not in the deployment database:")
                 for ioc in new_iocs:
                     click.echo(f"  - {ioc}")
-                if (facilities and len(facilities) == 1):
-                    if (len(facilities) == 1):
-                        if (click.confirm("Do you want to deploy ALL iocs *including* the new ones listed above?")):
-                            ioc_list += new_iocs
+                if (len(user_specified_facilities) == 1):
+                    if (click.confirm("Do you want to deploy ALL iocs *including* the new ones listed above?")):
+                        ioc_list += new_iocs
+                        playbook_args_dict["ioc_list"] = ioc_list
+                    else:
+                        if (click.confirm("Do you want to deploy ALL iocs *excluding* the new ones listed above?")):
                             playbook_args_dict["ioc_list"] = ioc_list
                         else:
-                            if (click.confirm("Do you want to deploy ALL iocs *excluding* the new ones listed above?")):
-                                playbook_args_dict["ioc_list"] = ioc_list
-                            else:
-                                click.echo("== ADBS == Please specify which IOCs you want to deploy if not ALL")          
-                                return
+                            click.echo("== ADBS == Please specify which IOCs you want to deploy if not ALL")          
+                            return
                 else: # Either more than one facility or no faciltiies specified and there are new iocs found
                     if (not click.confirm("Do you want to proceed deploying ALL iocs *excluding* the new ones listed above?")):
                         click.echo("== ADBS == The new IOCs need to be deployed seperately with only one facility specified")
@@ -649,8 +688,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
                                         deployment_type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
-    if (facilities):
-        click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
+    if (len(user_specified_facilities) > 0):
+        click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "... (This may take a minute)")
     else:
         click.echo("== ADBS == Deploying... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
