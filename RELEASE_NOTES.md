@@ -3,6 +3,11 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.13 21-May-2025 P. Nisperos (pnispero)
+  * Redesigned deployment controller for pydm deployments, more robust.
+  * ommitted the update-db option for easier usage
+  * Created testing module for the cli, specifically bs deploy for pydm.
+
 * tag:1.0.12 20-May-2025 P. Nisperos (pnispero)
   * EEDSWCM-134
   * Redesigned deployment controller for IOC deployments, more robust.
