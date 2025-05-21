@@ -1,4 +1,3 @@
-import time
 import click
 import os
 import git
@@ -7,6 +6,7 @@ import json
 import logging
 import subprocess
 import pathlib
+from datetime import datetime, timezone, timedelta
 from adbs_cli.component import Component, SimpleProgress
 from adbs_cli.request import Request
 from adbs_cli.cli_configuration import INPUT_PREFIX, Api, ApiEndpoints, under_development, cli_configuration
@@ -456,16 +456,15 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-f", "--facility", required=False, help="Deploy only to the specified facility(s). Put 'ALL' for all facilities. | Options: [dev, lcls, facet, testfac] Seperate facilties by comma, ex: dev,lcls")
 @click.option("-ts", "--test", is_flag=True, required=False, help="Deploy to test stand")
 @click.option("-i", "--ioc", required=False, help="Deploy only to the specified ioc(s). If 'ALL', all iocs in facilities specified by facility arg will be deployed. Seperate iocs by comma, ex: sioc-sys0-test1,sioc-sys0-test2.")
-@click.option("-t", "--tag", required=False, help="Component tag to deploy")
+@click.argument("tag", required=False)
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 # @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
-@click.option("-u", "--update-db", is_flag=True, required=False, help="Add a new deployment to the deployment configuration/database (Only use when deploying app/iocs for the first time)")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-n", "--dry-run", is_flag=True, required=False, help="Print the commands that would be executed, but do not execute them.")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: bool,
-            revert: bool, update_db: bool, dry_run: bool, verbose: bool):
+            revert: bool, dry_run: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -525,38 +524,25 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 ),]
     # 4) Error check
     if (deployment_type == 'ioc'):
-        # Get ioc list (if applicable)
-        if (ioc):
-            ioc_list = ioc.split(',')
         if (not facility and not ioc):
             click.echo("== ADBS == Please supply the facility and/or the iocs")
-            return
-        if (facility and not ioc):
-            click.echo(f"== ADBS == Please supply the iocs you want to deploy for facility: {facility}")
-            return
-        if (ioc.upper() == "ALL" and update_db):
-            click.echo("== ADBS == Cannot deploy 'ALL' for NEW iocs/component. Please supply the specific iocs you want to deploy.")
             return
     if (not tag):
         click.echo("== ADBS == Please provide a tag")
         return
     # 5) Get facilities (if applicable)
-    facilities = None
-    if (not facility and ioc.upper() == "ALL"): # If ALL iocs, then need the facilities 
-        facilities = inquirer.prompt(question)['facility']
-    elif (facility):
-        facilities = facility.split(',')
-    if (facilities):
-        facilities = [facility.upper() for facility in facilities] # Uppercase every facility
+    user_specified_facilities = []
+    if (facility):
+        user_specified_facilities = facility.split(',')
+        user_specified_facilities = [facility.upper() for facility in user_specified_facilities] # Uppercase every facility
 
     # 6) Set the arguments needed for playbook
     linux_uname = os.environ.get('USER')
     playbook_args_dict = {
-        "facilities": facilities,
+        "facilities": user_specified_facilities,
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "new": update_db,
         "dry_run": dry_run
     }
 
@@ -564,9 +550,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
 
-    # 6) Error check - Confirm with database that every ioc found in the source tree is in the database.
-    if (deployment_type == 'ioc'): 
-        playbook_args_dict["ioc_list"] = ioc_list
+    # 6) Error check - If user specified iocs - Confirm with database that every ioc found in the source tree is in the database.
+    if (deployment_type == 'ioc' and ioc): 
         # 6.1) First check that user is in repo
         if (not deployment_request.component.set_cur_dir_component()):
             click.echo('fatal: not a git repository (or any of the parent directories)')
@@ -584,35 +569,110 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                                     item.startswith('sioc') or 
                                     item.startswith('vioc')):
                 all_ioc_dirs.append(item)
-        # 6.5) See if user applied "ALL" in their deployment
-        if (ioc.upper() == "ALL"):
-            iocs_in_db = [] 
-            for facility in ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]: # Get every ioc from each facility
-                active_deployment_request = Request(deployment_request.component.name)
-                active_deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_FACILITIY,
-                                                       component_name=deployment_request.component.name,
-                                                       facility=facility)
-                response = active_deployment_request.get_request(log=verbose)
-                if (not response.ok): # Skip if no ioc found in facility
-                    continue
 
-                payload = response.json()['payload']
-                # Extract IOCs from the dependsOn list in the payload
-                for entry in payload.get('dependsOn', []):
-                    iocs_in_db.append(entry.get('name'))
+        facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]    
+        all_iocs_in_db = []
+        all_iocs_and_facility_in_db = {}
+        user_specified_facilities_iocs_in_db = [] 
+        for facility in facilities_to_loop: # Get every ioc from each facility
+            iocs_in_db = []
+            active_deployment_request = Request(deployment_request.component.name)
+            active_deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_FACILITIY,
+                                                    component_name=deployment_request.component.name,
+                                                    facility=facility)
+            response = active_deployment_request.get_request(log=verbose)
+            if (not response.ok): # Skip if no ioc found in facility
+                continue
 
-            # 6.6) Find IOCs that are in our directory but not in the database
-            missing_iocs = [ioc for ioc in all_ioc_dirs if ioc not in iocs_in_db]
-            
-            if missing_iocs:
-                click.echo("== ADBS == The following IOCs are not in the deployment database:")
+            payload = response.json()['payload']
+            # Extract IOCs from the dependsOn list in the payload
+            for entry in payload.get('dependsOn', []):
+                iocs_in_db.append(entry.get('name'))
+
+            all_iocs_in_db += iocs_in_db
+            if (len(user_specified_facilities) > 0):
+                if (facility in user_specified_facilities): # If user specified facilities, then only deploy to all IOCs in those facilities
+                    user_specified_facilities_iocs_in_db += iocs_in_db
+            all_iocs_and_facility_in_db[facility] = iocs_in_db
+
+        if (ioc.upper() != "ALL"): # User specified IOCs
+            ioc_list = ioc.split(',')
+            missing_iocs = [user_specified_ioc for user_specified_ioc in ioc_list if user_specified_ioc not in all_ioc_dirs]
+            if (missing_iocs):
+                # Error check - there is an ioc that user specified that does not exist in the source tree
+                click.echo("== ADBS == ERROR: The following IOCs are not in your application iocBoot/ dir:")
                 for ioc in missing_iocs:
                     click.echo(f"  - {ioc}")
-                
-                if not click.confirm("Continue with deployment anyway? (If yes, then the above IOCs will not be deployed)"):
-                    click.echo("== ADBS == Please specify IOCs and deploy with '-u' to update database with new iocs.")
+                click.echo("== ADBS == Please double check if you made a typo.")
+                return
+            
+            # Error check - If IOC specified but no facility (then its an existing IOC). Make sure it exists in the db
+            if (len(user_specified_facilities) < 1):
+                new_iocs = [user_specified_ioc for user_specified_ioc in ioc_list if user_specified_ioc not in all_iocs_in_db]
+                if new_iocs:
+                    click.echo("== ADBS == The following IOCs are not in the deployment database:")
+                    for ioc in new_iocs:
+                        click.echo(f"  - {ioc}")
+                    click.echo("== ADBS == The new IOCs need to be deployed seperately with only one facility specified")
                     return
-    
+
+            # Error check - If user is deploying a new ioc to specific facility
+            if (len(user_specified_facilities) == 1):
+                iocs_that_already_exist_in_another_facility = {}
+                for user_specified_ioc in ioc_list:
+                    # Compare the user specified IOCs to the ones that already exist in the db
+                    for facility_in_db, iocs_in_db in all_iocs_and_facility_in_db.items():
+                        if (user_specified_facilities[0] == facility_in_db):
+                            continue # skip user facility
+                        if (user_specified_ioc in iocs_in_db):
+                            iocs_that_already_exist_in_another_facility.setdefault(facility_in_db, [])
+                            iocs_that_already_exist_in_another_facility[facility_in_db].append(user_specified_ioc) 
+                if (iocs_that_already_exist_in_another_facility != {}):
+                    click.echo("== ADBS == ERROR: IOCs you want to deploy already exist in another facility:")
+                    for facility, iocs in iocs_that_already_exist_in_another_facility.items():
+                        click.echo(f"Facility: {facility}")
+                        click.echo(f"- IOCs: {iocs}")
+                    click.echo("== ADBS == If you would like to delete/move IOCs from a facility, please contact software factory admins.")
+                    return
+                
+            elif (len(user_specified_facilities) > 1):
+                # Can't have more than one facility for new IOCs.
+                click.echo("== ADBS == ERROR: Can't deploy new IOC(s) to more than one facility. Please specify only one facility for your new IOC(s)")
+                return
+            playbook_args_dict["ioc_list"] = ioc_list
+
+        # If user specified ALL iocs, then check if facilities specified
+        if (ioc.upper() == "ALL"):
+            # 6.6) Find IOCs that are in our directory but not in the deployment database
+                # Which means these are new IOCs
+            new_iocs = [ioc for ioc in all_ioc_dirs if ioc not in all_iocs_in_db]
+
+            # Set the ioc_list to deploy
+            if (len(user_specified_facilities) > 0):
+                ioc_list = user_specified_facilities_iocs_in_db
+            else:
+                ioc_list = all_iocs_in_db
+            
+            if new_iocs:
+                click.echo("== ADBS == The following IOCs are not in the deployment database:")
+                for ioc in new_iocs:
+                    click.echo(f"  - {ioc}")
+                if (len(user_specified_facilities) == 1):
+                    if (click.confirm("Do you want to deploy ALL iocs *including* the new ones listed above?")):
+                        ioc_list += new_iocs
+                        playbook_args_dict["ioc_list"] = ioc_list
+                    else:
+                        if (click.confirm("Do you want to deploy ALL iocs *excluding* the new ones listed above?")):
+                            playbook_args_dict["ioc_list"] = ioc_list
+                        else:
+                            click.echo("== ADBS == Please specify which IOCs you want to deploy if not ALL")          
+                            return
+                else: # Either more than one facility or no faciltiies specified and there are new iocs found
+                    if (not click.confirm("Do you want to proceed deploying ALL iocs *excluding* the new ones listed above?")):
+                        click.echo("== ADBS == The new IOCs need to be deployed seperately with only one facility specified")
+                        return
+                playbook_args_dict["ioc_list"] = ioc_list
+
     # Set subsystem for pydm
     if (deployment_type == 'pydm'):
         subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
@@ -628,7 +688,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
                                         deployment_type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
-    click.echo("== ADBS == Deploying to " + str(facilities) + "... (This may take a minute)")
+    if (len(user_specified_facilities) > 0):
+        click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "... (This may take a minute)")
+    else:
+        click.echo("== ADBS == Deploying... (This may take a minute)")
     response = deployment_request.put_request(log=verbose)
     if (not response.ok):
         try:
@@ -641,7 +704,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     file_content = response.content.decode('utf-8')
     # Get the home directory of the current user
     home_directory = os.path.expanduser("~")
-    file_path = f"{home_directory}/deployment-report-{deployment_request.component.name}-{tag}"
+    # Get the local timezone of the computer
+    local_tz = datetime.now().astimezone().tzinfo
+    timestamp = datetime.now(local_tz).strftime("%Y-%m-%dT%H-%M-%S")
+    file_path = f"{home_directory}/deployment-report-{deployment_request.component.name}-{tag}-{timestamp}.log"
     click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
     new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
     if (new_file_path):
