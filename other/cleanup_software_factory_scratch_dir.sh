@@ -1,5 +1,4 @@
 #!/bin/bash
-# /usr/local/bin/cleanup_builds.sh
 
 # Simple script to remove old builds from the filesystem.
 # This is ran as a cron job by "adbuild" every 7 days.
@@ -8,9 +7,6 @@
 BASE_DIR="/sdf/group/ad/eed/ad-build/scratch"
 LOG_FILE="${BASE_DIR}/cleanup.log"
 NUM_DAYS_ALLOWED="+7"
-
-# Create backup and log directories if they don't exist
-mkdir -p "$(dirname "$LOG_FILE")"
 
 # Log the start of the cleanup
 echo "--------------------------------------------------------------" >> "$LOG_FILE"
