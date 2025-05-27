@@ -12,10 +12,11 @@ NUM_DAYS_ALLOWED="+7"
 echo "--------------------------------------------------------------" >> "$LOG_FILE"
 echo "=== Build Cleanup Started: $(date) ===" >> "$LOG_FILE"
 
-# Find build directories older than 7 days (at the 5th level) and move them to backup
+# Find build directories older than 7 days (at the 5th level user/repo/branch/os/build)
 echo "Removing build directories older than 7 days:" >> "$LOG_FILE"
 
 find "$BASE_DIR" -mindepth 5 -maxdepth 5 -type d -mtime "$NUM_DAYS_ALLOWED" | while read dir_path; do
+    # Get the relative path to output in the log
     relative_path="${dir_path#${BASE_DIR}/}"
     echo "Removing: $relative_path" >> "$LOG_FILE"
     rm -rf "$dir_path"
