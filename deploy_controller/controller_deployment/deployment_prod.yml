@@ -65,6 +65,10 @@ spec:
           mountPath: /home/adbuild/.ssh/deployment_controller
           subPath: adbuild-key
           readOnly: true
+        - name: s3df-ssh-key-volume
+          mountPath: /home/adbuild/.ssh/id_ed25519
+          subPath: id_ed25519
+          readOnly: true
       volumes:
       - name: s3df-dev-container-ad-group
         persistentVolumeClaim:

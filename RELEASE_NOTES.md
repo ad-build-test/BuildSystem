@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.14 11-Jun-2025 P. Nisperos (pnispero)
+  * Updated deployment controller to include ssh key for production facilities
+  * Updated deployment controller ssh config
+
 * tag:1.0.13 21-May-2025 P. Nisperos (pnispero)
   * Changed deployment controller for pydm deployments, more robust.
   * Ommitted the pydm update-db option for easier usage

@@ -4,3 +4,9 @@ Host dev-srv09
     StrictHostKeyChecking no
     User adbuild
     IdentityFile ~/.ssh/deployment_controller
+
+Host mcclogin
+    HostName mcclogin.slac.stanford.edu
+    StrictHostKeyChecking no
+    User adbuild
+    IdentityFile ~/.ssh/deployment_controller
