@@ -1,6 +1,6 @@
 # Configuration for s3df ad 
-Host dev-srv09
-    HostName dev-srv09.slac.stanford.edu
+Host devlogin
+    HostName devlogin.slac.stanford.edu
     StrictHostKeyChecking no
     User adbuild
     IdentityFile ~/.ssh/deployment_controller

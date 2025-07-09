@@ -333,11 +333,13 @@ def write_file(filepath: str, content: str):
     with open(filepath, 'w') as file:
         file.write(content)
 
-def generate_report(component_name: str, tag: str, user: str, deployment_output: str, status: int, deployment_report_file: str, facilities_ioc_dict: dict=None):
+def generate_report(component_name: str, tag: str, user: str, deployment_output: str, status: int, deployment_report_file: str, facilities_ioc_dict: dict=None, dry_run: bool=False):
     """ Generate a deployment report """
     summary = \
 f"""#### Deployment report for {component_name} - {tag} ####
 #### User: {user}"""
+    if (dry_run):
+        summary += "\n#### Note - This was deployed as a DRY-RUN"
     if (facilities_ioc_dict):
         summary += f"\n#### IOCs deployed: {facilities_ioc_dict}"
 
@@ -709,7 +711,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
 
     # Generate summary for report
     summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
-                            deployment_output, status, deployment_report_file, facilities_ioc_dict)
+                            deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
 
     # Return ansible playbook output to user
     if os.getenv('PYTHON_TESTING') == 'True':
@@ -794,7 +796,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     
     # 6) Generate summary for report
     summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
-                            deployment_output, status, deployment_report_file)
+                            deployment_output, status, deployment_report_file, dry_run=pydm_to_deploy.dry_run)
     # Add cleanup
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
 
