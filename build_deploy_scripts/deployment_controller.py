@@ -41,8 +41,8 @@ is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes
 if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
-FACILITIES_OS = {"LCLS": "RHEL7", "FACET": "RHEL7", "TESTFAC": "RHEL7",
-                  "DEV": "ROCKY9", "S3DF": "RHEL7"}
+USED_OS_LIST = ["RHEL7", "ROCKY9"]
+FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV"]
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
@@ -171,7 +171,7 @@ def find_component_in_facility(facility: str, component_to_find: str) -> dict:
 
 def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
     """ Function to return the facility that the ioc is in """
-    for facility in FACILITIES_OS.keys(): # Loop through each facility
+    for facility in FACILITIES_LIST: # Loop through each facility
         component = find_component_in_facility(facility, component_with_ioc)
         if (component):
             for ioc in component['dependsOn']: # Loop through each ioc
@@ -278,16 +278,7 @@ def cleanup_temp_deployment_dir(directory: str):
     except Exception as e:
         logging.error(f"Error cleaning up directory {directory}: {str(e)}")
 
-def download_release(component_name: str, tag: str, download_dir: str, tag_os: str, extract_tarball: bool = False):
-    """ Download a components tagged release from the backend -> github """
-
-    endpoint = BACKEND_URL + f'component/{component_name}/release/{tag}'
-    # Add OS as a query parameter if provided
-    if tag_os:
-        endpoint += f'?os={tag_os}'
-    # Name the tarball based on tag and OS if provided
-    tarball_name = f'{tag}-{tag_os}.tar.gz' if tag_os else f'{tag}.tar.gz'
-
+def download_release_helper(endpoint: str, download_dir: str, tarball_name: str, extract_tarball: bool):
     response = requests.get(endpoint)
     # Download file from api, and extract to download_dir
     # Download the .tar.gz file
@@ -305,13 +296,47 @@ def download_release(component_name: str, tag: str, download_dir: str, tag_os: s
         if (extract_tarball):
             # Extract the .tar.gz file
             logging.info('Extracting tarball...')
+            
             with tarfile.open(tarball_filepath, 'r:gz') as tar:
-                tar.extractall(path=download_dir)
-            logging.info(f'{tarball_filepath} extracted to {download_dir}')
+                # Extract with modified permissions
+                tar.extractall(path=download_dir, filter="data")
+                logging.info(f'{tarball_filepath} extracted to {download_dir}')
+
         return True
     else:
         logging.info(f'Failed to retrieve the file. Status code: {response.status_code}')
         return False
+
+def download_release(component_name: str, tag: str, download_dir: str, all_os: bool, extract_tarball: bool = False):
+    """ Download a components tagged release from the backend -> github """
+
+    endpoint = BACKEND_URL + f'component/{component_name}/release/{tag}'
+    valid_tag_release = False
+    if (all_os): # This is needed if app has a build for one or more OSes
+        for current_os in USED_OS_LIST:
+            new_endpoint = endpoint + f'?os={current_os}'
+            tarball_name = f'{tag}-{current_os}.tar.gz'
+            found_release = download_release_helper(new_endpoint, download_dir, tarball_name, extract_tarball)
+            if (found_release): # Just need to find at least one release otherwise the tag or app doesn't exist
+                valid_tag_release = True
+        if (valid_tag_release):
+            logging.info('Creating merged tarball from extracted contents...')
+    
+            # New tarball will be named after the tag
+            merged_tarball_path = os.path.join(download_dir, f'{tag}.tar.gz')
+            # The extracted directory name is just the tag
+            extracted_dir = os.path.join(download_dir, tag)
+            # Create new tarball with all extracted contents
+            with tarfile.open(merged_tarball_path, 'w:gz') as tar:
+                tar.add(extracted_dir, arcname=tag)
+            logging.info(f'Merged tarball created: {merged_tarball_path}')
+    else:
+        tarball_name = f'{tag}.tar.gz'
+        valid_tag_release = download_release_helper(endpoint, download_dir, tarball_name, extract_tarball)
+
+    return valid_tag_release
+
+
     
 def update_db_after_deployment(deployment_success: bool, new_component: bool, facility: str, app_type: str, component_name: str,
                                tag: str, user: str, current_output: str, ioc_list: list = None):
@@ -368,7 +393,7 @@ async def get_deployment_component_info(component: Component):
     """
     # 1) Return dictionary of information for an App
     error_msg = "Deployment not found in deployment database, name or facility is wrong or missing. Or it has never been deployed"
-    facilities = FACILITIES_OS.keys()
+    facilities = FACILITIES_LIST
     component_info_list = []
     try:
         found_ioc = False
@@ -610,8 +635,11 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
     deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
     deployment_output = ""
     extracted_ioc_info = False
-    # Track which OS versions have been downloaded
-    downloaded_os = set()
+
+    # Download release
+    if not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, all_os=True, extract_tarball=True):
+        return JSONResponse(content={"payload": {"Error": f"Deployment tag may not exist for app: {ioc_to_deploy.component_name}, tag: {ioc_to_deploy.tag} \
+                                    . Or software factory backend is broken"}}, status_code=400)
     
     for facility in facilities_ioc_dict.keys():
         logging.info(f"Deploying to facility: {facility}")
@@ -620,14 +648,6 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         # Skip facilities with empty IOC lists for component-only deployments
         is_component_only = len(facilities_ioc_dict[facility]) == 0
         
-        # Download release for all deployments
-        facility_os = FACILITIES_OS[facility]
-        # Download only if this OS hasn't been downloaded yet
-        if facility_os not in downloaded_os:
-            if not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, tag_os=facility_os, extract_tarball=True):
-                return JSONResponse(content={"payload": {"Error": f"Deployment tag may not exist for app: {ioc_to_deploy.component_name}, tag: {ioc_to_deploy.tag} \
-                                                        , os: {facility_os}. Or software factory backend is broken"}}, status_code=400)
-            downloaded_os.add(facility_os)
         # Extract IOC info (needed even for component-only to record component in DB)
         if not extracted_ioc_info:
             extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
@@ -658,7 +678,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
 
         # Add the tarball path
         extracted_tarball_filepath = os.path.join(temp_download_dir, ioc_to_deploy.tag)
-        tarball_filepath = extracted_tarball_filepath + "-" + facility_os + '.tar.gz'
+        tarball_filepath = extracted_tarball_filepath + '.tar.gz'
         logging.info(f"tarball_filepath: {tarball_filepath}")
         playbook_args_dict['tarball'] = tarball_filepath
 
@@ -732,7 +752,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     logging.info(f"New deployment request data: {pydm_to_deploy}")
     pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
     # 2) Call to backend to get component/tag from github releases
-    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir, tag_os="", )):
+    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir, all_os=False)):
         return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
 
     # 3) Logic for special cases
