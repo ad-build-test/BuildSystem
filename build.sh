@@ -9,6 +9,10 @@ RESULTS_DIR="${ROOT_DIR}/build_results"
 
 echo "Starting build process..."
 
+# Ensure library path uses local python
+echo "export LD_LIBRARY_PATH=/lib64/:${LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH=/lib64/:${LD_LIBRARY_PATH}
+
 # Check if build module is available, install dependencies only if needed
 if ! python3 -c "import build" &>/dev/null; then
     echo "Installing build dependencies... (python3 -m pip install --upgrade pip setuptools wheel build)"
