@@ -65,9 +65,7 @@ def mock_paths():
          patch('deployment_controller.CONFIG_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/config.yaml'), \
          patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
-         patch('deployment_controller.APP_PATH', '/home/pnispero/test-deployment-controller/app'), \
-         patch('deployment_controller.FACILITIES_OS', {"test": "RHEL7","LCLS": "RHEL7", "FACET": "RHEL7", "TESTFAC": "RHEL7",
-                  "DEV": "ROCKY9", "S3DF": "ROCKY9"}):
+         patch('deployment_controller.FACILITIES_LIST', ["test", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]):
         yield
 
 ####### Tests for get_deployment_component_info
