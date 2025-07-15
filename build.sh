@@ -11,7 +11,7 @@ echo "Starting build process..."
 
 # Check if build module is available, install dependencies only if needed
 if ! python3 -c "import build" &>/dev/null; then
-    echo "Installing build dependencies..."
+    echo "Installing build dependencies... (python3 -m pip install --upgrade pip setuptools wheel build)"
     python3 -m pip install --upgrade pip setuptools wheel build
 else
     echo "Build dependencies already installed."
