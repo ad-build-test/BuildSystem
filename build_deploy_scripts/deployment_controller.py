@@ -42,7 +42,7 @@ if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
 APP_PATH = "/app"
 USED_OS_LIST = ["RHEL7", "ROCKY9"]
-FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV"]
+FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]
 
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
