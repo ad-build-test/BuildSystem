@@ -169,15 +169,16 @@ def find_component_in_facility(facility: str, component_to_find: str) -> dict:
     else: 
         return None
 
-def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> str:
+def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> list:
     """ Function to return the facility that the ioc is in """
+    facilities_the_ioc_exist_in = []
     for facility in FACILITIES_LIST: # Loop through each facility
         component = find_component_in_facility(facility, component_with_ioc)
         if (component):
             for ioc in component['dependsOn']: # Loop through each ioc
                 if (ioc_to_find in ioc['name']):
-                    return facility
-    return None
+                    facilities_the_ioc_exist_in.append(facility)
+    return facilities_the_ioc_exist_in
 
 def extract_date(entry) -> datetime:
     return datetime.fromisoformat(entry['date'])
@@ -292,7 +293,7 @@ def download_release_helper(endpoint: str, download_dir: str, tarball_name: str,
                     file.write(chunk)
         logging.info('Tarball downloaded successfully')
         logging.debug(f'Extract tarball: {extract_tarball}')
-        logging.debug(f'download dir: {download_dir}')
+        logging.debug(f'download tarball: {tarball_filepath}')
         if (extract_tarball):
             # Extract the .tar.gz file
             logging.info('Extracting tarball...')
@@ -568,18 +569,19 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, backgro
     
     Facility not required as we'll find where each IOC exists.
     """
-    facilities_ioc_dict = {}
+    facilities_ioc_dict = {} # This dict will contain all the iocs that exist in their corresponding facility
     
-    # Process each IOC to find its facility
+    # Process each IOC to find its facility(s)
     # the cli should do a check if the iocs the user wants to deploy actually exist
     for ioc in ioc_to_deploy.ioc_list:
-        facility = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-        logging.info(f"ioc: {ioc}, facility: {facility}")
-        if not facility:
+        facilities = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+        logging.info(f"ioc: {ioc}, facilities: {facilities}")
+        if len(facilities) == 0: # Empty list
             return JSONResponse(content={"payload": {"Error": f"IOC not found in deployment database: {ioc}. (If new IOC then please deploy with a facility)"}}, status_code=400)
-        if facility not in facilities_ioc_dict:
-            facilities_ioc_dict[facility] = []
-        facilities_ioc_dict[facility].append(ioc)
+        for facility in facilities: # Add the ioc to facilities_ioc_dict
+            if facility not in facilities_ioc_dict:
+                facilities_ioc_dict[facility] = []
+            facilities_ioc_dict[facility].append(ioc)
     
     # If we get here, we found facilities for all IOCs
     ioc_to_deploy.facilities = list(facilities_ioc_dict.keys())

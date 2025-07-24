@@ -26,11 +26,25 @@ POST TEST:
     dependsOn: Array (2)
     0: Object
         name: "sioc-b34-gtest01"
-        tag: "1.0.66"
+        tag: "1.0.67"
 
     1: Object
         name: "sioc-b34-gtest02"
         tag: "1.0.67"
+
+    "name": "test-ioc",
+    "facility": "test2",
+    "tag": "1.0.66",
+    "type": "ioc",
+    dependsOn: Array (2)
+    0: Object
+        "name": "sioc-b34-gtest02",
+        "tag": "1.0.66"
+    
+    1: Object
+        "name": "sioc-b34-gtest01",
+        "tag": "1.0.67"
+
 2) Please delete the new deployment you made which is test-ioc at facility 'test'
     and pydm-mps at facility 'test' and
     then can rerun test
@@ -61,11 +75,11 @@ def set_test_environment():
 @pytest.fixture
 def mock_paths():
     with patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'), \
-         patch('deployment_controller.INVENTORY_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/global_inventory.ini'), \
+         patch('deployment_controller.INVENTORY_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/test_inventory.ini'), \
          patch('deployment_controller.CONFIG_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/config.yaml'), \
          patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
-         patch('deployment_controller.FACILITIES_LIST', ["test", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]):
+         patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]):
         yield
 
 ####### Tests for get_deployment_component_info
@@ -304,6 +318,129 @@ async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
     assert response.status_code == 200
     assert "Deployment report" in response.text
     assert "Success" in response.text
+
+@pytest.mark.asyncio
+async def test_deploy_same_component_and_iocs_in_another_test_facility_success(mock_paths):
+    print("Starting test_deploy_same_component_and_ioc_in_another_test_facility_success \
+           - add the same component and ioc but in another facility (to test if can deploy to same ioc in multiple facilities later)\n \
+          bs deploy --facility test -i sioc-b34-gtest01,sioc-b34-gtest02 1.0.65")
+    
+    test_facility = "test2"
+    test_component = "test-ioc"
+    test_tag = "1.0.65"
+    test_ioc_list = ["sioc-b34-gtest01", "sioc-b34-gtest02"]
+    test_user = "test_user"
+
+    ioc_request = IocDict(
+        facilities=[test_facility],
+        component_name=test_component,
+        tag=test_tag,
+        ioc_list=test_ioc_list,
+        user=test_user,
+    )
+    
+    print("Sending request to /ioc/deployment")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+    print("Confirm deployment database contents are correct...")
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
+    payload = response.json()['payload']
+    print(f"payload: {payload}")
+    details = []
+    # Loop through the list of deployment entries (one for each facility if exists)
+    for deployment in payload:
+        # Extract the inner dictionary (assuming there's only one item at the top level)
+        for facility, details in deployment.items():
+            if (facility == test_facility):
+                assert details['name'] == test_component
+                assert details['tag'] == test_tag
+                assert details['type'] == 'ioc'
+            # Loop through the 'dependsOn' list and print each entry
+                dependencies = details['dependsOn']
+     # Check if both entries exist
+    assert any(dep['name'] == 'sioc-b34-gtest01' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest01 not found or tag mismatch"
+
+@pytest.mark.asyncio
+async def test_deploy_ioc_new_tag_specific_ioc_multiple_facilities_success(mock_paths):
+    print("Starting test_deploy_ioc_new_tag_specific_ioc_multiple_facilities_success \
+          - deploy a new tag to an existing ioc in an existing component, in multiple facilities\n \
+          bs deploy -i sioc-b34-gtest01 1.0.67")
+    
+    ioc_request = IocDict(
+        component_name="test-ioc",
+        tag="1.0.67",
+        ioc_list=["sioc-b34-gtest01"],
+        user="test_user"
+    )
+    
+    print("Sending request to /ioc/deployment")
+    print(ioc_request.model_dump())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+@pytest.mark.asyncio
+async def test_deploy_ioc_new_tag_specific_ioc_specific_facility_success(mock_paths):
+    print("Starting test_deploy_ioc_new_tag_specific_ioc_specific_facility_success \
+          - deploy a new tag to an existing ioc in an existing component in specific facility \
+          where ioc exists in 2 facilities\n \
+          bs deploy -i sioc-b34-gtest02 -f 1.0.66")
+    
+    test_facility = "test2"
+    test_component = "test-ioc"
+    test_tag = "1.0.66"
+    test_ioc_list = ["sioc-b34-gtest02"]
+    test_user = "test_user"
+
+    ioc_request = IocDict(
+        facilities=[test_facility],
+        component_name=test_component,
+        tag=test_tag,
+        ioc_list=test_ioc_list,
+        user=test_user,
+    )
+    
+    print("Sending request to /ioc/deployment")
+    print(ioc_request.model_dump())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
+
+    print("Confirm deployment database contents are correct...")
+    response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
+    payload = response.json()['payload']
+    print(f"payload: {payload}")
+    details = []
+    # Loop through the list of deployment entries (one for each facility if exists)
+    for deployment in payload:
+        # Extract the inner dictionary (assuming there's only one item at the top level)
+        for facility, details in deployment.items():
+            if (facility == test_facility):
+                assert details['name'] == test_component
+                assert details['tag'] == test_tag
+                assert details['type'] == 'ioc'
+            # Loop through the 'dependsOn' list and print each entry
+                dependencies = details['dependsOn']
+     # Check if both entries exist
+    assert any(dep['name'] == test_ioc_list[0] and dep['tag'] == test_tag for dep in dependencies), f"{test_ioc_list[0]} not found or tag mismatch"
+
 
 ####### Tests for get_ioc_component_info ######################################
 def test_get_deployment_component_info_success(mock_paths):

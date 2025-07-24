@@ -3,6 +3,10 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.15 24-Jul-2025 P. Nisperos (pnispero)
+  * Updated deployment controller to account for IOCs that exist in more than one facility
+  * Updated bs deploy CLI accordingly
+
 * tag:1.0.14 11-Jun-2025 P. Nisperos (pnispero)
   * Updated deployment controller to include ssh key for production facilities
   * Updated deployment controller ssh config
