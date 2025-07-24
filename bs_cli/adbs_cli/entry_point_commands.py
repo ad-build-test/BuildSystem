@@ -572,7 +572,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
 
         facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]    
         all_iocs_in_db = []
-        all_iocs_and_facility_in_db = {}
         user_specified_facilities_iocs_in_db = [] 
         for facility in facilities_to_loop: # Get every ioc from each facility
             iocs_in_db = []
@@ -593,7 +592,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             if (len(user_specified_facilities) > 0):
                 if (facility in user_specified_facilities): # If user specified facilities, then only deploy to all IOCs in those facilities
                     user_specified_facilities_iocs_in_db += iocs_in_db
-            all_iocs_and_facility_in_db[facility] = iocs_in_db
 
         if (ioc.upper() != "ALL"): # User specified IOCs
             ioc_list = ioc.split(',')
@@ -614,25 +612,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                     for ioc in new_iocs:
                         click.echo(f"  - {ioc}")
                     click.echo("== ADBS == The new IOCs need to be deployed seperately with only one facility specified")
-                    return
-
-            # Error check - If user is deploying a new ioc to specific facility
-            if (len(user_specified_facilities) == 1):
-                iocs_that_already_exist_in_another_facility = {}
-                for user_specified_ioc in ioc_list:
-                    # Compare the user specified IOCs to the ones that already exist in the db
-                    for facility_in_db, iocs_in_db in all_iocs_and_facility_in_db.items():
-                        if (user_specified_facilities[0] == facility_in_db):
-                            continue # skip user facility
-                        if (user_specified_ioc in iocs_in_db):
-                            iocs_that_already_exist_in_another_facility.setdefault(facility_in_db, [])
-                            iocs_that_already_exist_in_another_facility[facility_in_db].append(user_specified_ioc) 
-                if (iocs_that_already_exist_in_another_facility != {}):
-                    click.echo("== ADBS == ERROR: IOCs you want to deploy already exist in another facility:")
-                    for facility, iocs in iocs_that_already_exist_in_another_facility.items():
-                        click.echo(f"Facility: {facility}")
-                        click.echo(f"- IOCs: {iocs}")
-                    click.echo("== ADBS == If you would like to delete/move IOCs from a facility, please contact software factory admins.")
                     return
                 
             elif (len(user_specified_facilities) > 1):
