@@ -666,7 +666,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
                     startup_cmd_template = 'startup.cmd.rtems'
                 else: # We can assume if not linuxrt or rtems, then it is a softioc/cpu
                     if ('ioc' in ioc['folder_name'].lower()):
-                        startup_cmd_template = 'startup.cmd.soft.ioc'
+                        startup_cmd_template = 'startup.cmd.soft'
                     else:
                         startup_cmd_template = 'startup.cmd.soft.cpu'
                 ioc_dict = {
