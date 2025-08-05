@@ -390,6 +390,10 @@ f"""#### Deployment report for {component_name} - {tag} ####
 def read_root():
     return {"status": "Empty endpoint - somethings wrong with your api call."}
 
+@app.get("/health") # Used for pod liveness probe
+async def health():
+    return {"status": "ok"}
+
 @app.get("/deployment/info")
 async def get_deployment_component_info(component: Component):
     """
@@ -876,6 +880,7 @@ async def initial_deployment(initial_deployment: InitialDeploymentDict):
     return JSONResponse(content={"payload": {"Success": "Deployment added to database"}}, status_code=200)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=360)
-    # timeout_keep_alive set to 360 seconds, in case deployment takes longer than usual
+    uvicorn.run('deployment_controller:app', workers=4, host='0.0.0.0', port=8080, timeout_keep_alive=600)
+    # timeout_keep_alive set to 600 seconds, in case deployment takes longer than usual
     # deployment_controller refers to file, and app is the app=fastapi()
+    # 4 workers run in parallel, so if a worker is blocked on a request that takes a while, then the others will still accept requests

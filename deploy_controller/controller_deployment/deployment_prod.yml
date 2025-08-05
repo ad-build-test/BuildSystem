@@ -31,6 +31,20 @@ spec:
       - name: deployment-controller
         image: ghcr.io/ad-build-test/deployment-controller:latest
         imagePullPolicy: Always
+        livenessProbe: # Don't restart me during long requests
+          httpGet:
+            path: /health  # or whatever health endpoint you have
+            port: 8080
+          timeoutSeconds: 300      # 5 minutes
+          periodSeconds: 60        # Check every 60 seconds
+          failureThreshold: 3      # Fail after 3 consecutive failures
+        readinessProbe: # Keep sending me traffic during long requests  
+          httpGet:
+            path: /health
+            port: 8080
+          timeoutSeconds: 300
+          periodSeconds: 60
+          failureThreshold: 3
         env: 
         - name: AD_BUILD_PROD
           value: "1"
@@ -43,8 +57,8 @@ spec:
               cd /app/ && 
               echo "$ pwd && ls" &&
               pwd && ls &&
-              echo "$ uvicorn deployment_controller:app --host 0.0.0.0 --port 8080 --timeout-keep-alive 360" &&
-              uvicorn deployment_controller:app --host 0.0.0.0 --port 8080 --timeout-keep-alive 360
+              echo "$ uvicorn deployment_controller:app --workers 4 --host 0.0.0.0 --port 8080 --timeout-keep-alive 600" &&
+              uvicorn deployment_controller:app --workers 4 --host 0.0.0.0 --port 8080 --timeout-keep-alive 600
         ports:
         - containerPort: 8080  
         resources:
