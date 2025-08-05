@@ -672,9 +672,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                                         deployment_type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     if (len(user_specified_facilities) > 0):
-        click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "... (This may take a minute)")
+        click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
     else:
-        click.echo("== ADBS == Deploying... (This may take a minute)")
+        click.echo("== ADBS == Deploying...")
+    click.echo("== ADBS == This may take a minute (or longer if there are many iocs)")
     response = deployment_request.put_request(log=verbose)
     if (not response.ok):
         try:

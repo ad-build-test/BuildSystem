@@ -74,12 +74,17 @@ def set_test_environment():
 
 @pytest.fixture
 def mock_paths():
-    with patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'), \
-         patch('deployment_controller.INVENTORY_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/test_inventory.ini'), \
-         patch('deployment_controller.CONFIG_FILE_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/config.yaml'), \
-         patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
+    with patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
+         patch('deployment_controller.TEST_INVENTORY', True), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
-         patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]):
+         patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]), \
+         patch('deployment_controller.ANSIBLE_PLAYBOOKS_FACILITIES_DICT', {"DEV": "/sdf/group/ad/eed/ad-build/build-system-playbooks/", \
+                    "LCLS": "/usr/local/lcls/tools/build-system-playbooks/",
+                    "FACET": "/usr/local/facet/tools/build-system-playbooks/",
+                    "TESTFAC": "/afs/slac/g/acctest/tools",
+                    "S3DF": "/sdf/group/ad/eed/ad-build/build-system-playbooks/",
+                    "test": "/home/pnispero/test-deployment-controller/build-system-playbooks/",
+                    "test2": "/home/pnispero/test-deployment-controller/build-system-playbooks/"}):
         yield
 
 ####### Tests for get_deployment_component_info
