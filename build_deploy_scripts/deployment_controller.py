@@ -33,10 +33,13 @@ logging.basicConfig(
     level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
-INVENTORY_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + 'global_inventory.ini'
-CONFIG_FILE_PATH = ANSIBLE_PLAYBOOKS_PATH + "deployment_destinations.yaml"
+ANSIBLE_PLAYBOOKS_FACILITIES_DICT = {"DEV": "/sdf/group/ad/eed/ad-build/build-system-playbooks/",
+                                   "LCLS": "/usr/local/lcls/tools/build-system-playbooks/",
+                                   "FACET": "/usr/local/facet/tools/build-system-playbooks/",
+                                   "TESTFAC": "/afs/slac/g/acctest/tools",
+                                   "S3DF": "/sdf/group/ad/eed/ad-build/build-system-playbooks/"}
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
+TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
 is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes", "y")
 if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
 else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
@@ -629,9 +632,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
     """
     Called by the specific deployment functions after they determine what to deploy.
     """
-    ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
     playbook_args_dict = ioc_to_deploy.model_dump()
-    playbook_args_dict['playbook_path'] = ioc_playbooks_path
     playbook_args_dict['user_src_repo'] = None
     status = 200
     deployment_report_file = temp_download_dir + '/deployment-report-' + ioc_to_deploy.component_name + '-' + ioc_to_deploy.tag + '.log'
@@ -647,6 +648,17 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         logging.info(f"Deploying to facility: {facility}")
         logging.info(f"IOCs to deploy: {facilities_ioc_dict[facility]}")
         
+        ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT[facility] + 'ioc_module'
+        playbook_args_dict['playbook_path'] = ioc_playbooks_path
+        # Deployment controller will call the playbook from dev server, but the
+        # ansible envpaths script has to be called from target machine
+        if TEST_INVENTORY: 
+            inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'test_inventory.ini'
+            local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'ioc_module'
+        else: 
+            inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'global_inventory.ini'
+            local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'ioc_module'
+
         # Skip facilities with empty IOC lists for component-only deployments
         is_component_only = len(facilities_ioc_dict[facility]) == 0
         
@@ -699,7 +711,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         playbook_args_dict['facility'] = facility
         
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, ioc_playbooks_path + '/ioc_deploy.yml',
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(inventory_file_path, local_ioc_playbooks_path + '/ioc_deploy.yml',
                                     facility, playbook_args, return_output=True, no_color=True, check_mode=ioc_to_deploy.dry_run)
         # Combine output
         current_output = ""
@@ -752,7 +764,6 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
     os.makedirs(temp_download_dir, exist_ok=True)
     logging.info(f"New deployment request data: {pydm_to_deploy}")
-    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
     # 2) Call to backend to get component/tag from github releases
     if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir, all_os=False)):
         return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
@@ -774,6 +785,16 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
             deploy_new_component = True
     logging.debug(f"deploy_new_component: {deploy_new_component}")
 
+    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT[facility] + 'pydm_module'
+    # Deployment controller will call the playbook from dev server, but the
+    # ansible envpaths script has to be called from target machine
+    if TEST_INVENTORY: 
+        inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'test_inventory.ini'
+        local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'pydm_module'
+    else: 
+        inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'global_inventory.ini'
+        local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'pydm_module'
+
     tarball = f'{pydm_to_deploy.tag}.tar.gz'
     tarball_filepath = os.path.join(temp_download_dir, tarball)
     
@@ -793,7 +814,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
         playbook_args_dict['facility'] = facility
     # TODO: - may want to do a dry run first to see if there would be any fails.
         playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-        stdout, stderr, return_code = ansible_api.run_ansible_playbook(INVENTORY_FILE_PATH, pydm_playbooks_path + '/pydm_deploy.yml',
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(inventory_file_path, local_pydm_playbooks_path + '/pydm_deploy.yml',
                                         facility, playbook_args, return_output=True, no_color=True, check_mode=pydm_to_deploy.dry_run)
         # 5.1) Combine output
         current_output = ""
@@ -855,6 +876,6 @@ async def initial_deployment(initial_deployment: InitialDeploymentDict):
     return JSONResponse(content={"payload": {"Success": "Deployment added to database"}}, status_code=200)
 
 if __name__ == "__main__":
-    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=180)
-    # timeout_keep_alive set to 180 seconds, in case deployment takes longer than usual
+    uvicorn.run('deployment_controller:app', host='0.0.0.0', port=8080, timeout_keep_alive=360)
+    # timeout_keep_alive set to 360 seconds, in case deployment takes longer than usual
     # deployment_controller refers to file, and app is the app=fastapi()

@@ -3,6 +3,11 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.16 04-Aug-2025 P. Nisperos (pnispero)
+  * Updated deployment controller for a longer timeout for a request (for large deployments)
+  * Updated deployment controller paths to playbooks for different facilities
+  * Updated bs deploy CLI output
+
 * tag:1.0.15 24-Jul-2025 P. Nisperos (pnispero)
   * Updated deployment controller to account for IOCs that exist in more than one facility
   * Updated bs deploy CLI accordingly
