@@ -16,7 +16,7 @@ import logging
 import adbs_cli.create_commands as create_group
 import adbs_cli.tag_commands as tag_group
 import adbs_cli.admin_commands as admin_group
-from adbs_cli.entry_point_commands import configure_user, generate_config, clone, build, test, deploy, mark
+from adbs_cli.entry_point_commands import configure_user, clone, build, test, deploy, mark
 
 # TODO: When done, add exception handling to all possible break points
 # like [requests, environment vars, ]
@@ -38,7 +38,6 @@ def entry_point():
 def main():
     # Note - Order of adding in commands reflects on the frontend
     entry_point.add_command(configure_user)
-    entry_point.add_command(generate_config)
     entry_point.add_command(clone)
     entry_point.add_command(create_group.create)
     entry_point.add_command(build)

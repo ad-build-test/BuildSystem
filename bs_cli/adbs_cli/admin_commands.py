@@ -1,7 +1,9 @@
+import shutil
 import click
 import re
 import json
 import inquirer
+import os
 from adbs_cli.request import Request
 from adbs_cli.component import Component
 from adbs_cli.auto_complete import AutoComplete
@@ -11,6 +13,152 @@ from adbs_cli.cli_configuration import cli_configuration, Api, ApiEndpoints, INP
 def admin():
     """admin [ add-repo | delete-repo ]"""
     pass
+
+@admin.command()
+def configure_repo():
+    """Configure repo to integrate into software factory"""
+    # Get user input
+    at_top = click.confirm("Are you at the TOP level of your repo?")
+    if (at_top):
+        top_level = os.getcwd()
+        repo_name = os.path.basename(top_level)
+    else: 
+        top_level = input("Specify filepath to the TOP level of your repo: ")
+        if os.path.exists(top_level):
+            repo_name = os.path.basename(os.path.abspath(top_level))
+        else:
+            click.echo(f"Error: The specified path '{top_level}' does not exist.")
+            return
+
+    org_name = input(INPUT_PREFIX + "Specify name of GitHub organization: ")
+    description = input(INPUT_PREFIX + "Specify repo description: ")
+    build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
+    question = [
+    inquirer.List(
+        "issueTracker",
+        message="What issue tracking system does this app use?",
+        choices=["github", "jira"]
+        ),
+    ]
+    issue_tracker = inquirer.prompt(question)['issueTracker']
+    jira_project_key = 'n/a'
+    if (issue_tracker == 'jira'):
+        jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
+    question = [
+    inquirer.Checkbox(
+        "buildOs",
+        message="What are the operating systems this app runs on?",
+        choices=["ROCKY9", "RHEL7", "RHEL6", "RHEL5"],
+        default=[],
+        ),
+    ]
+    build_os_list = inquirer.prompt(question)['buildOs']
+    question = [
+    inquirer.List(
+        "deploymentType",
+        message="What type of deployment will this app use?",
+        choices=["ioc", "hla", "tools", "matlab", "pydm", "container"]
+        ),
+    ]
+    deployment_type = inquirer.prompt(question)['deploymentType']
+
+    # Create the content
+    content = f"""# [Required]
+# Basic component information
+repo: {repo_name}
+organization: {org_name}
+url: https://github.com/{org_name}/{repo_name}
+description: {description}
+
+# [Required]
+# Continous integration
+approvalRule: all
+testingCriteria: all
+issueTracker: {issue_tracker}
+jiraProjectKey: {jira_project_key}
+
+# [Required]
+# Environments this app runs on
+environments:
+{chr(10).join('   - ' + env for env in build_os_list)}
+
+# [Required]
+# Type of deployment
+# Types: [ioc, hla, tools, matlab, pydm, container]
+deploymentType: {deployment_type}
+
+# [Optional] 
+# Build method for building the component
+# Can be a simple command like 'make'
+"""
+    if (build_command == ""):
+        content += "# build: \n"
+    else:
+        content += f"build: {build_command}\n"
+
+    # Generate full filepath
+    filepath = os.path.join(top_level, 'config.yaml')
+
+    # Write to file
+    with open(filepath, 'w') as f:
+        f.write(content)
+
+    click.echo(f"File '{filepath}' has been generated successfully!")
+
+    # If deployment type is IOC, then generate RELEASE_SITE, and remove .cram, and remove RELEASE_SITE from .gitignore
+    if (deployment_type == 'ioc'):
+
+        # Generate RELEASE_SITE
+        release_site_contents = f"""
+#==============================================================================
+# RELEASE_SITE Location of EPICS_SITE_TOP, EPICS_MODULES, and BASE_MODULE_VERSION
+# Run "gnumake clean uninstall install" in the application
+# top directory each time this file is changed.
+
+#==============================================================================
+BASE_MODULE_VERSION=R7.0.3.1-1.0
+EPICS_SITE_TOP=/afs/slac/g/lcls/epics
+BASE_SITE_TOP=/afs/slac/g/lcls/epics/base
+MODULES_SITE_TOP=/afs/slac/g/lcls/epics/R7.0.3.1-1.0/modules
+EPICS_MODULES=/afs/slac/g/lcls/epics/R7.0.3.1-1.0/modules
+IOC_SITE_TOP=/afs/slac/g/lcls/epics/iocTop
+PACKAGE_SITE_TOP=/afs/slac/g/lcls/package
+MATLAB_PACKAGE_TOP=/afs/slac/g/lcls/package/matlab
+PSPKG_ROOT=/afs/slac/g/lcls/package/pkg_mgr
+TOOLS_SITE_TOP=/afs/slac/g/lcls/tools
+ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
+#==============================================================================
+"""
+        # Generate full filepath
+        filepath = os.path.join(top_level, 'RELEASE_SITE')
+
+        # Write to file
+        with open(filepath, 'w') as f:
+            f.write(release_site_contents)
+
+        click.echo(f"File '{filepath}' has been generated successfully!")
+
+        # Remove .cram directory
+        try:
+            shutil.rmtree(".cram")
+            click.echo(f"Successfully removed .cram directory")
+        except FileNotFoundError:
+            pass  # Already doesn't exist
+
+        # Remove RELEASE_SITE from .gitignore
+        # Read all lines
+        with open('.gitignore', 'r') as file:
+            lines = file.readlines()
+
+        # Remove the one line containing 'RELEASE_SITE'
+        filtered_lines = [line for line in lines if 'RELEASE_SITE' not in line.strip()]
+
+        # Write back
+        with open('.gitignore', 'w') as file:
+            file.writelines(filtered_lines)
+
+        click.echo(f"Successfully removed RELEASE_SITE from .gitignore")
+    
 
 @admin.command()
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
