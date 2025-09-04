@@ -36,7 +36,7 @@ logging.basicConfig(
 ANSIBLE_PLAYBOOKS_FACILITIES_DICT = {"DEV": "/sdf/group/ad/eed/ad-build/build-system-playbooks/",
                                    "LCLS": "/usr/local/lcls/tools/build-system-playbooks/",
                                    "FACET": "/usr/local/facet/tools/build-system-playbooks/",
-                                   "TESTFAC": "/afs/slac/g/acctest/tools",
+                                   "TESTFAC": "/afs/slac/g/acctest/tools/build-system-playbooks/",
                                    "S3DF": "/sdf/group/ad/eed/ad-build/build-system-playbooks/"}
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
 TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
