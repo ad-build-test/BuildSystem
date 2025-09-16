@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from dateutil import parser
 
 """
 Ex api request
@@ -53,6 +54,11 @@ yaml.default_flow_style = False  # Make the output more readable
 # pydantic models =================================================================================
 class Component(BaseModel):
     component_name: str
+
+class RevertDict(Component):
+    user: str
+    facilities: Optional[list] = None  # Optional, defaults to None
+    ioc_list: Optional[list] = None
 
 class IocDict(Component):
     facilities: Optional[list] = None  # Optional, defaults to None
@@ -172,8 +178,30 @@ def find_component_in_facility(facility: str, component_to_find: str) -> dict:
     else: 
         return None
 
+def find_recent_deployment_for_component_facility(facility: str, component_to_find: str, deployment_index: int) -> dict:
+    """ Function to return recent deployment information 
+        deployment_index: 0 is the most recent, 1 is second most recent, etc.
+    """
+    endpoint = BACKEND_URL + f'deployments/{component_to_find}/{facility}/logs'
+    response = requests.get(endpoint)
+    if (response.ok):
+        payload = response.json()['payload']
+    else: 
+        logging.debug(f"Unable to find deployment for {component_to_find}, at {facility}, at index {deployment_index}")
+        return None
+    # Check if we have at least 2 deployments occured
+    if len(payload) < 2:
+        return {}  # or raise an exception if you prefer
+    
+    # Sort by logDate in descending order (most recent first)
+    sorted_payload = sorted(payload, 
+                        key=lambda deployment: parser.parse(deployment['logDate']), 
+                        reverse=True)
+    
+    return sorted_payload[deployment_index]
+
 def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> list:
-    """ Function to return the facility that the ioc is in """
+    """ Function to return the facility(s) that the ioc is in """
     facilities_the_ioc_exist_in = []
     for facility in FACILITIES_LIST: # Loop through each facility
         component = find_component_in_facility(facility, component_with_ioc)
@@ -451,44 +479,68 @@ async def post_tag_creation(tag_request: TagDict):
 
 
 @app.put("/ioc/deployment/revert")
-async def revert_ioc_deployment(ioc_to_deploy: IocDict):
-    # TODO:
-    # This would require a log or some history data of the previous deployments,
-    # we can store this in the deployment yaml for now.
+async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: BackgroundTasks):
+    """
+    Revert a deployment for an IOC application to the previous iteration.
+    """
 
-    # 1) Figure out the previous component, tag, and the iocs and their tags.
-    find_component_in_facility(ioc_to_deploy.facilities)
-    # Previous component = most recent + 1, or always the second item in history. Better to sort the history by date just in case 
-    # its not in order
-    # 1.1) Get the history, and sort by date 
-    # Define a function to extract and convert the date
+    # 1) If user specified only IOCs, then figure out the facilities
+    ioc_facilities = []
+    if (ioc_to_deploy.ioc_list):
+        # Figure out facilities 
+        for ioc in ioc_to_deploy.ioc_list:
+            facilities = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
+            logging.info(f"ioc: {ioc}, facilities: {facilities}")
+            if len(facilities) == 0: # Empty list
+                return JSONResponse(content={"payload": {"Error": f"IOC not found in deployment database: {ioc}. (If new IOC then please deploy with a facility)"}}, status_code=400)
+            for facility in facilities:
+                if facility not in ioc_facilities:
+                    ioc_facilities.append(facility)
 
-    # Sort the history by the date field in descending order
-    # sorted_history = sorted(['history'], key=extract_date, reverse=True)
-    # Get the second item in history
-    # TODO: need to alter ioc_deployment_logic to revert all iocs to the tags in the history item
+    if (ioc_to_deploy.facilities): ioc_faciliies = ioc_to_deploy.facilities
 
-# Steps 2-5 can be abstracted to its own function since regular deploy_ioc() will be the same logic
-    # ioc_deployment_logic(ioc_to_deploy)
-    # TODO: add extra logic in there, for revert only, call normal_ioc_deploy.yml, as many times as needed, 
-    # but group the iocs by tag, ex: if have 3 iocs at tag 1.1, and 2 iocs at tag 1.2. Call playbook only twice,
-    # instead of one for each. and we dont need all logic in ioc deployment_logic, 
+    deployment_report = ""
+    for facility in ioc_faciliies:
+        current_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 0)
+        previous_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 1)
 
-    # perhaps split it up into more functions and only use the ones that are needed, then the regular deployment can call 
-    # all of them, while revert only calls some of them.
+        # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
+        # Get changed IOCs and revert tag
+        iocs_that_changed = []
+        revert_tag = None
+        
+        if current_deployment and previous_deployment:
+            current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
+            previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
+            # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
+            logging.debug(f"current_iocs: {current_iocs}")
+            logging.debug(f"previous_iocs: {previous_iocs}")
+            # Find IOCs that have different tags
+            for ioc_name, current_tag in current_iocs.items():
+                # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
+                if ioc_name in previous_iocs and current_tag != previous_iocs[ioc_name]:
+                    # ex: previous_iocs["sioc-b34-gtest02"] = "1.0.66"
+                    iocs_that_changed.append(ioc_name)
+            
+            revert_tag = previous_deployment.get("tag")
 
+        # 2) Deploy the reverted deployment for this facility 
+        revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
+                                facilities=[facility],
+                                tag=revert_tag,
+                                ioc_list=iocs_that_changed,
+                                user=ioc_to_deploy.user)
 
-    # todo: alter deploy_ioc to use ioc_deplyoment_logic
-    # 2) Using the component and ioc info
-    # Either request the artifact from artifact storage, or mount the artifact storage directly
+        summary = await deploy_ioc(revert_deployment, background_tasks, return_report_content=True)
+        deployment_report += summary
 
-    # 3) Call the appropriate playbook
-    
-    # 4) Update the deployment config
+    return JSONResponse(content={
+        "success": True,
+        "payload": deployment_report
+    }, status_code=200)
 
-    # 5) Return status and log of the playbook in action
 @app.put("/ioc/deployment")
-async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
+async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, return_report_content: bool = False):
     """
     Main entry point for IOC deployment API.
     Handles these deployment scenarios:
@@ -516,28 +568,27 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks):
     temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
     os.makedirs(temp_download_dir, exist_ok=True)
     logging.info(f"New deployment request data: {ioc_to_deploy}")
-    
     # Add cleanup as background task
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
     
     # Handle component-only deployment
     if not ioc_to_deploy.ioc_list:
         logging.info("Component-only deployment")
-        return deploy_component(ioc_to_deploy, temp_download_dir, background_tasks)
+        return deploy_component(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
     
     # Handle IOC deployments
     if ioc_to_deploy.facilities:
         # Case 3: Deploy tag to new IOCs (IOCs specified, facility required)
         # Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
         logging.info("Deploy tag to new IOCs")
-        return deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, background_tasks)
+        return deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
     else:
         # Cases 1 & 2: Deploy tag to existing IOCs (facility not required)
         logging.info("Deploy tag to existing IOCs (Cases 1 & 2)")
-        return deploy_existing_iocs(ioc_to_deploy, temp_download_dir, background_tasks)
+        return deploy_existing_iocs(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
 
 
-def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
+def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
     """
     Handle component-only deployment
     - Deploy tag to component (either new or existing) with facility specified
@@ -565,10 +616,10 @@ def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_
     # Execute deployment with empty IOC lists - component only
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, background_tasks
+        facilities_ioc_dict, new_component, background_tasks, return_report_content
     )
 
-def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
+def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
     """
     Handle deployments to existing IOCs
     - Case 1: Deploy tag to select existing IOCs 
@@ -596,10 +647,10 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, backgro
     # Execute deployment with the IOCs we found
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, False, background_tasks  # No new components
+        facilities_ioc_dict, False, background_tasks, return_report_content  # No new components
     )
 
-def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks):
+def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
     """
     Handle deployment of IOCs with facility specified
     - Case 3: Deploy tag to new IOCs (facility required)
@@ -627,12 +678,12 @@ def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, ba
     # Execute deployment
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, background_tasks
+        facilities_ioc_dict, new_component, background_tasks, return_report_content
     )
 
 
 def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str, 
-                      facilities_ioc_dict: dict, new_component: bool, background_tasks: BackgroundTasks):
+                      facilities_ioc_dict: dict, new_component: bool, background_tasks: BackgroundTasks, return_report_content: bool = False):
     """
     Called by the specific deployment functions after they determine what to deploy.
     """
@@ -752,7 +803,9 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
                             deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
 
     # Return ansible playbook output to user
-    if os.getenv('PYTHON_TESTING') == 'True':
+    if ((return_report_content)):
+        return summary
+    elif os.getenv('PYTHON_TESTING') == 'True':
         content = summary
         return Response(content=content, media_type="text/plain", status_code=status)
     else:

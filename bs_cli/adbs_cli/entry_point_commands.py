@@ -112,6 +112,29 @@ def get_remote_build_log(build_id: str, verbose: bool=False):
     
     click.echo(f"\n== ADBS == Build log retrieval completed for {build_id}")
 
+def generate_deployment_report(file_content: str, component_name: str, tag: str):
+    # 9) Prompt user if they want to download and view the report
+    # Get the file content from the response
+    file_content
+    # Set the deployment report file 
+    home_directory = os.path.expanduser("~")
+    local_tz = datetime.now().astimezone().tzinfo
+    timestamp = datetime.now(local_tz).strftime("%Y-%m-%dT%H-%M-%S")
+    file_path = f"{home_directory}/deployment-report-{component_name}-{tag}-{timestamp}.log"
+    click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
+    new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
+    if (new_file_path):
+        file_path = new_file_path
+    with open(file_path, "w") as report_file:
+        report_file.write(file_content)
+        # Read out the head of the report
+    with open(file_path, "r") as report_file:
+        summary = [report_file.readline() for _ in range(7)]
+    click.echo("Report head:")
+    for line in summary:
+        click.echo(line, nl=False)
+    click.echo(f"\nReport downloaded successfully to {file_path}")
+
 @click.command()
 def configure_user():
     """Configure user to authorize commands"""
@@ -395,10 +418,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # if (local):
     #     under_development()
 
-    # 1.3) Option - revert
-    if (revert):
-        under_development()
-
     # 1.2) Option - list
     if (list):
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
@@ -424,6 +443,29 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                         for dep in sorted_deps:
                             click.echo(f"IOC: {dep['name']} => {dep['tag']}")
         return
+    
+    # Get facilities (if applicable)
+    linux_uname = os.environ.get('USER')
+    user_specified_facilities = []
+    if (facility):
+        user_specified_facilities = facility.split(',')
+        user_specified_facilities = [facility.upper() for facility in user_specified_facilities] # Uppercase every facility
+
+    # 1.3) Option - revert
+    if (revert):
+        deployment_request.add_to_payload("component_name", deployment_request.component.name)
+        deployment_request.add_to_payload("facilities", user_specified_facilities)
+        deployment_request.add_to_payload("user", linux_uname)
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
+                                        deployment_type="ioc")
+        response = deployment_request.put_request(log=verbose)
+        if (not response.ok):
+            click.echo(f"== ADBS == Error - {response.json()}")
+            return
+        payload = response.json()['payload']
+        generate_deployment_report(payload, deployment_request.component.name, "revert")
+        return
+
     # 2) Get fields
     question = [inquirer.Checkbox(
                 "facility",
@@ -439,14 +481,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (not tag):
         click.echo("== ADBS == Please provide a tag")
         return
-    # 5) Get facilities (if applicable)
-    user_specified_facilities = []
-    if (facility):
-        user_specified_facilities = facility.split(',')
-        user_specified_facilities = [facility.upper() for facility in user_specified_facilities] # Uppercase every facility
-
+    
     # 6) Set the arguments needed for playbook
-    linux_uname = os.environ.get('USER')
     playbook_args_dict = {
         "facilities": user_specified_facilities,
         "component_name": deployment_request.component.name,
@@ -595,12 +631,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')
-    # Get the home directory of the current user
-    home_directory = os.path.expanduser("~")
-    # Get the local timezone of the computer
-    local_tz = datetime.now().astimezone().tzinfo
-    timestamp = datetime.now(local_tz).strftime("%Y-%m-%dT%H-%M-%S")
-    file_path = f"{home_directory}/deployment-report-{deployment_request.component.name}-{tag}-{timestamp}.log"
     click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
     new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
     if (new_file_path):
