@@ -189,7 +189,6 @@ def find_recent_deployment_for_component_facility(facility: str, component_to_fi
     else: 
         logging.debug(f"Unable to find deployment for {component_to_find}, at {facility}, at index {deployment_index}")
         return None
-
     # Check if we have at least 2 deployments occured
     if len(payload) < 2:
         return {}  # or raise an exception if you prefer
@@ -481,10 +480,9 @@ async def post_tag_creation(tag_request: TagDict):
 
 @app.put("/ioc/deployment/revert")
 async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: BackgroundTasks):
-    # TODO:
-    # 1) Figure out the previous component, tag, and the iocs and their tags.
-    # Previous component = most recent + 1, or always the second item in history. Better to sort the history by date just in case 
-    # its not in order
+    """
+    Revert a deployment for an IOC application to the previous iteration.
+    """
 
     # 1) If user specified only IOCs, then figure out the facilities
     ioc_facilities = []
@@ -507,7 +505,6 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
         previous_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 1)
 
         # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
-
         # Get changed IOCs and revert tag
         iocs_that_changed = []
         revert_tag = None
@@ -516,7 +513,8 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
             current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
             previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
             # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
-
+            logging.debug(f"current_iocs: {current_iocs}")
+            logging.debug(f"previous_iocs: {previous_iocs}")
             # Find IOCs that have different tags
             for ioc_name, current_tag in current_iocs.items():
                 # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
@@ -525,9 +523,6 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
                     iocs_that_changed.append(ioc_name)
             
             revert_tag = previous_deployment.get("tag")
-        
-        print(f"IOCs to revert for {facility}: {iocs_that_changed}")
-        print(f"Revert tag: {revert_tag}")
 
         # 2) Deploy the reverted deployment for this facility 
         revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
@@ -537,9 +532,8 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
                                 user=ioc_to_deploy.user)
 
         summary = await deploy_ioc(revert_deployment, background_tasks, return_report_content=True)
-        logging.debug(summary)
         deployment_report += summary
-        # return deploy_ioc(previous_deployment)
+
     return JSONResponse(content={
         "success": True,
         "payload": deployment_report
@@ -574,7 +568,6 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, 
     temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
     os.makedirs(temp_download_dir, exist_ok=True)
     logging.info(f"New deployment request data: {ioc_to_deploy}")
-    
     # Add cleanup as background task
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
     
@@ -810,11 +803,11 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
                             deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
 
     # Return ansible playbook output to user
-    if os.getenv('PYTHON_TESTING') == 'True':
+    if ((return_report_content)):
+        return summary
+    elif os.getenv('PYTHON_TESTING') == 'True':
         content = summary
         return Response(content=content, media_type="text/plain", status_code=status)
-    elif (return_report_content):
-        return summary
     else:
         return FileResponse(path=deployment_report_file, status_code=status)
     

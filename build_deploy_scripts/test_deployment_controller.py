@@ -58,7 +58,7 @@ Then we really have a self-contained test without any need for POST operations
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, mock_open
-from deployment_controller import app, IocDict, PydmDict
+from deployment_controller import app, IocDict, PydmDict, RevertDict
 import os
 from httpx import AsyncClient, ASGITransport
 import asyncio
@@ -300,6 +300,28 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
      # Check if both entries exist
     assert any(dep['name'] == 'sioc-b34-gtest01' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest01 not found or tag mismatch"
     assert any(dep['name'] == 'sioc-b34-gtest02' and dep['tag'] == test_tag for dep in dependencies), "sioc-b34-gtest02 not found or tag mismatch"
+
+@pytest.mark.asyncio
+async def test_revert_ioc_success(mock_paths):
+    print("Starting test_revert_ioc_success - Revert IOC deployment\n \
+          bs deploy --revert --facility test")
+    
+    ioc_request = RevertDict(
+        facilities=["test"],
+        component_name="test-ioc",
+        user="test_user"
+    )
+    
+    print("Sending request to /ioc/deployment/revert")
+    print(ioc_request.model_dump())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.put("/ioc/deployment/revert", json=ioc_request.model_dump())
+    
+    print(f"Received response with status code: {response.status_code}")
+    
+    assert response.status_code == 200
+    assert "Deployment report" in response.text
+    assert "Success" in response.text
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
