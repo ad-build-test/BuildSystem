@@ -9,7 +9,7 @@ And make the following dirs:
 1) cd ~/test-deployment-controller/ && mkdir scratch app 
 2) git clone https://github.com/ad-build-test/build-system-playbooks
 3) Alter the paths for 'test' group in build-system-playbooks/global_inventory.ini to your username
-4) Then in mock_paths(), alter the paths to your local ~/test-deployment-controller/
+4) Then in mock_paths(), alter the paths to your local ~/test-deployment-controller/ (Anywhere it says pnispero, change to your username)
 
 
 Usage: pytest test_deployment_controller.py
@@ -78,13 +78,7 @@ def mock_paths():
          patch('deployment_controller.TEST_INVENTORY', True), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
          patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]), \
-         patch('deployment_controller.ANSIBLE_PLAYBOOKS_FACILITIES_DICT', {"DEV": "/sdf/group/ad/eed/ad-build/build-system-playbooks/", \
-                    "LCLS": "/usr/local/lcls/tools/build-system-playbooks/",
-                    "FACET": "/usr/local/facet/tools/build-system-playbooks/",
-                    "TESTFAC": "/afs/slac/g/acctest/tools",
-                    "S3DF": "/sdf/group/ad/eed/ad-build/build-system-playbooks/",
-                    "test": "/home/pnispero/test-deployment-controller/build-system-playbooks/",
-                    "test2": "/home/pnispero/test-deployment-controller/build-system-playbooks/"}):
+         patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'):
         yield
 
 ####### Tests for get_deployment_component_info
@@ -153,7 +147,7 @@ async def test_deploy_ioc_new_component_and_ioc_success(mock_paths):
         component_name=test_component,
         tag=test_tag,
         ioc_list=[test_ioc_list],
-        user=test_user,
+        user=test_user
     )
     
     print("Sending request to /ioc/deployment")

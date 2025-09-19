@@ -118,9 +118,14 @@ def generate_deployment_report(file_content: str, component_name: str, tag: str)
     file_content
     # Set the deployment report file 
     home_directory = os.path.expanduser("~")
+    # Create a deployment reports directory if it doesn't exist
+    reports_dir = os.path.join(home_directory, "software_deployment_reports", component_name)
+    os.makedirs(reports_dir, exist_ok=True)
+    
     local_tz = datetime.now().astimezone().tzinfo
     timestamp = datetime.now(local_tz).strftime("%Y-%m-%dT%H-%M-%S")
-    file_path = f"{home_directory}/deployment-report-{component_name}-{tag}-{timestamp}.log"
+    file_path = os.path.join(reports_dir, f"deployment-report-{component_name}-{tag}-{timestamp}.log")
+    
     click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
     new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
     if (new_file_path):
@@ -392,11 +397,12 @@ def test(component: str, branch: str, quick: bool, main: bool, verbose: bool=Tru
 @click.option("-ls", "--list", is_flag=True, required=False, help="List the active releases")
 # @click.option("-l", "--local", is_flag=True, required=False, help="Deploy local directory instead of the artifact storage")
 @click.option("-r", "--revert", is_flag=True, required=False, help="Revert to previous version")
+@click.option("-rb", "--reboot", is_flag=True, required=False, help="Reboot iocs after deployment")
 # @click.option("-o", "--override", is_flag=True, required=False, help="Point local DEV deployment to your user-space repo")
 @click.option("-n", "--dry-run", is_flag=True, required=False, help="Print the commands that would be executed, but do not execute them.")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: bool,
-            revert: bool, dry_run: bool, verbose: bool):
+            revert: bool, reboot: bool, dry_run: bool, verbose: bool):
     """Trigger a deployment. Automatically deploys app and ioc(s) to the tag you choose. Facility is automatically determined by ioc.
         Will automatically pickup app in the directory you're sitting in.
     """
@@ -501,6 +507,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         if (not deployment_request.component.set_cur_dir_component()):
             click.echo('fatal: not a git repository (or any of the parent directories)')
             return
+        # Set reboot
+        playbook_args_dict['reboot_iocs'] = reboot
         # 6.2) Get top of git dir
         top_level = deployment_request.component.git_get_top_dir()
         # 6.3) Enter iocBoot/ dir
@@ -631,61 +639,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')
-    click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
-    new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
-    if (new_file_path):
-        file_path = new_file_path
-    with open(file_path, "w") as report_file:
-        report_file.write(file_content)
-        # Read out the head of the report
-    with open(file_path, "r") as report_file:
-        summary = [report_file.readline() for _ in range(7)]
-    click.echo("Report head:")
-    for line in summary:
-        click.echo(line, nl=False)
-    click.echo(f"\nReport downloaded successfully to {file_path}")
-
-    # 5) Call the deployment controller to deploy for each facility (unless dev then call locally)
-    # TODO: Local deployment - if want local deployment, then user must follow the steps to ensure ansible can ssh from s3df to prod. 
-    # The steps are outlined in Jira issue EEDSWCM-69. but if its local deployment, then its essentially cram.
-    # if (local):
-    # for facility in facilities:
-    #     click.echo(f"== ADBS == Deploying to facility: {facility}\n")
-    #     playbook_args_dict['facility'] = facility
-            
-    # TODO: Come back to this logic here for local directory deployments
-    # # 5.1) If deploying on DEV, then just call playbook directly here, then api call to deployment to add to db
-    #     if ('S3DF' in facilities):
-    #         playbook_output_path = os.getcwd() + "/ADBS_TMP"
-    #         user_src_repo = deployment_request.component.git_get_top_dir()
-    #         tarball_path = user_src_repo + '/build_results/'
-    #         tarball = str(find_tarball(tarball_path))
-    #         if (tarball == None):
-    #             click.echo("== ADBS == No tarball found in " + tarball_path)
-    #         playbook_args_dict['tarball'] = tarball
-    #         playbook_args_dict['user_src_repo'] = None
-    #         if (override == True):
-    #             playbook_args_dict['user_src_repo'] = user_src_repo
-
-    #         isExist = os.path.exists(playbook_output_path)
-    #         if not isExist:
-    #             click.echo(f"== ADBS == Adding a {playbook_output_path} dir for deployment playbook output. You may delete if unused")
-    #             os.mkdir(playbook_output_path)
-    #         adbs_playbooks_dir = cli_configuration["build_system_filepath"] + "ansible/ioc_module/" # TODO: Change this once official
-
-    #         return_code = run_ansible_playbook(adbs_playbooks_dir + 'global_inventory.ini',
-    #                                         adbs_playbooks_dir + 'ioc_deploy.yml',
-    #                                             facility,
-    #                                             playbook_args_dict)
-    #         click.echo("Playbook execution finished with return code:", return_code)
-    #         # TODO: API call to deployment controller to add deployment info to db
-    #     else: # 5.2) Otherwise deployment controller will deploy to production facilities
-    #         deployment_request.set_endpoint('ioc/deployment')
-    #         deployment_request.add_dict_to_payload(playbook_args_dict)
-    #         click.echo("== ADBS == Deploying to " + facility + "...")
-    #         deployment_request.put_request(log=verbose, msg="Remote deployment")
-    #     if (initial):
-    #         click.echo("== ADBS == Please create startup.cmd manually!")
+    generate_deployment_report(file_content, deployment_request.component.name, tag)
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")

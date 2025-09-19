@@ -3,6 +3,11 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.19 19-Sep-2025 P. Nisperos (pnispero)
+  * Updated bs cli - Added in --reboot option for bs deploy
+  * Added IOC reboot functionality to the deployment controller
+  * Moved deployment reports to ~/software_deployment_reports/component/
+
 * tag:1.0.18 09-Sep-2025 P. Nisperos (pnispero)
   * Updated bs cli - Added in --revert option for bs deploy
   * Added IOC revert functionality to the deployment controller
