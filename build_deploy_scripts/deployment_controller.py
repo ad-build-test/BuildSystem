@@ -34,11 +34,7 @@ logging.basicConfig(
     level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-ANSIBLE_PLAYBOOKS_FACILITIES_DICT = {"DEV": "/sdf/group/ad/eed/ad-build/build-system-playbooks/",
-                                   "LCLS": "/usr/local/lcls/tools/build-system-playbooks/",
-                                   "FACET": "/usr/local/facet/tools/build-system-playbooks/",
-                                   "TESTFAC": "/afs/slac/g/acctest/tools/build-system-playbooks/",
-                                   "S3DF": "/sdf/group/ad/eed/ad-build/build-system-playbooks/"}
+ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
 TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
 is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes", "y")
@@ -59,6 +55,7 @@ class RevertDict(Component):
     user: str
     facilities: Optional[list] = None  # Optional, defaults to None
     ioc_list: Optional[list] = None
+    reboot_iocs: Optional[bool] = False # Optional
 
 class IocDict(Component):
     facilities: Optional[list] = None  # Optional, defaults to None
@@ -66,6 +63,7 @@ class IocDict(Component):
     ioc_list: Optional[list] = None
     user: str
     dry_run: Optional[bool] = False # Optional
+    reboot_iocs: Optional[bool] = False # Optional
 
 class PydmDict(Component):
     facilities: Optional[list] = None # Optional
@@ -703,16 +701,12 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         logging.info(f"Deploying to facility: {facility}")
         logging.info(f"IOCs to deploy: {facilities_ioc_dict[facility]}")
         
-        ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT[facility] + 'ioc_module'
+        ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
         playbook_args_dict['playbook_path'] = ioc_playbooks_path
-        # Deployment controller will call the playbook from dev server, but the
-        # ansible envpaths script has to be called from target machine
-        if TEST_INVENTORY: 
-            inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'test_inventory.ini'
-            local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'ioc_module'
-        else: 
-            inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'global_inventory.ini'
-            local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'ioc_module'
+        local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
+        inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
+        if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
+        else: inventory_file_path += 'global_inventory.ini'
 
         # Skip facilities with empty IOC lists for component-only deployments
         is_component_only = len(facilities_ioc_dict[facility]) == 0
@@ -842,15 +836,11 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
             deploy_new_component = True
     logging.debug(f"deploy_new_component: {deploy_new_component}")
 
-    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT[facility] + 'pydm_module'
-    # Deployment controller will call the playbook from dev server, but the
-    # ansible envpaths script has to be called from target machine
-    if TEST_INVENTORY: 
-        inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'test_inventory.ini'
-        local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["test"] + 'pydm_module'
-    else: 
-        inventory_file_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'global_inventory.ini'
-        local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_FACILITIES_DICT["DEV"] + 'pydm_module'
+    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
+    local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
+    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
+    if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
+    else: inventory_file_path += 'global_inventory.ini'
 
     tarball = f'{pydm_to_deploy.tag}.tar.gz'
     tarball_filepath = os.path.join(temp_download_dir, tarball)
