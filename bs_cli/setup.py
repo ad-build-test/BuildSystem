@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 # Avoided using pyproject.toml, becuase can't get an editable version installed (pip install -e .)
 setup(
     name='adbs_cli',
-    version='1.0.18',
+    version='1.0.19',
     description="Command line interface for the accelerator directorate build system (software factory)",
     author="Patrick Nisperos, Jerry Katzung, Claudio Bisegni",
     author_email="pnispero@slac.stanford.edu, katzung@slac.stanford.edu, bisegni@slac.stanford.edu",
