@@ -77,7 +77,7 @@ def mock_paths():
     with patch('deployment_controller.SCRATCH_FILEPATH', '/home/pnispero/test-deployment-controller/scratch/'), \
          patch('deployment_controller.TEST_INVENTORY', True), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
-         patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "S3DF"]), \
+         patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]), \
          patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'):
         yield
 
@@ -548,7 +548,7 @@ async def test_deploy_pydm_new_tag_success(mock_paths):
 #     mock_ansible.return_value = ("", "Error output", 1)
     
 #     ioc_request = IocDict(
-#         facilities=["S3DF"],
+#         facilities=["SANDBOX"],
 #         component_name="test_ioc",
 #         tag="v1.0.0",
 #         ioc_list=["ALL"],

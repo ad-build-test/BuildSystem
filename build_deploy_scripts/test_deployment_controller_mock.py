@@ -59,7 +59,7 @@ def mock_external_dependencies():
         # Mock component found
         mock_find.return_value = {
             'name': 'test_ioc',
-            'facility': 'S3DF',
+            'facility': 'SANDBOX',
             'dependsOn': [{'name': 'sub_ioc1'}, {'name': 'sub_ioc2'}]
         }
         
@@ -83,25 +83,25 @@ def mock_external_dependencies():
 @patch('deployment_controller.find_component_in_facility')
 @patch('deployment_controller.get_facilities_list')
 def test_get_ioc_component_info_success(mock_get_facilities_list, mock_find_component_in_facility):
-    mock_get_facilities_list.return_value = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
+    mock_get_facilities_list.return_value = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'SANDBOX']
     mock_find_component_in_facility.side_effect = [
         None,
         None,
         None,
         None,
-        {'name': 'test_ioc', 'facility': 'S3DF'}
+        {'name': 'test_ioc', 'facility': 'SANDBOX'}
     ]
     
     response = client.request("GET", "/ioc/info", json={"component_name": "test_ioc"})
     
     assert response.status_code == 200
     assert len(response.json()['payload']) == 1
-    assert 'S3DF' in response.json()['payload'][0]
+    assert 'SANDBOX' in response.json()['payload'][0]
 
 @patch('deployment_controller.find_component_in_facility')
 @patch('deployment_controller.get_facilities_list')
 def test_get_ioc_component_info_not_found(mock_get_facilities_list, mock_find_component_in_facility):
-    mock_get_facilities_list.return_value = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'S3DF']
+    mock_get_facilities_list.return_value = ['LCLS', 'FACET', 'TESTFAC', 'DEV', 'SANDBOX']
     mock_find_component_in_facility.return_value = None
     
     response = client.request("GET", "/ioc/info", json={"component_name": "non_existent_ioc"})
@@ -119,7 +119,7 @@ async def test_deploy_ioc_success(mock_external_dependencies, mock_paths):
     mock_ansible.return_value = ("Success output", "", 0)
     
     ioc_request = IocDict(
-        facilities=["S3DF"],
+        facilities=["SANDBOX"],
         component_name="test_ioc",
         tag="v1.0.0",
         ioc_list=["ALL"],
@@ -159,7 +159,7 @@ async def test_deploy_ioc_failure(mock_external_dependencies, mock_paths):
     mock_ansible.return_value = ("", "Error output", 1)
     
     ioc_request = IocDict(
-        facilities=["S3DF"],
+        facilities=["SANDBOX"],
         component_name="test_ioc",
         tag="v1.0.0",
         ioc_list=["ALL"],

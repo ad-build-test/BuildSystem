@@ -523,7 +523,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                                     item.startswith('vioc')):
                 all_ioc_dirs.append(item)
 
-        facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "S3DF"]    
+        facilities_to_loop = ["DEV", "LCLS", "FACET", "TESTFAC", "SANDBOX"]    
         all_iocs_in_db = []
         user_specified_facilities_iocs_in_db = [] 
         for facility in facilities_to_loop: # Get every ioc from each facility
