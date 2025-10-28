@@ -16,7 +16,7 @@ This tests end-to-end (meaning everything has to be running for this to work)
 Pre-reqs:
 1. be on development server and point your cli to dev cluster.
 2. make sure build system backend is running
-3. ensure oscilloscope deployment entry exists for other facilities except for S3DF
+3. ensure oscilloscope deployment entry exists for other facilities except for SANDBOX
 
 How to run:
 pytest -v -s test_entry_point_commands.py
@@ -57,7 +57,7 @@ class TestDeployIocCommand:
             os.chdir(original_dir)
             shutil.rmtree(temp_dir)
             test_finished_cleanup_task = """
-    \n**Tests finished** - PLEASE remove the following contents from mock dev on S3DF to test again: 
+    \n**Tests finished** - PLEASE remove the following contents from mock dev on SANDBOX to test again: 
         - iocTop/oscilloscope 
         rm -rf /sdf/group/ad/eed/unofficial/lcls/epics/iocTop/oscilloscope
         - iocCommon/sioc-b34-sc01,sioc-b34-sc02
@@ -65,7 +65,7 @@ class TestDeployIocCommand:
         - iocData/sioc-b34-sc01,sioc-b34-sc02
         rm -rf iocCommon/sioc-b34-sc0* iocData/sioc-b34-sc0*
 
-        And delete the oscilloscope entry for S3DF in the deployment database 
+        And delete the oscilloscope entry for SANDBOX in the deployment database 
         Now should be good to run test again. (May fully automate this sometime in future)
     """
             print(test_finished_cleanup_task)
@@ -73,10 +73,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_component_no_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 1: Deploy a new tag to component (No IOCs specified)
-        $ bs deploy -f S3DF R1.3.0
+        $ bs deploy -f SANDBOX R1.3.0
         """
         # Execute the command
-        command = ["-f", "S3DF", "R1.3.0"]
+        command = ["-f", "SANDBOX", "R1.3.0"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -85,17 +85,17 @@ class TestDeployIocCommand:
         
         # Assertions
         assert result.exit_code == 0, f"Command failed with output: {result.output}"
-        assert "Deploying to ['S3DF']" in result.output
+        assert "Deploying to ['SANDBOX']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output
     
     def test_deploy_new_tag_to_new_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 2: Deploy a new tag to new IOCs
-        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 -f S3DF R1.3.0
+        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 -f SANDBOX R1.3.0
         """
         # Execute the command
-        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "S3DF", "R1.3.0"]
+        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "SANDBOX", "R1.3.0"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -104,7 +104,7 @@ class TestDeployIocCommand:
 
         # Assertions
         assert result.exit_code == 0, f"Command failed with output: {result.output}"
-        assert "Deploying to ['S3DF']" in result.output
+        assert "Deploying to ['SANDBOX']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output
     
@@ -129,10 +129,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_all_existing_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 4: Deploy a new tag to ALL (existing) IOCs
-        $ bs deploy -i ALL -f S3DF R1.3.2
+        $ bs deploy -i ALL -f SANDBOX R1.3.2
         """
         # Execute the command
-        command = ["-i", "ALL", "-f", "S3DF", "R1.3.2"]
+        command = ["-i", "ALL", "-f", "SANDBOX", "R1.3.2"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='n\ny\n\n')
         
@@ -141,7 +141,7 @@ class TestDeployIocCommand:
 
         # Assertions
         assert result.exit_code == 0, f"Command failed with output: {result.output}"
-        assert "Deploying to ['S3DF']" in result.output
+        assert "Deploying to ['SANDBOX']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output
 
@@ -149,10 +149,10 @@ class TestDeployIocCommand:
         """
         Test Case 5: Deploy a new tag to new IOC (but exists already in another facility)
         (This should show an error saying that the IOCs already exist)
-        $ bs deploy -i sioc-as01-sc01,sioc-sys1-sc01 -f S3DF R1.3.1
+        $ bs deploy -i sioc-as01-sc01,sioc-sys1-sc01 -f SANDBOX R1.3.1
         """
         # Execute the command
-        command = ["-i", "sioc-as01-sc01,sioc-sys1-sc01", "-f", "S3DF", "R1.3.2"]
+        command = ["-i", "sioc-as01-sc01,sioc-sys1-sc01", "-f", "SANDBOX", "R1.3.2"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command)
         
@@ -198,10 +198,10 @@ class TestDeployPydmCommand:
             os.chdir(original_dir)
             shutil.rmtree(temp_dir)
             test_finished_cleanup_task = """
-    \n**Tests finished** - PLEASE remove the following contents from mock dev on S3DF to test again: 
+    \n**Tests finished** - PLEASE remove the following contents from mock dev on SANDBOX to test again: 
         rm -rf /sdf/group/ad/eed/unofficial/lcls/tools/pydm/display/release/pydm-mps
 
-        And delete the pydm-mps entry for S3DF in the deployment database 
+        And delete the pydm-mps entry for SANDBOX in the deployment database 
         Now should be good to run test again. (May fully automate this sometime in future)
     """
             print(test_finished_cleanup_task)
@@ -209,10 +209,10 @@ class TestDeployPydmCommand:
     def test_deploy_new_tag_to_new_component(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 1: Deploy a new tag to new component
-        $ bs deploy -f S3DF R1.0.0
+        $ bs deploy -f SANDBOX R1.0.0
         """
         # Execute the command
-        command = ["-f", "S3DF", "R1.0.0"]
+        command = ["-f", "SANDBOX", "R1.0.0"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -221,17 +221,17 @@ class TestDeployPydmCommand:
         
         # Assertions
         assert result.exit_code == 0, f"Command failed with output: {result.output}"
-        assert "Deploying to ['S3DF']" in result.output
+        assert "Deploying to ['SANDBOX']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output
 
     def test_deploy_new_tag_to_existing_component(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 2: Deploy a new tag to existing component
-        $ bs deploy -f S3DF R1.0.1
+        $ bs deploy -f SANDBOX R1.0.1
         """
         # Execute the command
-        command = ["-f", "S3DF", "R1.0.1"]
+        command = ["-f", "SANDBOX", "R1.0.1"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -240,6 +240,6 @@ class TestDeployPydmCommand:
         
         # Assertions
         assert result.exit_code == 0, f"Command failed with output: {result.output}"
-        assert "Deploying to ['S3DF']" in result.output
+        assert "Deploying to ['SANDBOX']" in result.output
         assert "Deployment finished" in result.output
         assert "Overall status: Success" in result.output

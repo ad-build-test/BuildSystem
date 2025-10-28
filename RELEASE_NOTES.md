@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.20 28-Oct-2025 P. Nisperos (pnispero)
+  * Renamed facility S3DF to sandbox
+
 * tag:1.0.19 19-Sep-2025 P. Nisperos (pnispero)
   * Updated bs cli - Added in --reboot option for bs deploy
   * Added IOC reboot functionality to the deployment controller
