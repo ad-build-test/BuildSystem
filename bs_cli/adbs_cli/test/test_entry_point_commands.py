@@ -73,10 +73,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_component_no_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 1: Deploy a new tag to component (No IOCs specified)
-        $ bs deploy -f SANDBOX R1.3.0
+        $ bs deploy -f SANDBOX R1.2.12
         """
         # Execute the command
-        command = ["-f", "SANDBOX", "R1.3.0"]
+        command = ["-f", "SANDBOX", "R1.2.12"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -92,10 +92,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_new_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 2: Deploy a new tag to new IOCs
-        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 -f SANDBOX R1.3.0
+        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 -f SANDBOX R1.2.12
         """
         # Execute the command
-        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "SANDBOX", "R1.3.0"]
+        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "-f", "SANDBOX", "R1.2.12"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -111,10 +111,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_select_existing_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 3: Deploy a new tag to select (existing) IOCs
-        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 R1.3.1
+        $ bs deploy -i sioc-b34-sc01,sioc-b34-sc02 R1.2.13
         """
         # Execute the command
-        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "R1.3.1"]
+        command = ["-i", "sioc-b34-sc01,sioc-b34-sc02", "R1.2.13"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='\n')
         
@@ -129,10 +129,10 @@ class TestDeployIocCommand:
     def test_deploy_new_tag_to_all_existing_iocs(self, runner: CliRunner, setup_test_repo):
         """
         Test Case 4: Deploy a new tag to ALL (existing) IOCs
-        $ bs deploy -i ALL -f SANDBOX R1.3.2
+        $ bs deploy -i ALL -f SANDBOX R1.2.14
         """
         # Execute the command
-        command = ["-i", "ALL", "-f", "SANDBOX", "R1.3.2"]
+        command = ["-i", "ALL", "-f", "SANDBOX", "R1.2.14"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command, input='n\ny\n\n')
         
@@ -149,10 +149,10 @@ class TestDeployIocCommand:
         """
         Test Case 5: Deploy a new tag to new IOC (but exists already in another facility)
         (This should show an error saying that the IOCs already exist)
-        $ bs deploy -i sioc-as01-sc01,sioc-sys1-sc01 -f SANDBOX R1.3.1
+        $ bs deploy -i sioc-as01-sc01,sioc-sys1-sc01 -f SANDBOX R1.2.14
         """
         # Execute the command
-        command = ["-i", "sioc-as01-sc01,sioc-sys1-sc01", "-f", "SANDBOX", "R1.3.2"]
+        command = ["-i", "sioc-as01-sc01,sioc-sys1-sc01", "-f", "SANDBOX", "R1.2.14"]
         print(f"Command to invoke: bs deploy {command}")
         result = runner.invoke(deploy, command)
         
