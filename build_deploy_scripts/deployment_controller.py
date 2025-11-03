@@ -40,7 +40,7 @@ TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
 is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes", "y")
 if is_prod: 
     BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
-    ELOG_ENDPOINT = "https://accel-webapp-dev.slac.stanford.edu/api/elog-apptoken/v1/entries"
+    ELOG_ENDPOINT = "https://accel-webapp.slac.stanford.edu/api/elog-apptoken/v1/entries"
 else: 
     BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
     ELOG_ENDPOINT = "https://accel-webapp-dev.slac.stanford.edu/api/elog-apptoken/v1/entries"
