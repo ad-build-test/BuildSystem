@@ -979,6 +979,10 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     # 6) Generate summary for report
     summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
                             deployment_output, status, deployment_report_file, dry_run=pydm_to_deploy.dry_run)
+    
+    # Send summary to elog
+    send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
+
     # Add cleanup
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
 
