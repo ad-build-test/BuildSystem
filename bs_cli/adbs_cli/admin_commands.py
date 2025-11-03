@@ -78,11 +78,6 @@ issueTracker: {issue_tracker}
 jiraProjectKey: {jira_project_key}
 
 # [Required]
-# Environments this app runs on
-environments:
-{chr(10).join('   - ' + env for env in build_os_list)}
-
-# [Required]
 # Type of deployment
 # Types: [ioc, hla, tools, matlab, pydm, container]
 deploymentType: {deployment_type}
@@ -95,6 +90,20 @@ deploymentType: {deployment_type}
         content += "# build: \n"
     else:
         content += f"build: {build_command}\n"
+
+    if (build_os_list == []):
+        content += """
+# [Optional]
+# Environments this app runs on
+# environments:
+"""
+    else:
+        content += f"""
+# [Optional]
+# Environments this app runs on
+environments:
+{chr(10).join('   - ' + env for env in build_os_list)}
+"""
 
     # Generate full filepath
     filepath = os.path.join(top_level, 'config.yaml')
@@ -192,7 +201,8 @@ def add_repo(verbose: bool=False):
         return
     if (issue_tracker == 'jira'):
         request.add_to_payload("jiraProjectKey", manifest_data["jiraProjectKey"])
-    build_os = {"buildOs": manifest_data["environments"]}
+
+    build_os = {"buildOs": manifest_data.get("environments")}
     request.add_dict_to_payload(build_os)
     request.add_to_payload("url", f"https://github.com/{organization}/{request.component.name}")
     request.add_to_payload("ssh", f"git@github.com:{organization}/{request.component.name}.git")

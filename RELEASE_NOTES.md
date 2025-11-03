@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.0.21 3-Nov-2025 P. Nisperos (pnispero)
+  * Admin cli made environments optional for non-ioc applications
+
 * tag:1.0.20 28-Oct-2025 P. Nisperos (pnispero)
   * Renamed facility S3DF to sandbox
 
