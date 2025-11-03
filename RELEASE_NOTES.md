@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.0 3-Nov-2025 P. Nisperos (pnispero)
+  * Added api calls to ELOG for writing deployments and their reports
+
 * tag:1.0.21 3-Nov-2025 P. Nisperos (pnispero)
   * Admin cli made environments optional for non-ioc applications
 

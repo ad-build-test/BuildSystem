@@ -38,8 +38,18 @@ ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
 TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
 is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes", "y")
-if is_prod: BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
-else: BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
+if is_prod: 
+    BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
+    ELOG_ENDPOINT = "https://accel-webapp.slac.stanford.edu/api/elog-apptoken/v1/entries"
+else: 
+    BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
+    ELOG_ENDPOINT = "https://accel-webapp-dev.slac.stanford.edu/api/elog-apptoken/v1/entries"
+
+ELOG_USER_PASSWORD = os.getenv("ELOG_USER_PASSWORD")
+if (ELOG_USER_PASSWORD == None):
+    raise ValueError("Missing environment variable - ELOG_USER_PASSWORD")
+ELOG_HEADERS = {"x-vouch-idp-accesstoken": ELOG_USER_PASSWORD}
+
 APP_PATH = "/app"
 USED_OS_LIST = ["RHEL7", "ROCKY9"]
 FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]
@@ -409,6 +419,85 @@ f"""#### Deployment report for {component_name} - {tag} ####
     write_file(deployment_report_file, summary)
     logging.debug(summary)
     return summary
+
+def send_deployment_to_elog(component_name: str, tag: str, facilities: list, summary_report: str):
+    """
+    Writes processed data to ELOG backend API based on the message type
+    """
+    print(f"Writing to the ELOG (SW_LOG) logbook through backend API for: {component_name} - {tag}")
+
+    logbook_id = "6536f0b5fbf92e44a7675731" # This is SW_LOG logbook id
+
+    title = f"Deployment: {component_name} - {tag} {facilities}"
+    text = f"<pre>{summary_report}</pre>"
+
+    # Construct the payload
+    payload = {
+        "logbooks": [logbook_id],
+        "title": title,
+        "text": text,
+        "note": "",
+        "attachments": [],
+        # "summarizes": { # We can skip this field
+        #     "shiftId": "",
+        #     "date": summary_date
+        # },
+        # "eventAt": event_at,
+        "userIdsToNotify": []
+    }
+
+    # Send the request
+    try:
+        print(f"Sending request to: {ELOG_ENDPOINT}")
+        print(f"Headers: {ELOG_HEADERS}")
+        response = requests.post(ELOG_ENDPOINT, headers=ELOG_HEADERS, json=payload)
+        
+        print(f"Response status code: {response.status_code}")
+        print(f"Response headers: {response.headers}")
+        
+        # Try to raise for status
+        response.raise_for_status()
+        
+        print(f"Successfully sent to ELOG API: {response.status_code}")
+        return True
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP Error: {http_err}")
+        
+        # Print detailed response information
+        print(f"Response status code: {response.status_code}")
+        print(f"Response reason: {response.reason}")
+        
+        # Try to get response text (may contain error details)
+        try:
+            print(f"Response text: {response.text}")
+        except:
+            print("Could not get response text")
+        
+        # Try to parse JSON response (may contain error details)
+        try:
+            print(f"Response JSON: {response.json()}")
+        except:
+            print("Response is not valid JSON")
+        
+        print(f"Request URL: {response.request.url}")
+        print(f"Request method: {response.request.method}")
+        print(f"Request headers: {response.request.headers}")
+        print(f"Request body: {response.request.body}")
+        
+        return False
+    except requests.exceptions.ConnectionError as conn_err:
+        print(f"Connection Error: {conn_err}")
+        return False
+    except requests.exceptions.Timeout as timeout_err:
+        print(f"Timeout Error: {timeout_err}")
+        return False
+    except requests.exceptions.RequestException as req_err:
+        print(f"Request Error: {req_err}")
+        return False
+    except Exception as e:
+        print(f"General Error: {e}")
+        print(f"Failed payload: {payload}")
+        return False
 
 # Begin API functions =================================================================================
 
@@ -796,6 +885,9 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
     summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
                             deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
 
+    # Send summary to elog
+    send_deployment_to_elog(ioc_to_deploy.component_name, ioc_to_deploy.tag, list(facilities_ioc_dict.keys()), summary)
+
     # Return ansible playbook output to user
     if ((return_report_content)):
         return summary
@@ -887,6 +979,10 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     # 6) Generate summary for report
     summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
                             deployment_output, status, deployment_report_file, dry_run=pydm_to_deploy.dry_run)
+    
+    # Send summary to elog
+    send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
+
     # Add cleanup
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
 
