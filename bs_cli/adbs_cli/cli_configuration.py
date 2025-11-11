@@ -21,6 +21,8 @@ class ApiEndpoints(str, Enum):
     # From deployment controller api
     DEPLOYMENT = "{deployment_type}/deployment"
     DEPLOYMENT_REVERT = "{deployment_type}/deployment/revert" 
+    DEPLOYMENT_STATUS = "deployment/{task_id}/status"
+    DEPLOYMENT_REPORT = "deployment/{task_id}/report"
     DEPLOYMENT_INFO = "deployment/info"
     DEPLOYMENT_FACILITIY = "deployments/{component_name}/{facility}"
     DEPLOYMENT_INITIAL = "initial/deployment"
