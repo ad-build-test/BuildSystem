@@ -16,6 +16,8 @@ where <KEY_NAME_IN_DEPLOYMENT> (also the subPath) is the name of the key in `dep
 Example: --from-file=adbuild-key=deployment_controller
 Example: --from-file=id_ed25519=id_ed25519
 
+kubectl -n core-build-system create secret generic deployment-controller-secrets --from-file=adbuild-key=deployment_controller --from-file=id_ed25519=id_ed25519
+
 5. Add the key's .pub to `authorized_keys`
 6. Repeat the previous step for each facility. Like s3df, or dev-srv09, or mcclogin. For production facilities, we need to ask Ken Brobeck to add `adbuild` ssh keys to production, and mcclogin is the jump host.
 7. Double check the `config` file that is the ssh config file that gets copied to the deployment controllers `~/.ssh` directory.
@@ -23,7 +25,7 @@ Example: --from-file=id_ed25519=id_ed25519
 Then the deployment controller should be able to login to the necessary facilities
 
 ## Testing
-Please refer to build_deploy_scripts/test_deployment_controller.py
+Please refer to test_deployment_controller.py
 
 ## How to build
 ### deployment controller

@@ -150,7 +150,7 @@ class Component(BaseModel):
 
 class RevertDict(Component):
     user: str
-    facilities: Optional[list] = None  # Optional, defaults to None
+    facility: str
     ioc_list: Optional[list] = None
     reboot_iocs: Optional[bool] = False # Optional
 
@@ -718,60 +718,41 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
     """
     Revert a deployment for an IOC application to the previous iteration.
     """
+    current_deployment = find_recent_deployment_for_component_facility(ioc_to_deploy.facility, ioc_to_deploy.component_name, 0)
+    previous_deployment = find_recent_deployment_for_component_facility(ioc_to_deploy.facility, ioc_to_deploy.component_name, 1)
 
-    # 1) If user specified only IOCs, then figure out the facilities
-    ioc_facilities = []
-    if (ioc_to_deploy.ioc_list):
-        # Figure out facilities 
-        for ioc in ioc_to_deploy.ioc_list:
-            facilities = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-            logging.info(f"ioc: {ioc}, facilities: {facilities}")
-            if len(facilities) == 0: # Empty list
-                return JSONResponse(content={"payload": {"Error": f"IOC not found in deployment database: {ioc}. (If new IOC then please deploy with a facility)"}}, status_code=400)
-            for facility in facilities:
-                if facility not in ioc_facilities:
-                    ioc_facilities.append(facility)
+    # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
+    # Get changed IOCs and revert tag
+    iocs_that_changed = []
+    revert_tag = None
+    if current_deployment and previous_deployment:
+        current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
+        previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
+        # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
+        logging.debug(f"current_iocs: {current_iocs}")
+        logging.debug(f"previous_iocs: {previous_iocs}")
+        # Find IOCs that have different tags
+        for ioc_name, current_tag in current_iocs.items():
+            # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
+            if ioc_name in previous_iocs and current_tag != previous_iocs[ioc_name]:
+                # ex: previous_iocs["sioc-b34-gtest02"] = "1.0.66"
+                iocs_that_changed.append(ioc_name)
+        
+        revert_tag = previous_deployment.get("tag")
 
-    if (ioc_to_deploy.facilities): ioc_faciliies = ioc_to_deploy.facilities
+    # 2) Deploy the reverted deployment for this facility 
+    revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
+                            facilities=[ioc_to_deploy.facility],
+                            tag=revert_tag,
+                            ioc_list=iocs_that_changed,
+                            user=ioc_to_deploy.user)
 
-    for facility in ioc_faciliies:
-        current_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 0)
-        previous_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 1)
-
-        # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
-        # Get changed IOCs and revert tag
-        iocs_that_changed = []
-        revert_tag = None
-        task_id_list = []
-        if current_deployment and previous_deployment:
-            current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
-            previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
-            # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
-            logging.debug(f"current_iocs: {current_iocs}")
-            logging.debug(f"previous_iocs: {previous_iocs}")
-            # Find IOCs that have different tags
-            for ioc_name, current_tag in current_iocs.items():
-                # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
-                if ioc_name in previous_iocs and current_tag != previous_iocs[ioc_name]:
-                    # ex: previous_iocs["sioc-b34-gtest02"] = "1.0.66"
-                    iocs_that_changed.append(ioc_name)
-            
-            revert_tag = previous_deployment.get("tag")
-
-        # 2) Deploy the reverted deployment for this facility 
-        revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
-                                facilities=[facility],
-                                tag=revert_tag,
-                                ioc_list=iocs_that_changed,
-                                user=ioc_to_deploy.user)
-
-        task_id = await deploy_ioc(revert_deployment, background_tasks, True)
-        task_id_list.append(task_id)
+    task_id = await deploy_ioc(revert_deployment, background_tasks, True)
 
     return JSONResponse(
         status_code=202,
         content={
-            "task_id_list": task_id_list,
+            "task_id": task_id,
             "status": "pending"
         }
     )

@@ -60,6 +60,7 @@ os.environ['PYTHON_TESTING'] = 'True'
 os.environ['ELOG_USER_PASSWORD'] = "mock"
 
 import pytest
+import fakeredis
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, mock_open
 from deployment_controller import app, IocDict, PydmDict, RevertDict
@@ -69,6 +70,14 @@ import asyncio
 from fastapi.responses import FileResponse
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def mock_redis_client():
+    fake_redis = fakeredis.FakeRedis(decode_responses=True)
+    
+    with patch('deployment_controller.redis_client', fake_redis):
+        yield fake_redis
+        fake_redis.flushall()
 
 @pytest.fixture
 def mock_paths():
@@ -92,8 +101,6 @@ async def wait_for_deployment(ac: AsyncClient, response):
     assert response.status_code == 202
     data = response.json()
     task_id = data.get("task_id", None)
-    if not task_id:
-        task_id = data["task_id_list"][0] # For revert only one facility to test anyways
     
     for _ in range(60):  # 60 seconds max
         status_url = f"/deployment/{task_id}/status"
@@ -311,7 +318,7 @@ async def test_revert_ioc_success(mock_paths):
           bs deploy --revert --facility test")
     
     ioc_request = RevertDict(
-        facilities=["test"],
+        facility="test",
         component_name="test-ioc",
         user="test_user"
     )

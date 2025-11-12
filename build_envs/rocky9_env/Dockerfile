@@ -36,7 +36,7 @@ RUN pip install pyyaml \
     && pip install ansible
 
 # Add build scripts to /build
-ADD build_deploy_scripts /build/
+ADD build_deploy /build/
 
 # Create adbuild with a specific UID (e.g., 46487)
 RUN groupadd -g 1006 cd && \
