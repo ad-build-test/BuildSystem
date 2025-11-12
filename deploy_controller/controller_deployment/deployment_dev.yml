@@ -35,14 +35,14 @@ spec:
           httpGet:
             path: /health  # or whatever health endpoint you have
             port: 8080
-          timeoutSeconds: 300      # 5 minutes
+          timeoutSeconds: 600      # 10 minutes
           periodSeconds: 60        # Check every 60 seconds
           failureThreshold: 3      # Fail after 3 consecutive failures
         readinessProbe: # Keep sending me traffic during long requests  
           httpGet:
             path: /health
             port: 8080
-          timeoutSeconds: 300
+          timeoutSeconds: 600
           periodSeconds: 60
           failureThreshold: 3
         # start the build script
@@ -90,4 +90,42 @@ spec:
       - name: s3df-ssh-key-volume
         secret:
           secretName: deployment-controller-secrets
-
+---
+# Redis store for task information
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

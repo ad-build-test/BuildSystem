@@ -29,7 +29,7 @@ RUN groupadd -g 1006 cd && \
 # Add build and deploy scripts to /app
 RUN mkdir /app
 RUN mkdir /home/adbuild/.ssh
-ADD build_deploy_scripts /app/
+ADD deploy_controller /app/
 ADD deploy_controller/config /home/adbuild/.ssh
 RUN chown -R 46487:1006 /app
 RUN chown -R 46487:1006 /home

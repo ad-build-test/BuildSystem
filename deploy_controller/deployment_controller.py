@@ -4,7 +4,7 @@ Desc: Deployment controller, handles deployments
 Usage: python3 deployment_controller.py
 note - this would have to run 24/7 as a service
 """
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 import os
 import shutil
 import uuid
@@ -14,13 +14,15 @@ import ansible_api
 import tarfile
 import requests
 
+import redis
 import uvicorn
 import json
 import time
-from fastapi import FastAPI, BackgroundTasks
+import asyncio
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
-from typing import Optional
+from typing import Dict, Optional
 from datetime import datetime, timezone, timedelta
 from dateutil import parser
 
@@ -34,16 +36,17 @@ logging.basicConfig(
     level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
     format="%(levelname)s-%(name)s:[%(filename)s:%(lineno)s - %(funcName)s() ] %(message)s")
 
-ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
 SCRATCH_FILEPATH = "/sdf/group/ad/eed/ad-build/scratch"
 TEST_INVENTORY = False # This gets set to true in test_deployment_controller.py
 is_prod = os.environ.get("AD_BUILD_PROD", "false").lower() in ("true", "1", "yes", "y")
 if is_prod: 
     BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
     ELOG_ENDPOINT = "https://accel-webapp.slac.stanford.edu/api/elog-apptoken/v1/entries"
+    ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
 else: 
     BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
     ELOG_ENDPOINT = "https://accel-webapp-dev.slac.stanford.edu/api/elog-apptoken/v1/entries"
+    ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/dev-build-system-playbooks/"
 
 ELOG_USER_PASSWORD = os.getenv("ELOG_USER_PASSWORD")
 if (ELOG_USER_PASSWORD == None):
@@ -57,13 +60,83 @@ FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]
 yaml = YAML()
 yaml.default_flow_style = False  # Make the output more readable
 
+class DeploymentTask:
+    def __init__(self, task_id, save_callback=None):
+        self.task_id = task_id
+        self.save_callback = save_callback
+        self.status = "pending"
+        self.progress = {"current_step": "Initializing", "percent": 0}
+        self.started_at = datetime.now().isoformat()
+        self.updated_at = self.started_at
+        self.temp_dir = None
+        self.result = None
+        self.error = None
+
+    def update_progress(self, step: str, percent: int, details: str = None):
+        self.progress = {"current_step": step, "percent": percent, "details": details}
+        self.updated_at = datetime.now().isoformat()
+        self.status = "running"
+        if self.save_callback:
+            self.save_callback(self)  # Auto-save
+    
+    def complete(self, result):
+        self.status = "completed"
+        self.result = result
+        self.progress["percent"] = 100
+        if self.save_callback:
+            self.save_callback(self)  # Auto-save
+    
+    def fail(self, error):
+        self.status = "failed"
+        self.error = error
+        self.updated_at = datetime.now().isoformat()
+        if self.save_callback:
+            self.save_callback(self)  # Auto-save
+        
+# Redis for storing task information
+redis_client = redis.Redis(
+    host='redis',  # k8s service name
+    port=6379,
+    decode_responses=True,
+    db=0
+)
+
+def save_task(task: DeploymentTask):
+    """Save task to Redis"""
+    task_dict = {
+        "task_id": task.task_id,
+        "status": task.status,
+        "progress": task.progress,
+        "started_at": task.started_at,
+        "updated_at": task.updated_at,
+        "result": task.result,
+        "error": task.error
+    }
+    # Auto-expire after 5 mins
+    redis_client.setex(f"task:{task.task_id}", 300, json.dumps(task_dict))
+
+def get_task(task_id: str) -> DeploymentTask:
+    """Load task from Redis"""
+    data = redis_client.get(f"task:{task_id}")
+    if not data:
+        return None
+    
+    task_dict = json.loads(data)
+    task = DeploymentTask(task_dict["task_id"], save_callback=save_task)
+    task.status = task_dict["status"]
+    task.progress = task_dict["progress"]
+    task.result = task_dict["result"]
+    task.error = task_dict["error"]
+    # Restore datetime fields if needed
+    return task
+
 # pydantic models =================================================================================
 class Component(BaseModel):
     component_name: str
 
 class RevertDict(Component):
     user: str
-    facilities: Optional[list] = None  # Optional, defaults to None
+    facility: str
     ioc_list: Optional[list] = None
     reboot_iocs: Optional[bool] = False # Optional
 
@@ -500,7 +573,6 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
         return False
 
 # Begin API functions =================================================================================
-
 @app.get("/")
 def read_root():
     return {"status": "Empty endpoint - somethings wrong with your api call."}
@@ -539,6 +611,52 @@ async def get_deployment_component_info(component: Component):
     response_msg = {"payload": component_info_list} # 200 - successful
     return JSONResponse(content=response_msg, status_code=200)
 
+@app.get("/deployment/{task_id}/status")
+async def get_deployment_status(task_id: str):
+    """Get deployment task status and progress"""
+    task = get_task(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    response = {
+        "task_id": task.task_id,
+        "status": task.status,
+        "progress": task.progress,
+        "started_at": task.started_at,
+        "updated_at": task.updated_at
+    }
+    
+    if task.status == "completed":
+        response["result"] = {
+            "summary": task.result.get("summary")
+        }
+    elif task.status == "failed":
+        response["error"] = task.error
+    
+    return response
+
+@app.get("/deployment/{task_id}/report")
+async def download_deployment_report(task_id: str):
+    """Download the deployment report file"""
+
+    task = get_task(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if task.status != "completed":
+        raise HTTPException(status_code=409, detail="Deployment not completed yet")
+    
+    report_file = task.result.get("report_file")
+    if not report_file or not os.path.exists(report_file):
+        raise HTTPException(status_code=404, detail="Report file not found")
+    
+    return FileResponse(
+        path=report_file,
+        filename=os.path.basename(report_file),
+        media_type='text/plain'
+    )
+
 @app.post("/tag")
 async def post_tag_creation(tag_request: TagDict):
     """
@@ -570,65 +688,76 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
     """
     Revert a deployment for an IOC application to the previous iteration.
     """
+    current_deployment = find_recent_deployment_for_component_facility(ioc_to_deploy.facility, ioc_to_deploy.component_name, 0)
+    previous_deployment = find_recent_deployment_for_component_facility(ioc_to_deploy.facility, ioc_to_deploy.component_name, 1)
 
-    # 1) If user specified only IOCs, then figure out the facilities
-    ioc_facilities = []
-    if (ioc_to_deploy.ioc_list):
-        # Figure out facilities 
-        for ioc in ioc_to_deploy.ioc_list:
-            facilities = find_facility_an_ioc_is_in(ioc, ioc_to_deploy.component_name)
-            logging.info(f"ioc: {ioc}, facilities: {facilities}")
-            if len(facilities) == 0: # Empty list
-                return JSONResponse(content={"payload": {"Error": f"IOC not found in deployment database: {ioc}. (If new IOC then please deploy with a facility)"}}, status_code=400)
-            for facility in facilities:
-                if facility not in ioc_facilities:
-                    ioc_facilities.append(facility)
-
-    if (ioc_to_deploy.facilities): ioc_faciliies = ioc_to_deploy.facilities
-
-    deployment_report = ""
-    for facility in ioc_faciliies:
-        current_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 0)
-        previous_deployment = find_recent_deployment_for_component_facility(facility, ioc_to_deploy.component_name, 1)
-
-        # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
-        # Get changed IOCs and revert tag
-        iocs_that_changed = []
-        revert_tag = None
+    # 1) Check which IOCs tags have changed from the current deployment to the previous deployment
+    # Get changed IOCs and revert tag
+    iocs_that_changed = []
+    revert_tag = None
+    if current_deployment and previous_deployment:
+        current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
+        previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
+        # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
+        logging.debug(f"current_iocs: {current_iocs}")
+        logging.debug(f"previous_iocs: {previous_iocs}")
+        # Find IOCs that have different tags
+        for ioc_name, current_tag in current_iocs.items():
+            # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
+            if ioc_name in previous_iocs and current_tag != previous_iocs[ioc_name]:
+                # ex: previous_iocs["sioc-b34-gtest02"] = "1.0.66"
+                iocs_that_changed.append(ioc_name)
         
-        if current_deployment and previous_deployment:
-            current_iocs = {ioc["name"]: ioc["tag"] for ioc in current_deployment.get("dependsOn", [])}
-            previous_iocs = {ioc["name"]: ioc["tag"] for ioc in previous_deployment.get("dependsOn", [])}
-            # ex: previous_iocs = {"sioc-b34-gtest02": "1.0.66", "sioc-b34-gtest01": "1.0.66"}
-            logging.debug(f"current_iocs: {current_iocs}")
-            logging.debug(f"previous_iocs: {previous_iocs}")
-            # Find IOCs that have different tags
-            for ioc_name, current_tag in current_iocs.items():
-                # ex: ioc_name = "sioc-b34-gtest02", current_tag = "1.0.67"
-                if ioc_name in previous_iocs and current_tag != previous_iocs[ioc_name]:
-                    # ex: previous_iocs["sioc-b34-gtest02"] = "1.0.66"
-                    iocs_that_changed.append(ioc_name)
-            
-            revert_tag = previous_deployment.get("tag")
+        revert_tag = previous_deployment.get("tag")
 
-        # 2) Deploy the reverted deployment for this facility 
-        revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
-                                facilities=[facility],
-                                tag=revert_tag,
-                                ioc_list=iocs_that_changed,
-                                user=ioc_to_deploy.user)
+    # 2) Deploy the reverted deployment for this facility 
+    revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
+                            facilities=[ioc_to_deploy.facility],
+                            tag=revert_tag,
+                            ioc_list=iocs_that_changed,
+                            user=ioc_to_deploy.user)
 
-        summary = await deploy_ioc(revert_deployment, background_tasks, return_report_content=True)
-        deployment_report += summary
+    task_id = await deploy_ioc(revert_deployment, background_tasks, True)
 
-    return JSONResponse(content={
-        "success": True,
-        "payload": deployment_report
-    }, status_code=200)
+    return JSONResponse(
+        status_code=202,
+        content={
+            "task_id": task_id,
+            "status": "pending"
+        }
+    )
 
 @app.put("/ioc/deployment")
-async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, return_report_content: bool = False):
+async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, return_id_only: bool=False):
+    """Main entry point for IOC deployment API (async 202 pattern)"""
+    task_id = str(uuid.uuid4())
+    
+    # Create task
+    task = DeploymentTask(task_id, save_callback=save_task)
+    save_task(task)
+    
+    # Start deployment in background
+    background_tasks.add_task(
+        deploy_ioc_async,
+        task_id,
+        ioc_to_deploy
+    )
+    logging.debug(f"Returning TASK_ID: {task_id}")
+    if (return_id_only):
+        return task_id
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "task_id": task_id,
+            "status": "pending"
+        }
+    )
+
+async def deploy_ioc_async(task_id: str, ioc_to_deploy: IocDict):
     """
+    Runs the deployment logic asynchronously and updates task status
+
     Main entry point for IOC deployment API.
     Handles these deployment scenarios:
     1. Deploy tag to select existing IOCs 
@@ -650,39 +779,53 @@ async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, 
         (IOCs specified, facility required)
         ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 -f LCLS R1.3.4
     """
-    # Setup temporary directory for deployment contents
-    request_id = str(uuid.uuid4())
-    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
-    os.makedirs(temp_download_dir, exist_ok=True)
-    logging.info(f"New deployment request data: {ioc_to_deploy}")
-    # Add cleanup as background task
-    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+    await asyncio.sleep(0.1)  # Force yield
+    task = get_task(task_id)
+    temp_download_dir = f"{APP_PATH}/tmp/{task_id}"
+    task.temp_dir = temp_download_dir
     
-    # Handle component-only deployment
-    if not ioc_to_deploy.ioc_list:
-        logging.info("Component-only deployment")
-        return deploy_component(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
-    
-    # Handle IOC deployments
-    if ioc_to_deploy.facilities:
-        # Case 3: Deploy tag to new IOCs (IOCs specified, facility required)
-        # Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
-        logging.info("Deploy tag to new IOCs")
-        return deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
-    else:
-        # Cases 1 & 2: Deploy tag to existing IOCs (facility not required)
-        logging.info("Deploy tag to existing IOCs (Cases 1 & 2)")
-        return deploy_existing_iocs(ioc_to_deploy, temp_download_dir, background_tasks, return_report_content)
+    try:
+        os.makedirs(temp_download_dir, exist_ok=True)
+        logging.info(f"New deployment request data: {ioc_to_deploy}")
+        
+        task.update_progress("Determining deployment type", 5)
+        
+        # Handle component-only deployment
+        if not ioc_to_deploy.ioc_list:
+            logging.info("Component-only deployment")
+            task.update_progress("Component-only deployment", 10)
+            result = deploy_component(ioc_to_deploy, temp_download_dir, task)
+        
+        # Handle IOC deployments
+        elif ioc_to_deploy.facilities:
+            logging.info("Deploy tag to new IOCs")
+            # Case 3: Deploy tag to new IOCs (IOCs specified, facility required)
+            # Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
+            task.update_progress("Deploying to new IOCs", 10)
+            result = deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, task)
+        else:
+            logging.info("Deploy tag to existing IOCs")
+            # Cases 1 & 2: Deploy tag to existing IOCs (facility not required)
+            task.update_progress("Deploying to existing IOCs", 10)
+            result = deploy_existing_iocs(ioc_to_deploy, temp_download_dir, task)
+        
+        # Store result (summary and report file path)
+        task.complete(result)
+        
+    except Exception as e:
+        logging.exception(f"Deployment {task_id} failed")
+        task.fail(str(e))
+        # Cleanup on failure
+        if os.path.exists(temp_download_dir):
+            cleanup_temp_deployment_dir(temp_download_dir)
 
-
-def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
+def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle component-only deployment
     - Deploy tag to component (either new or existing) with facility specified
     - No IOCs are deployed
     """
     # I think ioc_to_deploy will always only have one facility specified. if the facility field is used. 
-
     facilities_ioc_dict = {facility: [] for facility in ioc_to_deploy.facilities}
     
     # Determine if component is new or not
@@ -703,10 +846,10 @@ def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, background_
     # Execute deployment with empty IOC lists - component only
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, background_tasks, return_report_content
+        facilities_ioc_dict, new_component, task
     )
 
-def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
+def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle deployments to existing IOCs
     - Case 1: Deploy tag to select existing IOCs 
@@ -734,10 +877,10 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, backgro
     # Execute deployment with the IOCs we found
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, False, background_tasks, return_report_content  # No new components
+        facilities_ioc_dict, False, task # No new components
     )
 
-def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, background_tasks: BackgroundTasks, return_report_content: bool = False):
+def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle deployment of IOCs with facility specified
     - Case 3: Deploy tag to new IOCs (facility required)
@@ -765,15 +908,17 @@ def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, ba
     # Execute deployment
     return execute_ioc_deployment(
         ioc_to_deploy, temp_download_dir,
-        facilities_ioc_dict, new_component, background_tasks, return_report_content
+        facilities_ioc_dict, new_component, task
     )
 
 
 def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str, 
-                      facilities_ioc_dict: dict, new_component: bool, background_tasks: BackgroundTasks, return_report_content: bool = False):
+                      facilities_ioc_dict: dict, new_component: bool, task: DeploymentTask):
     """
     Called by the specific deployment functions after they determine what to deploy.
     """
+    task.update_progress("Preparing deployment", 20)
+
     playbook_args_dict = ioc_to_deploy.model_dump()
     playbook_args_dict['user_src_repo'] = None
     status = 200
@@ -782,13 +927,16 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
     extracted_ioc_info = False
 
     # Download release
+    task.update_progress("Downloading release artifacts", 25)
     if not download_release(ioc_to_deploy.component_name, ioc_to_deploy.tag, temp_download_dir, all_os=True, extract_tarball=True):
         return JSONResponse(content={"payload": {"Error": f"Deployment tag may not exist for app: {ioc_to_deploy.component_name}, tag: {ioc_to_deploy.tag} \
                                     . Or software factory backend is broken"}}, status_code=400)
-    
+    facility_num = 1
     for facility in facilities_ioc_dict.keys():
         logging.info(f"Deploying to facility: {facility}")
         logging.info(f"IOCs to deploy: {facilities_ioc_dict[facility]}")
+        percent = 40 + (facility_num * 10 // len(facilities_ioc_dict))
+        task.update_progress(f"Deploying to {facility}", percent, f"Running playbook for {facility}")
         
         ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
         playbook_args_dict['playbook_path'] = ioc_playbooks_path
@@ -882,20 +1030,23 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         return JSONResponse(content={"payload": {"Error": "No deployments performed. This may be due to empty IOC lists or invalid component/facility combinations."}}, status_code=400)
 
     # Generate summary for report
+    task.update_progress("Generating deployment report", 90)
     summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
                             deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
 
     # Send summary to elog
-    send_deployment_to_elog(ioc_to_deploy.component_name, ioc_to_deploy.tag, list(facilities_ioc_dict.keys()), summary)
+    if (not ioc_to_deploy.dry_run):
+        task.update_progress("Writing to ELOG", 95)
+        send_deployment_to_elog(ioc_to_deploy.component_name, ioc_to_deploy.tag, list(facilities_ioc_dict.keys()), summary)
+
+    task.complete(summary)
 
     # Return ansible playbook output to user
-    if ((return_report_content)):
-        return summary
-    elif os.getenv('PYTHON_TESTING') == 'True':
-        content = summary
-        return Response(content=content, media_type="text/plain", status_code=status)
-    else:
-        return FileResponse(path=deployment_report_file, status_code=status)
+    return {
+        "summary": summary,
+        "report_file": deployment_report_file,
+        "status": status
+    }
     
 @app.put("/pydm/deployment")
 async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTasks):
@@ -928,7 +1079,6 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
             deploy_new_component = True
     logging.debug(f"deploy_new_component: {deploy_new_component}")
 
-    pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
     local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
     inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
     if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
@@ -981,7 +1131,8 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
                             deployment_output, status, deployment_report_file, dry_run=pydm_to_deploy.dry_run)
     
     # Send summary to elog
-    send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
+    if (not pydm_to_deploy.dry_run):
+        send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
 
     # Add cleanup
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)

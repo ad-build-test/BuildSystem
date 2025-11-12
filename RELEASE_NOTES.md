@@ -3,6 +3,11 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.1 12-Nov-2025 P. Nisperos (pnispero)
+  * Restuctured IOC deployments to run deployment task in background, and immediately return task id to client, that will later be used to poll status. Fixed bug with IOC deployments that may take a few minutes and retries the request.
+  * Updated CLI with the new deployment polling feature.
+  * Moved deployment scripts to deploy_controller/
+
 * tag:1.1.0 3-Nov-2025 P. Nisperos (pnispero)
   * Added api calls to ELOG for writing deployments and their reports
 

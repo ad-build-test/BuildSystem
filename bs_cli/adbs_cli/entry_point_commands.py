@@ -1,3 +1,4 @@
+from time import sleep
 import click
 import os
 import git
@@ -115,7 +116,6 @@ def get_remote_build_log(build_id: str, verbose: bool=False):
 def generate_deployment_report(file_content: str, component_name: str, tag: str):
     # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
-    file_content
     # Set the deployment report file 
     home_directory = os.path.expanduser("~")
     # Create a deployment reports directory if it doesn't exist
@@ -126,19 +126,41 @@ def generate_deployment_report(file_content: str, component_name: str, tag: str)
     timestamp = datetime.now(local_tz).strftime("%Y-%m-%dT%H-%M-%S")
     file_path = os.path.join(reports_dir, f"deployment-report-{component_name}-{tag}-{timestamp}.log")
     
-    click.echo(f"== ADBS == Deployment finished, report will be downloaded at {file_path}")
-    new_file_path = input(INPUT_PREFIX + "Confirm by 'enter', or specify alternate path:")
-    if (new_file_path):
-        file_path = new_file_path
     with open(file_path, "w") as report_file:
         report_file.write(file_content)
         # Read out the head of the report
     with open(file_path, "r") as report_file:
-        summary = [report_file.readline() for _ in range(7)]
+        summary = [report_file.readline() for _ in range(5)]
     click.echo("Report head:")
     for line in summary:
         click.echo(line, nl=False)
-    click.echo(f"\nReport downloaded successfully to {file_path}")
+    click.echo(f"Report downloaded successfully to {file_path}")
+
+def poll_deployment(response, deployment_status_request: Request):
+    """Poll deployment until complete, return final status"""
+    data = response.json()
+    task_id = data.get("task_id", None)
+    sleep(2) # Wait a bit for deployment status
+    for _ in range(30):  # 5 min max
+        deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_STATUS,
+                                        task_id=task_id)
+        status_response = deployment_status_request.get_request(log=False)
+        status_data = status_response.json()
+        
+        # Display progress and status here
+        progress = status_data.get("progress", None)
+        if (progress):   # \033[K clears from cursor to end of line
+            click.echo(f"\r\033[K{progress['percent']}% - {progress['current_step']}  ", nl=False)
+
+        if status_data["status"] == "completed":
+            click.echo("\n== ADBS == Completed deployment. ")
+            break
+
+        sleep(10)
+    # Download report
+    deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REPORT,
+                                            task_id=task_id)
+    return deployment_status_request.get_request(log=False)
 
 @click.command()
 def configure_user():
@@ -458,18 +480,24 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         user_specified_facilities = [facility.upper() for facility in user_specified_facilities] # Uppercase every facility
 
     # 1.3) Option - revert
-    if (revert):
+    if (revert and deployment_type == "ioc"):
+        if (user_specified_facilities == []):
+            click.echo(f"== ADBS == Please specify deployment facility you want to revert")
+            return
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
-        deployment_request.add_to_payload("facilities", user_specified_facilities)
         deployment_request.add_to_payload("user", linux_uname)
         deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
-                                        deployment_type="ioc")
-        response = deployment_request.put_request(log=verbose)
-        if (not response.ok):
-            click.echo(f"== ADBS == Error - {response.json()}")
-            return
-        payload = response.json()['payload']
-        generate_deployment_report(payload, deployment_request.component.name, "revert")
+                                        deployment_type=deployment_type)
+        click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
+        for facility in user_specified_facilities:
+            deployment_request.add_to_payload("facility", facility)
+            response = deployment_request.put_request(log=verbose)
+            if (not response.ok):
+                click.echo(f"== ADBS == Error - {response.json()}")
+                return
+            response = poll_deployment(response, deployment_request)
+            file_content = response.content.decode('utf-8')
+            generate_deployment_report(file_content, deployment_request.component.name, "revert")
         return
 
     # 2) Get fields
@@ -614,21 +642,14 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         if (len(user_specified_facilities) < 1):
             click.echo("== ADBS == ERROR: Please specify the facility(s)")
 
-    # 7) If revert then send deployment revert request to deployment controller
-    if (revert):
-        # TODO: Revert endpoint
-        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
-                                        deployment_type=deployment_type)
-    else:
-        # 8) Send deployment request to deployment controller
-        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
+    # 8) Send deployment request to deployment controller
+    deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
                                         deployment_type=deployment_type)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     if (len(user_specified_facilities) > 0):
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
     else:
         click.echo("== ADBS == Deploying...")
-    click.echo("== ADBS == This may take a minute (or longer if there are many iocs)")
     response = deployment_request.put_request(log=verbose)
     if (not response.ok):
         try:
@@ -636,6 +657,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             return
         except Exception:
             pass
+
+    if (deployment_type == 'ioc'): # If ioc deployment, then poll status
+        response = poll_deployment(response, deployment_request)
+    
     # 9) Prompt user if they want to download and view the report
     # Get the file content from the response
     file_content = response.content.decode('utf-8')

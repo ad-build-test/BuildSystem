@@ -54,12 +54,17 @@ TODO:
 Then we really have a self-contained test without any need for POST operations
 
 """
+import os
+
+os.environ['PYTHON_TESTING'] = 'True'
+os.environ['ELOG_USER_PASSWORD'] = "mock"
 
 import pytest
+import fakeredis
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, mock_open
 from deployment_controller import app, IocDict, PydmDict, RevertDict
-import os
+
 from httpx import AsyncClient, ASGITransport
 import asyncio
 from fastapi.responses import FileResponse
@@ -67,10 +72,12 @@ from fastapi.responses import FileResponse
 client = TestClient(app)
 
 @pytest.fixture(autouse=True)
-def set_test_environment():
-    os.environ['PYTHON_TESTING'] = 'True'
-    yield
-    os.environ.pop('PYTHON_TESTING', None)
+def mock_redis_client():
+    fake_redis = fakeredis.FakeRedis(decode_responses=True)
+    
+    with patch('deployment_controller.redis_client', fake_redis):
+        yield fake_redis
+        fake_redis.flushall()
 
 @pytest.fixture
 def mock_paths():
@@ -88,6 +95,26 @@ def test_get_ioc_component_info_not_found(mock_paths):
     
     assert response.status_code == 404
     print(f"payload: {response.json()['payload']}")
+
+async def wait_for_deployment(ac: AsyncClient, response):
+    """Poll deployment until complete, return final status"""
+    assert response.status_code == 202
+    data = response.json()
+    task_id = data.get("task_id", None)
+    
+    for _ in range(60):  # 60 seconds max
+        status_url = f"/deployment/{task_id}/status"
+        status_resp = await ac.get(status_url)
+        status_data = status_resp.json()
+        
+        if status_data["status"] == "completed":
+            return status_data["result"]["summary"]
+        elif status_data["status"] == "failed":
+            pytest.fail(f"Deployment failed: {status_data['error']}")
+        
+        await asyncio.sleep(1)
+    
+    pytest.fail("Deployment timeout")
 
 ####### Tests for deploy_ioc ######################################
 @pytest.mark.asyncio
@@ -110,12 +137,10 @@ async def test_deploy_ioc_new_component_success(mock_paths):
     print("Sending request to /ioc/deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -153,12 +178,10 @@ async def test_deploy_ioc_new_component_and_ioc_success(mock_paths):
     print("Sending request to /ioc/deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -194,12 +217,10 @@ async def test_deploy_ioc_new_ioc_success(mock_paths):
     print("Sending request to /ioc/deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
@@ -225,12 +246,10 @@ async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text    
+    assert "Deployment report" in summary
+    assert "Success" in summary    
 
     print("Confirm deployment database was not altered after the dry run...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -269,12 +288,10 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -301,7 +318,7 @@ async def test_revert_ioc_success(mock_paths):
           bs deploy --revert --facility test")
     
     ioc_request = RevertDict(
-        facilities=["test"],
+        facility="test",
         component_name="test-ioc",
         user="test_user"
     )
@@ -310,12 +327,10 @@ async def test_revert_ioc_success(mock_paths):
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment/revert", json=ioc_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+        summary = await wait_for_deployment(ac, response)
+
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
@@ -333,12 +348,10 @@ async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+        summary = await wait_for_deployment(ac, response)
+
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
 @pytest.mark.asyncio
 async def test_deploy_same_component_and_iocs_in_another_test_facility_success(mock_paths):
@@ -363,12 +376,10 @@ async def test_deploy_same_component_and_iocs_in_another_test_facility_success(m
     print("Sending request to /ioc/deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+        summary = await wait_for_deployment(ac, response)
+
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -405,12 +416,10 @@ async def test_deploy_ioc_new_tag_specific_ioc_multiple_facilities_success(mock_
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+        summary = await wait_for_deployment(ac, response)
+        
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
 @pytest.mark.asyncio
 async def test_deploy_ioc_new_tag_specific_ioc_specific_facility_success(mock_paths):
@@ -437,12 +446,10 @@ async def test_deploy_ioc_new_tag_specific_ioc_specific_facility_success(mock_pa
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
-    
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+        summary = await wait_for_deployment(ac, response)
+
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "test-ioc"})
@@ -488,8 +495,6 @@ async def test_deploy_pydm_new_component_success(mock_paths):
     print("Sending request to /pydm/deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.put("/pydm/deployment", json=pydm_request.model_dump())
-    
-    print(f"Received response with status code: {response.status_code}")
     
     assert response.status_code == 200
     assert "Deployment report" in response.text
