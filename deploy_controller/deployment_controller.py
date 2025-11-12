@@ -31,20 +31,6 @@ Ex api request
 curl -X 'GET' 'https://ad-build-dev.slac.stanford.edu/api/deployment/' -H 'accept: application/json'
 """
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: launch background task
-    cleanup_task = asyncio.create_task(cleanup_old_tasks())
-    
-    yield  # App runs here
-    
-    # Shutdown: cancel background task
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-
 app = FastAPI(debug=False, title="Deployment_controller", version='1.0.0')
 logging.basicConfig(
     level=logging.DEBUG, # TODO: Change this to NOTSET when use in production
@@ -587,22 +573,6 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
         return False
 
 # Begin API functions =================================================================================
-async def cleanup_old_tasks():
-    while True:
-        await asyncio.sleep(600)  # Every 10 minutes
-        cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
-        to_delete = []
-        for tid, task in deployment_tasks.items():
-            if task.status in ["completed", "failed"] and task.updated_at < cutoff:
-                # Cleanup temp directory
-                if task.temp_dir and os.path.exists(task.temp_dir):
-                    cleanup_temp_deployment_dir(task.temp_dir)
-                to_delete.append(tid)
-        
-        for tid in to_delete:
-            del deployment_tasks[tid]
-            logging.info(f"Cleaned up old task: {tid}")
-
 @app.get("/")
 def read_root():
     return {"status": "Empty endpoint - somethings wrong with your api call."}
