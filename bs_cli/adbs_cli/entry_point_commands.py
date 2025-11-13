@@ -267,7 +267,33 @@ def clone(component: str, branch: str="main", verbose: bool=False):
         else: # No match
             click.echo(f"Value '{component}' not found in any of the dictionaries.")
         
+@click.command()
+@click.option("-c", "--component", required=False, help="Check if component is apart of software factory")
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def list(component: str, verbose: bool=False):
+    """List components that are in software factory"""
 
+    # 1) Set fields
+    request = Request()
+    # request.set_component_fields()
+
+    # 2) Request for all components
+    request.set_endpoint(ApiEndpoints.COMPONENT)
+    response = request.get_request(log=verbose)
+
+    payload = response.json()['payload']
+    component_name_list = []
+    for item in payload:
+        component_name_list.append(item['name'])
+
+    if (component):
+        if (component.lower() in [name.lower() for name in component_name_list]):
+            click.echo(f"== ADBS == {component} is in software factory")
+        else:
+            click.echo(f"== ADBS == {component} is NOT in software factory")
+    else:
+        click.echo("== ADBS == Components that exist in software factory: ")
+        click.echo(component_name_list)
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
