@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.3 17-Nov-2025 P. Nisperos (pnispero)
+  * Fixed bug with admin adding initial deployment configuration. Merged onboarding steps into one command for simplicity. 
+
 * tag:1.1.2 12-Nov-2025 P. Nisperos (pnispero)
   * Added list components that are ported over to software factory command to CLI, and can search. 
 

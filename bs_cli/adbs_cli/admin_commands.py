@@ -85,31 +85,22 @@ def add_initial_deployment(component: str, verbose: bool = False):
     click.echo("== ADBS == Adding initial deployment configuration")
     click.echo("== ADBS == Running 'cram ls'...")
 
-    # TODO: TEMP
-    cram_output = """
-Current versions on facility: Dev 
-Current master release => 1.0.67
-IOC: sioc-b34-gtest01 => 1.0.67 (*)
-IOC: sioc-b34-gtest02 => 1.0.67 (*)
-"""
-    result = parse_ioc_deployments(cram_output)
-
-    # try:
-    #     # Run the command and capture output
-    #     cram_output = subprocess.run(
-    #         ['cram', 'ls'],
-    #         capture_output=True,
-    #         text=True,
-    #         check=True
-    #     )
+    try:
+        # Run the command and capture output
+        cram_output = subprocess.run(
+            ['cram', 'ls'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
         
-    #     # Parse the cram output
-    #     # Transform the data and send to deployment controller to add to db
-    #     result = parse_ioc_deployments(cram_output.stdout)
+        # Parse the cram output
+        # Transform the data and send to deployment controller to add to db
+        result = parse_ioc_deployments(cram_output.stdout)
         
-    # except subprocess.CalledProcessError as e:
-    #     click.echo(f"== ADBS == Error running cram ls: {e.stderr}")
-    #     return
+    except subprocess.CalledProcessError as e:
+        click.echo(f"== ADBS == Error running cram ls: {e.stderr}")
+        return
 
     # Print each facility as a separate JSON object
     for facility_name, facility_data in result.items():
@@ -205,10 +196,9 @@ def add_repo(verbose: bool=False):
 @click.pass_context
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def onboard_repo(ctx, verbose: bool=False):
-    """Command to onboard a repo to software factory"""
+    """Command to onboard a repo to software factory.
+    Creates config.yaml, adds component to database, adds initial deployment configuration (if existing IOC application)"""
     click.confirm("Ensure you did a 'kinit' before continuing.")
-    testing_criteria = "all" # Default to all since functionality is not used yet
-    approval_rule = "all"
 
     # Create the config.yaml =====================================================
     # Get user input
