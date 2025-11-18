@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.5 18-Nov-2025 P. Nisperos (pnispero)
+  * Added error checking to bs clone. Added comment on deployment controller to ensure latest OS "wins" deployment if multiple OS deployed for an app. 
+
 * tag:1.1.4 17-Nov-2025 P. Nisperos (pnispero)
   * Added additional field for the config.yaml named runtimeDependencies.
 

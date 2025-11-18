@@ -262,7 +262,15 @@ def clone(component: str, branch: str="main", verbose: bool=False):
         if (component_dict): # Found a match
             component_url = component_dict["ssh"]
             dir_path = os.path.join(os.getcwd(), component)
-            git.Repo.clone_from(component_url, dir_path, progress=SimpleProgress(), branch=branch)
+            if os.path.exists(dir_path):
+                click.echo(f"== ADBS == Error: Repo already exists: {dir_path}")
+                return
+            try:
+                git.Repo.clone_from(component_url, dir_path, progress=SimpleProgress(), branch=branch)
+            except git.GitCommandError as e:
+                click.echo(f"== ADBS == Failed to clone component: {e}")
+                return
+
             click.echo("Successfully cloned component " + component_url)
         else: # No match
             click.echo(f"Value '{component}' not found in any of the dictionaries.")
