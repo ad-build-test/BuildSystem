@@ -288,6 +288,22 @@ deploymentType: {deployment_type}
 environments:
 {chr(10).join('   - ' + env for env in build_os_list)}
 """
+    runtime_dependencies = click.confirm("Are there any runtime dependencies?")
+    if (runtime_dependencies):
+        deps_input = click.prompt("Enter dependencies (comma-separated)")
+        dependencies = [d.strip() for d in deps_input.split(',')]
+        content += f"""
+# [Optional]
+# Directories and files needed to run application
+runtimeDependencies:
+{chr(10).join('   - ' + dependency for dependency in dependencies)}
+"""
+    else:
+        content += f"""
+# [Optional]
+# Directories and files needed to run application
+# runtimeDependencies:
+"""
 
     # Generate full filepath
     filepath = os.path.join(top_level, 'config.yaml')

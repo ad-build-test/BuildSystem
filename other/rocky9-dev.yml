@@ -29,7 +29,7 @@ spec:
         runAsGroup: 1006
       containers:
       - name: test-build-rocky9-dev
-        image: ghcr.io/ad-build-test/rocky9-env:latest
+        image: ghcr.io/ad-build-test/rocky9-env:dev
         imagePullPolicy: Always
         # start the build script
         command: ["/bin/sh"]
