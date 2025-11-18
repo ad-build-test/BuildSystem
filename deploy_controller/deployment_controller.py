@@ -54,7 +54,10 @@ if (ELOG_USER_PASSWORD == None):
 ELOG_HEADERS = {"x-vouch-idp-accesstoken": ELOG_USER_PASSWORD}
 
 APP_PATH = "/app"
-USED_OS_LIST = ["RHEL7", "ROCKY9"]
+# NOTE - ORDER MATTERS (Last item on the list "wins" if there are overlapping files when deploying for multiple OS)
+# Please make sure latest OS is the last item.
+USED_OS_LIST = ["RHEL7", "ROCKY9"] 
+
 FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]
 
 yaml = YAML()
