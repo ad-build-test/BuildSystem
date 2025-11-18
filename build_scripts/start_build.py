@@ -188,7 +188,7 @@ endif"""
         with open(file_path, 'w') as file:
             file.writelines(lines)
 
-    def package_ioc(self):
+    def package_ioc(self, config_yaml: dict):
         """
         Package IOC components by creating a tarball of necessary files.
         """
@@ -203,10 +203,15 @@ endif"""
             os.makedirs(target_dir, mode=0o775, exist_ok=True)
             
             # Copy required directories using rsync
-            directories_to_copy = [
-                "bin", "db", "dbd", "iocBoot", "cpuBoot", "conf", 
-                "archive", "restore", "cfg", "firmware", "build.log"
-            ]
+            # Defaults that are always included
+            default_dependencies = ["bin", "db", "dbd", "iocBoot", "cpuBoot", "conf", 
+                                "archive", "restore", "cfg", "firmware", "build.log"]
+
+            # Repo additions
+            runtime_dependencies = config_yaml.get("runtimeDependencies", [])
+
+            # Combine and remove duplicates
+            directories_to_copy = set(default_dependencies + runtime_dependencies)
             
             for item in directories_to_copy:
                 src_path = os.path.join(user_src_repo, item)
@@ -273,7 +278,7 @@ endif"""
             logger.info("Build process FAILED!")
             sys.exit(EXIT_BUILD_FAILURE)
         else:
-            self.package_ioc()
+            self.package_ioc(config_yaml)
 
     def create_docker_file(self, dependencies: dict, py_pkgs_file: str):
         # Create dockerfile with dependencies installed

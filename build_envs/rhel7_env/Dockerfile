@@ -51,7 +51,7 @@ RUN groupadd -g 1006 cd && \
     useradd -u 46487 -g cd -m adbuild
 
 # Add build scripts to /build
-ADD build_deploy /build/
+ADD build_scripts /build/
 
 # Make /build open to 'adbuild' user
 RUN chown -R 46487:1006 /build/
