@@ -13,7 +13,7 @@ from adbs_cli.create_commands import branch
 
 @click.group(hidden=True)
 def admin():
-    """admin [ onboard-repo | update-repo | delete-repo ]"""
+    """admin [ onboard-repo | update-repo | update-deployment | delete-repo ]"""
     pass
 
 def parse_ioc_deployments(content):
@@ -76,7 +76,7 @@ def parse_ioc_deployments(content):
     return filtered_facilities
 
 def add_initial_deployment(component: str, verbose: bool = False):
-    """Add an initial deployment configuration in the database (Useful for IOCS only at the moment) (CAUTION)"""
+    """Add an initial deployment configuration in the database (Useful for IOCS only) taken from existing cram output (CAUTION)"""
 
     # The logic is done through the deployment controller,
     # so if api ever changes, you don't need to update this function. 
@@ -440,10 +440,32 @@ def update_repo(component: str, organization: str, testing_criteria: str, approv
     request.put_request(verbose, msg="Update component in component database")
 
 @admin.command()
+@click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
+def update_deployment(verbose: bool=False):
+    """(CAUTION) For IOCS: If deployment out of sync because cram was still accidentally utlized. Then this command with parse cram ls, and 
+update the deployment db entry."""
+    request = Request(Component())
+
+    # === Lets make sure the admin is in a checked out copy of the repo,
+    # then we can parse the manifest and only question to ask is the automated test part
+    # 1) First check that user is in repo
+    if (not request.component.set_cur_dir_component()):
+        click.echo('fatal: not a git repository (or any of the parent directories)')
+        return
+    # 2) Parse manifest
+    user_src_repo = request.component.git_get_top_dir()
+    manifest_filepath = user_src_repo + '/config.yaml'
+    manifest_data = request.component.parse_manifest(manifest_filepath)
+
+    repo_name = manifest_data["repo"]
+    # 3) Add deployment entry
+    add_initial_deployment(repo_name, verbose)
+    
+@admin.command()
 @click.option("-c", "--component", required=False, help="Component Name", prompt=INPUT_PREFIX + "Specify component name")
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def delete_repo(component: str, verbose: bool):
-    """Delete a component from the database (CAUTION)"""
+    """(CAUTION) Delete a component from the database"""
 
     # Request to disable permissions for backend to receive events
     request = Request(Component(component))
