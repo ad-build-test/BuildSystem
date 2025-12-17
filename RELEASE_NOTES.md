@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.8 17-Dec-2025 P. Nisperos (pnispero)
+  * Small fix to onboard repo admin command
+
 * tag:1.1.7 11-Dec-2025 P. Nisperos (pnispero)
   * Updated deployment controller to return elog url if deployed from github directly. 
   * Added github workflow deployment file to admin onboarding command
