@@ -43,10 +43,14 @@ if is_prod:
     BACKEND_URL = "https://ad-build.slac.stanford.edu/api/cbs/v1/"
     ELOG_ENDPOINT = "https://accel-webapp.slac.stanford.edu/api/elog-apptoken/v1/entries"
     ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/build-system-playbooks/"
+    ELOG_URL_PREFIX = "https://accel-webapp.slac.stanford.edu/elog/"
+    ELOG_URL_POSTFIX = "?logbooks=sw_log"
 else: 
     BACKEND_URL = "https://ad-build-dev.slac.stanford.edu/api/cbs/v1/"
     ELOG_ENDPOINT = "https://accel-webapp-dev.slac.stanford.edu/api/elog-apptoken/v1/entries"
     ANSIBLE_PLAYBOOKS_PATH = "/sdf/group/ad/eed/ad-build/dev-build-system-playbooks/"
+    ELOG_URL_PREFIX = "https://accel-webapp-dev.slac.stanford.edu/elog/"
+    ELOG_URL_POSTFIX = "?logbooks=sw_log"
 
 ELOG_USER_PASSWORD = os.getenv("ELOG_USER_PASSWORD")
 if (ELOG_USER_PASSWORD == None):
@@ -156,7 +160,8 @@ class PydmDict(Component):
     tag: str
     user: str
     dry_run: Optional[bool] = False # Optional
-    subsystem: str # Ex: [mps, mgnt, vac, prof, etc.]
+    subsystem: Optional[str] = "" # Optional Ex: [mps, mgnt, vac, prof, etc.]
+    return_elog: Optional[bool] = False # Optional
 
 class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
@@ -535,7 +540,10 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
         response.raise_for_status()
         
         print(f"Successfully sent to ELOG API: {response.status_code}")
-        return True
+        print(f"response: {response}")
+        print(f"response payload: {response.json()['payload']}")
+        elog_url = ELOG_URL_PREFIX + response.json()['payload'] + ELOG_URL_POSTFIX
+        return elog_url
     except requests.exceptions.HTTPError as http_err:
         print(f"HTTP Error: {http_err}")
         
@@ -1068,6 +1076,9 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     # 3) Logic for special cases
     facilities = pydm_to_deploy.facilities
 
+    # If subsystem not passed, then use component name
+    pydm_to_deploy.subsystem = pydm_to_deploy.component_name.replace("pydm-", "") # Remove "pydm-"
+
     # Special case - if adding new deployment
     deploy_new_component = False
     # If adding to multiple facilities, loop through them
@@ -1135,7 +1146,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     
     # Send summary to elog
     if (not pydm_to_deploy.dry_run):
-        send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
+        elog_url = send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
 
     # Add cleanup
     background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
@@ -1144,8 +1155,14 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     if os.getenv('PYTHON_TESTING') == 'True':
         content = summary
         return Response(content=content, media_type="text/plain", status_code=status)
+    elif (pydm_to_deploy.return_elog):
+        return JSONResponse(content={
+                "success": deployment_success,
+                "elog_url": elog_url
+        })
     else:
         return FileResponse(path=deployment_report_file, status_code=status)
+    
     
 @app.put("/initial/deployment")
 async def initial_deployment(initial_deployment: InitialDeploymentDict):

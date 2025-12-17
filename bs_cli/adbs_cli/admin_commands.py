@@ -314,6 +314,73 @@ runtimeDependencies:
 
     click.echo(f"File '{filepath}' has been generated successfully!")
 
+    # Create the github actions deployment workflow file
+    if (deployment_type == "pydm"):
+        content = """name: Request Deployment - PyDM Display
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_to_dev:
+        description: 'DEV'
+        required: false
+        type: boolean
+        default: false
+      deploy_to_lcls:
+        description: 'LCLS'
+        required: false
+        type: boolean
+        default: false
+      deploy_to_facet:
+        description: 'FACET'
+        required: false
+        type: boolean
+        default: false
+      deploy_to_testfac:
+        description: 'TESTFAC'
+        required: false
+        type: boolean
+        default: false
+      deploy_to_sandbox:
+        description: 'SANDBOX'
+        required: false
+        type: boolean
+        default: false
+      tag:
+        description: 'Tag to deploy'
+        required: true
+        type: string
+        
+permissions:
+  deployments: write
+  contents: read
+  actions: read
+  
+jobs:
+  deploy:
+    uses: ad-build-test/build-system-playbooks/.github/workflows/request-deployment.yml@main
+    with:
+      deploy_to_dev: ${{ inputs.deploy_to_dev }}
+      deploy_to_lcls: ${{ inputs.deploy_to_lcls }}
+      deploy_to_facet: ${{ inputs.deploy_to_facet }}
+      deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
+      deploy_to_sandbox: ${{ inputs.deploy_to_sandbox }}
+      tag: ${{ inputs.tag }}
+      deployment_type: 'pydm'
+"""
+
+    # Generate full filepath
+    filepath = os.path.join(top_level, '.github/workflows/deploy.yml')
+
+    # Create the directory if it doesn't exist
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    # Write to file
+    with open(filepath, 'w') as f:
+        f.write(content)
+
+    click.echo(f"File '{filepath}' has been generated successfully!")
+
     # If deployment type is IOC, then generate RELEASE_SITE, and remove .cram, and remove RELEASE_SITE from .gitignore
     if (deployment_type == 'ioc'):
 
@@ -376,7 +443,7 @@ ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
             add_initial_deployment(repo_name, verbose)
         else:
             click.echo("No initial deployment configuration will be added since this is a NEW IOC application")        
-
+    return # TEMP
     # Create software factory onboarding branch to push changes to
     click.echo("== ADBS == Creating software factory onboard branch to push changes to")
     ctx.invoke(
