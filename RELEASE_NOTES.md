@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.9 17-Dec-2025 P. Nisperos (pnispero)
+  * Small fix remove temporary return to onboard repo admin command
+
 * tag:1.1.8 17-Dec-2025 P. Nisperos (pnispero)
   * Small fix to onboard repo admin command
 

@@ -442,7 +442,6 @@ ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
             add_initial_deployment(repo_name, verbose)
         else:
             click.echo("No initial deployment configuration will be added since this is a NEW IOC application")        
-    return # TEMP
     # Create software factory onboarding branch to push changes to
     click.echo("== ADBS == Creating software factory onboard branch to push changes to")
     ctx.invoke(
