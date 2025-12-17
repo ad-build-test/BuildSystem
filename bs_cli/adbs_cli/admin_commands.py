@@ -364,7 +364,6 @@ jobs:
       deploy_to_lcls: ${{ inputs.deploy_to_lcls }}
       deploy_to_facet: ${{ inputs.deploy_to_facet }}
       deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
-      deploy_to_sandbox: ${{ inputs.deploy_to_sandbox }}
       tag: ${{ inputs.tag }}
       deployment_type: 'pydm'
 """
