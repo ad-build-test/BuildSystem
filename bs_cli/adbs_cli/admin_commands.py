@@ -341,11 +341,6 @@ on:
         required: false
         type: boolean
         default: false
-      deploy_to_sandbox:
-        description: 'SANDBOX'
-        required: false
-        type: boolean
-        default: false
       tag:
         description: 'Tag to deploy'
         required: true
