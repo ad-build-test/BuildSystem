@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.10 3-Feb-2026 P. Nisperos (pnispero)
+  * Small fix to remove sandbox as a deployment option for new users
+
 * tag:1.1.9 17-Dec-2025 P. Nisperos (pnispero)
   * Small fix remove temporary return to onboard repo admin command
 
