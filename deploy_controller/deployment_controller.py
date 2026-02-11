@@ -1078,7 +1078,7 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
     facilities = pydm_to_deploy.facilities
 
     # If subsystem not passed, then use component name
-    pydm_to_deploy.subsystem = pydm_to_deploy.component_name.replace("pydm-", "") # Remove "pydm-"
+    pydm_to_deploy.subsystem = pydm_to_deploy.component_name.replace("pydm-", "").replace("-displays", "")
 
     # Special case - if adding new deployment
     deploy_new_component = False
