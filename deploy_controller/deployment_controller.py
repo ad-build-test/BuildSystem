@@ -53,8 +53,11 @@ else:
     ELOG_URL_POSTFIX = "?logbooks=sw_log"
 
 ELOG_USER_PASSWORD = os.getenv("ELOG_USER_PASSWORD")
+ELOG_SW_LOG_ID = os.getenv("ELOG_SW_LOG_ID")
 if (ELOG_USER_PASSWORD == None):
     raise ValueError("Missing environment variable - ELOG_USER_PASSWORD")
+if (ELOG_SW_LOG_ID == None):
+    raise ValueError("Missing environment variable - ELOG_SW_LOG_ID")
 ELOG_HEADERS = {"x-vouch-idp-accesstoken": ELOG_USER_PASSWORD}
 
 APP_PATH = "/app"
@@ -507,14 +510,12 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
     """
     print(f"Writing to the ELOG (SW_LOG) logbook through backend API for: {component_name} - {tag}")
 
-    logbook_id = "6536f0b5fbf92e44a7675731" # This is SW_LOG logbook id
-
     title = f"Deployment: {component_name} - {tag} {facilities}"
     text = f"<pre>{summary_report}</pre>"
 
     # Construct the payload
     payload = {
-        "logbooks": [logbook_id],
+        "logbooks": [ELOG_SW_LOG_ID],
         "title": title,
         "text": text,
         "note": "",
