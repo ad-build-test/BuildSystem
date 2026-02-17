@@ -17,6 +17,7 @@ class ApiEndpoints(str, Enum):
     COMPONENT_ISSUE = "component/{component_name}/issue/{issue_tracker}"
     BUILD_LOG = "build/{id}/log/tail"
     BUILD_BRANCH = "build/component/{component_name}/branch/{branch_name}"
+    DEPLOYMENT_CREATE_GH_STATUS = "deployments/status"
 
     # From deployment controller api
     DEPLOYMENT = "{deployment_type}/deployment"
@@ -55,6 +56,9 @@ cli_configuration = prod_config if is_prod else dev_config
 # Set cli_configuration with linux_uname and gh_uname
 linux_uname = os.environ.get('USER')
 github_uname = os.environ.get('AD_BUILD_GH_USER')
+if (not github_uname):
+    print("== ADBS == Warning: CLI not configured. Use 'bs configure' to get rid of this warning.")
+
 cli_configuration["linux_uname"] = linux_uname
 cli_configuration["github_uname"] = github_uname
 
