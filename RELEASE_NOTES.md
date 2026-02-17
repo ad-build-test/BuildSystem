@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.11 17-Feb-2026 P. Nisperos (pnispero)
+  * Deployment through CLI now adds deployment entries to github deployments (for pydm)
+
 * tag:1.1.10 3-Feb-2026 P. Nisperos (pnispero)
   * Small fix to remove sandbox as a deployment option for new users
 

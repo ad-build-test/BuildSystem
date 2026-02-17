@@ -470,7 +470,10 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
     manifest_data = deployment_request.component.parse_manifest(manifest_filepath)
-    deployment_type = manifest_data['deploymentType'].lower()
+    deployment_type = manifest_data.get('deploymentType', '').lower()
+    if not deployment_type:
+        click.echo("== ADBS == Error: 'deploymentType' not found or empty in manifest")
+        return
 
     # 1.1) Option - test
     if (test):
@@ -675,6 +678,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         # So user_specified_facilities is required.
         if (len(user_specified_facilities) < 1):
             click.echo("== ADBS == ERROR: Please specify the facility(s)")
+        
+        deployment_request.add_to_payload("return_elog", True) # Get elog entry back from deployment playbook to print to user
 
     # 8) Send deployment request to deployment controller
     deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
@@ -684,21 +689,54 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
     else:
         click.echo("== ADBS == Deploying...")
-    response = deployment_request.put_request(log=verbose)
-    if (not response.ok):
+    deployment_response = deployment_request.put_request(log=verbose)
+    if (not deployment_response.ok):
         try:
-            click.echo(f"== ADBS == Error: {response.json()}")
+            click.echo(f"== ADBS == Error: {deployment_response.json()}")
             return
         except Exception:
             pass
 
+    if (deployment_type == 'pydm'): # add github deployment status in progress
+        deployment_status_request = Request(Component(component), Api.BACKEND)  
+        deployment_status_request.add_to_payload("name", deployment_request.component.name)
+        deployment_status_request.add_to_payload("tag", tag)
+        deployment_status_request.add_to_payload("status", "IN_PROGRESS")
+        for facility in user_specified_facilities:
+            deployment_status_request.add_to_payload("facility", facility)
+            deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_CREATE_GH_STATUS)
+
+            response = deployment_status_request.put_request(log=verbose)
+            if (not response.ok):
+                try:
+                    click.echo(f"== ADBS == Error: {response.json()}")
+                    return
+                except Exception:
+                    pass
+        
     if (deployment_type == 'ioc'): # If ioc deployment, then poll status
         response = poll_deployment(response, deployment_request)
-    
-    # 9) Prompt user if they want to download and view the report
-    # Get the file content from the response
-    file_content = response.content.decode('utf-8')
-    generate_deployment_report(file_content, deployment_request.component.name, tag)
+        # Get the file content from the response
+        file_content = response.content.decode('utf-8')
+        generate_deployment_report(file_content, deployment_request.component.name, tag)
+
+    elog_url = deployment_response.json().get("elog_url", "")
+    click.echo(f"== ADBS == Complete, log for details - {elog_url}")
+    if (deployment_type == 'pydm'): # add github deployment status success
+        deployment_status_request.add_to_payload("status", "SUCCESS")
+        deployment_status_request.add_to_payload("logUrl", elog_url)
+        response = deployment_status_request.put_request(log=verbose)
+        for facility in user_specified_facilities:
+            deployment_status_request.add_to_payload("facility", facility)
+            deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_CREATE_GH_STATUS)
+            response = deployment_status_request.put_request(log=verbose)
+            if (not response.ok):
+                try:
+                    click.echo(f"== ADBS == Error: {response.json()}")
+                    return
+                except Exception:
+                    pass
+
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
