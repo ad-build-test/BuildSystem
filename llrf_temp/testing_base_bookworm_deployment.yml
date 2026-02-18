@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: s3df-dev-container-ad-group
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testing-base-bookworm-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testing-base-bookworm
+  template:
+    metadata:
+      labels:
+        app: testing-base-bookworm
+    spec:
+      securityContext:
+        runAsUser: 46487
+        runAsGroup: 1006
+      containers:
+      - name: testing-base-bookworm
+        image: ghcr.io/ad-build-test/testing_base_bookworm:latest
+        imagePullPolicy: Always
+        # start the build script
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - >-
+              echo "test"
+              echo "$ sleep to keep container alive for debug" &&
+              sleep infinity
+        volumeMounts:
+        - name: s3df-dev-container-ad-group
+          mountPath: /mnt
+        resources:
+          limits:
+            memory: 8Gi
+            cpu: 4000m
+      volumes:
+      - name: s3df-dev-container-ad-group
+        persistentVolumeClaim:
+          claimName: s3df-dev-container-ad-group
