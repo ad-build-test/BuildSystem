@@ -42,4 +42,10 @@ class AutoComplete(object):
                 auto_complete_vals = []
                 for component in payload:
                     auto_complete_vals.append(component['name'])
+
+        # Get the current delimiters
+        current_delims = readline.get_completer_delims()
+        # Modify the delimiters (e.g., remove the dash '-')
+        new_delims = current_delims.replace('-', '')
+        readline.set_completer_delims(new_delims)
         readline.set_completer(AutoComplete(auto_complete_vals).complete)
