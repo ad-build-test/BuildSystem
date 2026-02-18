@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.1.12 17-Feb-2026 P. Nisperos (pnispero)
+  * CLI bs clone bug fix with tab complete
+
 * tag:1.1.11 17-Feb-2026 P. Nisperos (pnispero)
   * Deployment through CLI now adds deployment entries to github deployments (for pydm)
 
