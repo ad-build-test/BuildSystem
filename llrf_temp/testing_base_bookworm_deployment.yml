@@ -24,9 +24,6 @@ spec:
       labels:
         app: testing-base-bookworm
     spec:
-      securityContext:
-        runAsUser: 46487
-        runAsGroup: 1006
       containers:
       - name: testing-base-bookworm
         image: ghcr.io/ad-build-test/testing_base_bookworm:latest
@@ -46,6 +43,10 @@ spec:
           limits:
             memory: 8Gi
             cpu: 4000m
+        securityContext:
+          runAsUser: 46487
+          runAsGroup: 1006
+          privileged: true
       volumes:
       - name: s3df-dev-container-ad-group
         persistentVolumeClaim:
