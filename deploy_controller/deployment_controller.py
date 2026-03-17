@@ -61,6 +61,19 @@ if (ELOG_SW_LOG_ID == None):
 ELOG_HEADERS = {"x-vouch-idp-accesstoken": ELOG_USER_PASSWORD}
 
 APP_PATH = "/app"
+
+# Container deployment secrets are loaded per-app from environment variables.
+# Naming convention: CONTAINER_{APP_KEY}_{SECRET}
+# where APP_KEY = component_name uppercased with hyphens replaced by underscores
+def get_container_secrets(component_name: str) -> dict:
+    """Load per-app container secrets from environment variables."""
+    app_key = component_name.upper().replace("-", "_")
+    return {
+        'database_url': os.getenv(f"CONTAINER_{app_key}_DATABASE_URL", ""),
+        'redis_url': os.getenv(f"CONTAINER_{app_key}_REDIS_URL", ""),
+        'ghcr_token': os.getenv(f"CONTAINER_{app_key}_GHCR_TOKEN", ""),
+        'ghcr_user': os.getenv(f"CONTAINER_{app_key}_GHCR_USER", ""),
+    }
 # NOTE - ORDER MATTERS (Last item on the list "wins" if there are overlapping files when deploying for multiple OS)
 # Please make sure latest OS is the last item.
 USED_OS_LIST = ["RHEL7", "ROCKY9"] 
@@ -165,6 +178,22 @@ class PydmDict(Component):
     dry_run: Optional[bool] = False # Optional
     subsystem: Optional[str] = "" # Optional Ex: [mps, mgnt, vac, prof, etc.]
     return_elog: Optional[bool] = False # Optional
+
+class ContainerDict(Component):
+    facilities: Optional[list] = None # Optional
+    tag: str
+    user: str
+    return_elog: Optional[bool] = False # Optional
+    force_deploy: Optional[bool] = False # Optional
+    # App-specific configuration
+    docker_network: Optional[str] = None # Docker network name for inter-container DNS
+    migration_command: Optional[str] = None # e.g., "alembic upgrade head" — skipped if not set
+    health_check_path: Optional[str] = "/health" # Health check endpoint path
+    # Secrets — passed from GitHub Actions via core-build-system, with env var fallback
+    database_url: Optional[str] = None
+    redis_url: Optional[str] = None
+    ghcr_token: Optional[str] = None
+    ghcr_user: Optional[str] = None
 
 class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
@@ -1163,8 +1192,113 @@ async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTask
         })
     else:
         return FileResponse(path=deployment_report_file, status_code=status)
-    
-    
+
+
+@app.put("/container/deployment")
+async def deploy_container(container_to_deploy: ContainerDict, background_tasks: BackgroundTasks):
+    """
+    Deploy a containerized application via Docker Compose.
+    Runs the container_module Ansible playbook to pull images and deploy services.
+    Secrets can be passed in the request body (from GitHub Actions) or loaded from environment variables as fallback.
+    """
+    logging.info(f"New container deployment request: {container_to_deploy}")
+
+    # Use request body secrets if provided, otherwise fall back to per-app env vars
+    env_secrets = get_container_secrets(container_to_deploy.component_name)
+    secrets = {
+        'database_url': container_to_deploy.database_url or env_secrets['database_url'],
+        'redis_url': container_to_deploy.redis_url or env_secrets['redis_url'],
+        'ghcr_token': container_to_deploy.ghcr_token or env_secrets['ghcr_token'],
+        'ghcr_user': container_to_deploy.ghcr_user or env_secrets['ghcr_user'],
+    }
+    if not secrets['database_url']:
+        app_key = container_to_deploy.component_name.upper().replace("-", "_")
+        return JSONResponse(content={"payload": {"Error": f"database_url not provided in request and CONTAINER_{app_key}_DATABASE_URL environment variable not set"}}, status_code=500)
+
+    # Setup paths
+    local_container_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'container_module'
+    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
+    if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
+    else: inventory_file_path += 'global_inventory.ini'
+
+    # Build extra-vars for Ansible (app_name comes from component_name)
+    # Only include optional fields that are configured
+    playbook_args_dict = {
+        'app_name': container_to_deploy.component_name,
+        'image_tag': container_to_deploy.tag,
+        'database_url': secrets['database_url'],
+        'force_deploy': container_to_deploy.force_deploy,
+        'health_check_path': container_to_deploy.health_check_path,
+    }
+    if container_to_deploy.docker_network:
+        playbook_args_dict['docker_network'] = container_to_deploy.docker_network
+    if container_to_deploy.migration_command:
+        playbook_args_dict['migration_command'] = container_to_deploy.migration_command
+    if secrets['redis_url']:
+        playbook_args_dict['redis_url'] = secrets['redis_url']
+    if secrets['ghcr_token']:
+        playbook_args_dict['ghcr_token'] = secrets['ghcr_token']
+    if secrets['ghcr_user']:
+        playbook_args_dict['ghcr_user'] = secrets['ghcr_user']
+
+    facilities = container_to_deploy.facilities
+    status = 200
+    deployment_output = ""
+    deployment_success = True
+    request_id = str(uuid.uuid4())
+    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
+    os.makedirs(temp_download_dir, exist_ok=True)
+    deployment_report_file = temp_download_dir + '/deployment-report-' + container_to_deploy.component_name + '-' + container_to_deploy.tag + '.log'
+
+    for facility in facilities:
+        logging.info(f"Deploying container to facility: {facility}")
+        playbook_args = json.dumps(playbook_args_dict)
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(
+            inventory_file_path,
+            local_container_playbooks_path + '/container_deploy.yml',
+            facility,
+            playbook_args,
+            return_output=True,
+            no_color=True
+        )
+
+        current_output = "== Container deployment output for " + facility + ' ==\n\n' + stdout
+        if (return_code != 0):
+            status = 400
+            if (stderr != ''):
+                current_output += "\n== Errors ==\n\n" + stderr
+            deployment_success = False
+        deployment_output += current_output
+
+        # Update deployment database
+        update_db_after_deployment(deployment_success, True, facility, 'container',
+                                  container_to_deploy.component_name, container_to_deploy.tag,
+                                  container_to_deploy.user, current_output)
+
+    if (deployment_output == ""):
+        return JSONResponse(content={"payload": {"Error": "No deployments performed"}}, status_code=400)
+
+    # Generate report
+    summary = generate_report(container_to_deploy.component_name, container_to_deploy.tag,
+                              container_to_deploy.user, deployment_output, status, deployment_report_file)
+
+    # Send to elog
+    elog_url = send_deployment_to_elog(container_to_deploy.component_name, container_to_deploy.tag, facilities, summary)
+
+    # Cleanup
+    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+
+    if os.getenv('PYTHON_TESTING') == 'True':
+        return Response(content=summary, media_type="text/plain", status_code=status)
+    elif (container_to_deploy.return_elog):
+        return JSONResponse(content={
+            "success": deployment_success,
+            "elog_url": elog_url
+        })
+    else:
+        return FileResponse(path=deployment_report_file, status_code=status)
+
+
 @app.put("/initial/deployment")
 async def initial_deployment(initial_deployment: InitialDeploymentDict):
     """
