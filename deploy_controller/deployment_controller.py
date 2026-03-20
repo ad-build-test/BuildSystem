@@ -195,6 +195,14 @@ class ContainerDict(Component):
     ghcr_token: Optional[str] = None
     ghcr_user: Optional[str] = None
 
+class AppDict(Component):
+    facilities: Optional[list] = None
+    tag: str
+    user: str
+    return_elog: Optional[bool] = False
+    artifact_url: Optional[str] = None   # GitHub release asset URL
+    artifact_type: Optional[str] = 'rpm' # rpm, tar, zip
+
 class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
     facility: str
@@ -1291,6 +1299,120 @@ async def deploy_container(container_to_deploy: ContainerDict, background_tasks:
     if os.getenv('PYTHON_TESTING') == 'True':
         return Response(content=summary, media_type="text/plain", status_code=status)
     elif (container_to_deploy.return_elog):
+        return JSONResponse(content={
+            "success": deployment_success,
+            "elog_url": elog_url
+        })
+    else:
+        return FileResponse(path=deployment_report_file, status_code=status)
+
+
+@app.put("/app/deployment")
+async def deploy_app(app_to_deploy: AppDict, background_tasks: BackgroundTasks):
+    """
+    Deploy an application artifact (RPM, tarball, zip) to target servers.
+    Downloads the artifact from a GitHub release asset URL, then runs the
+    artifact_module Ansible playbook to extract and symlink on each facility.
+    """
+    logging.info(f"New app deployment request: {app_to_deploy}")
+
+    # Validate artifact_url
+    if not app_to_deploy.artifact_url:
+        return JSONResponse(content={"payload": {"Error": "artifact_url is required for app deployments"}}, status_code=400)
+
+    # Setup paths
+    request_id = str(uuid.uuid4())
+    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
+    os.makedirs(temp_download_dir, exist_ok=True)
+
+    # Determine file extension from artifact_type
+    ext_map = {'rpm': 'rpm', 'tar': 'tar.gz', 'tar.gz': 'tar.gz', 'tgz': 'tar.gz', 'zip': 'zip'}
+    ext = ext_map.get(app_to_deploy.artifact_type, app_to_deploy.artifact_type)
+    artifact_filename = f"{app_to_deploy.component_name}-{app_to_deploy.tag}.{ext}"
+    artifact_filepath = os.path.join(temp_download_dir, artifact_filename)
+
+    # Download artifact from GitHub release asset URL
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    headers = {"Accept": "application/octet-stream"}
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
+
+    try:
+        response = requests.get(app_to_deploy.artifact_url, headers=headers, stream=True, allow_redirects=True)
+        if response.status_code != 200:
+            logging.error(f"Failed to download artifact: HTTP {response.status_code}")
+            return JSONResponse(content={"payload": {"Error": f"Failed to download artifact from {app_to_deploy.artifact_url}: HTTP {response.status_code}"}}, status_code=400)
+
+        with open(artifact_filepath, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=1024*1024):
+                if chunk:
+                    f.write(chunk)
+        logging.info(f"Artifact downloaded to {artifact_filepath}")
+    except Exception as e:
+        logging.error(f"Error downloading artifact: {e}")
+        return JSONResponse(content={"payload": {"Error": f"Failed to download artifact: {str(e)}"}}, status_code=500)
+
+    # Ansible setup
+    local_artifact_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'artifact_module'
+    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
+    if TEST_INVENTORY:
+        inventory_file_path += 'test_inventory.ini'
+    else:
+        inventory_file_path += 'global_inventory.ini'
+
+    playbook_args_dict = {
+        'component_name': app_to_deploy.component_name,
+        'tag': app_to_deploy.tag,
+        'artifact_path': artifact_filepath,
+        'artifact_type': app_to_deploy.artifact_type,
+    }
+
+    facilities = app_to_deploy.facilities
+    status = 200
+    deployment_output = ""
+    deployment_success = True
+    deployment_report_file = os.path.join(temp_download_dir, f'deployment-report-{app_to_deploy.component_name}-{app_to_deploy.tag}.log')
+
+    for facility in facilities:
+        logging.info(f"Deploying app artifact to facility: {facility}")
+        playbook_args = json.dumps(playbook_args_dict)
+        stdout, stderr, return_code = ansible_api.run_ansible_playbook(
+            inventory_file_path,
+            local_artifact_playbooks_path + '/artifact_deploy.yml',
+            facility,
+            playbook_args,
+            return_output=True,
+            no_color=True
+        )
+
+        current_output = "== App deployment output for " + facility + ' ==\n\n' + stdout
+        if return_code != 0:
+            status = 400
+            if stderr != '':
+                current_output += "\n== Errors ==\n\n" + stderr
+            deployment_success = False
+        deployment_output += current_output
+
+        update_db_after_deployment(deployment_success, True, facility, 'app',
+                                  app_to_deploy.component_name, app_to_deploy.tag,
+                                  app_to_deploy.user, current_output)
+
+    if deployment_output == "":
+        return JSONResponse(content={"payload": {"Error": "No deployments performed"}}, status_code=400)
+
+    # Generate report
+    summary = generate_report(app_to_deploy.component_name, app_to_deploy.tag,
+                              app_to_deploy.user, deployment_output, status, deployment_report_file)
+
+    # Send to elog
+    elog_url = send_deployment_to_elog(app_to_deploy.component_name, app_to_deploy.tag, facilities, summary)
+
+    # Cleanup
+    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+
+    if os.getenv('PYTHON_TESTING') == 'True':
+        return Response(content=summary, media_type="text/plain", status_code=status)
+    elif app_to_deploy.return_elog:
         return JSONResponse(content={
             "success": deployment_success,
             "elog_url": elog_url
