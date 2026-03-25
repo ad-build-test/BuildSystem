@@ -466,14 +466,17 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     deployment_request = Request(Component(component), Api.DEPLOYMENT)    
     deployment_request.set_component_name()
 
-    # Get app type
+    # Get app type from deploy.playbook in config.yaml
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
     manifest_data = deployment_request.component.parse_manifest(manifest_filepath)
-    deployment_type = manifest_data.get('deploymentType', '').lower()
-    if not deployment_type:
-        click.echo("== ADBS == Error: 'deploymentType' not found or empty in manifest")
-        return
+    playbook = manifest_data.get('deploy', {}).get('playbook', '')
+    if 'ioc_module' in playbook:
+        deployment_type = 'ioc'
+    elif 'pydm_module' in playbook:
+        deployment_type = 'pydm'
+    else:
+        deployment_type = 'generic'
 
     # 1.1) Option - test
     if (test):
@@ -561,10 +564,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         "user": linux_uname,
         "dry_run": dry_run
     }
-
-    # 7) Figure out what the deployment type is and set the endpoint accordingly
-    user_src_repo = deployment_request.component.git_get_top_dir()
-    manifest_filepath = user_src_repo + '/config.yaml'
 
     # 6) Error check - If user specified iocs - Confirm with database that every ioc found in the source tree is in the database.
     if (deployment_type == 'ioc' and ioc): 
@@ -674,10 +673,6 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (deployment_type == 'pydm'):
         subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
         playbook_args_dict["subsystem"] = subsystem
-        # Error check - For pydm deployments, there can be a pydm subsystem for more than one facility
-        # So user_specified_facilities is required.
-        if (len(user_specified_facilities) < 1):
-            click.echo("== ADBS == ERROR: Please specify the facility(s)")
         
         deployment_request.add_to_payload("return_elog", True) # Get elog entry back from deployment playbook to print to user
 
@@ -687,8 +682,11 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     deployment_request.add_dict_to_payload(playbook_args_dict)
     if (len(user_specified_facilities) > 0):
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
+    elif (deployment_type == 'ioc'):
+        click.echo("== ADBS == Deploying to all facilities with active deployments...")
     else:
-        click.echo("== ADBS == Deploying...")
+        click.echo("== ADBS == ERROR: Please specify the facility(s)")
+        return
     deployment_response = deployment_request.put_request(log=verbose)
     if (not deployment_response.ok):
         try:

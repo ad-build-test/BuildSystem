@@ -1,0 +1,17 @@
+# Example config.yaml for a PyDM display application
+# [Required]
+repo: mc-displays
+organization: slaclab
+url: https://github.com/slaclab/mc-displays
+description: mc-displays
+
+# [Optional] Docker image for build pods
+# image: ghcr.io/ad-build-test/rocky9-env:latest
+
+# [Optional] Build command — skip if no build step needed
+# build:
+#   command: "pip install -r requirements.txt"
+
+# [Optional] Deployment playbook
+deploy:
+  playbook: pydm_module/pydm_deploy.yml
