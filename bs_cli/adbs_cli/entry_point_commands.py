@@ -137,9 +137,10 @@ def generate_deployment_report(file_content: str, component_name: str, tag: str)
     click.echo(f"Report downloaded successfully to {file_path}")
 
 def poll_deployment(response, deployment_status_request: Request):
-    """Poll deployment until complete, return final status"""
+    """Poll deployment until complete, return (report_response, elog_url)"""
     data = response.json()
     task_id = data.get("task_id", None)
+    elog_url = ""
     sleep(2) # Wait a bit for deployment status
     for _ in range(30):  # 5 min max
         deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_STATUS,
@@ -153,6 +154,7 @@ def poll_deployment(response, deployment_status_request: Request):
             click.echo(f"\r\033[K{progress['percent']}% - {progress['current_step']}  ", nl=False)
 
         if status_data["status"] == "completed":
+            elog_url = status_data.get("result", {}).get("elog_url", "")
             click.echo("\n== ADBS == Completed deployment. ")
             break
 
@@ -160,7 +162,7 @@ def poll_deployment(response, deployment_status_request: Request):
     # Download report
     deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REPORT,
                                             task_id=task_id)
-    return deployment_status_request.get_request(log=False)
+    return deployment_status_request.get_request(log=False), elog_url
 
 @click.command()
 def configure_user():
@@ -526,8 +528,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             return
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
         deployment_request.add_to_payload("user", linux_uname)
-        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
-                                        deployment_type=deployment_type)
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT)
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
         for facility in user_specified_facilities:
             deployment_request.add_to_payload("facility", facility)
@@ -535,8 +536,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             if (not response.ok):
                 click.echo(f"== ADBS == Error - {response.json()}")
                 return
-            response = poll_deployment(response, deployment_request)
-            file_content = response.content.decode('utf-8')
+            report_response, _ = poll_deployment(response, deployment_request)
+            file_content = report_response.content.decode('utf-8')
             generate_deployment_report(file_content, deployment_request.component.name, "revert")
         return
 
@@ -562,7 +563,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "dry_run": dry_run
+        "dry_run": dry_run,
+        "playbook": playbook
     }
 
     # 6) Error check - If user specified iocs - Confirm with database that every ioc found in the source tree is in the database.
@@ -673,12 +675,9 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (deployment_type == 'pydm'):
         subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
         playbook_args_dict["subsystem"] = subsystem
-        
-        deployment_request.add_to_payload("return_elog", True) # Get elog entry back from deployment playbook to print to user
 
     # 8) Send deployment request to deployment controller
-    deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
-                                        deployment_type=deployment_type)
+    deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     if (len(user_specified_facilities) > 0):
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
@@ -712,18 +711,16 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 except Exception:
                     pass
         
-    if (deployment_type == 'ioc'): # If ioc deployment, then poll status
-        response = poll_deployment(response, deployment_request)
-        # Get the file content from the response
-        file_content = response.content.decode('utf-8')
+    # Poll all deployment types — PUT /deployment always returns 202 async
+    report_response, elog_url = poll_deployment(deployment_response, deployment_request)
+    if (deployment_type == 'ioc'):
+        file_content = report_response.content.decode('utf-8')
         generate_deployment_report(file_content, deployment_request.component.name, tag)
 
-    elog_url = deployment_response.json().get("elog_url", "")
     click.echo(f"== ADBS == Complete, log for details - {elog_url}")
     if (deployment_type == 'pydm'): # add github deployment status success
         deployment_status_request.add_to_payload("status", "SUCCESS")
         deployment_status_request.add_to_payload("logUrl", elog_url)
-        response = deployment_status_request.put_request(log=verbose)
         for facility in user_specified_facilities:
             deployment_status_request.add_to_payload("facility", facility)
             deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_CREATE_GH_STATUS)

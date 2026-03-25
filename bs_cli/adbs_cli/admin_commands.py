@@ -255,7 +255,7 @@ jobs:
       deploy_to_facet: ${{ inputs.deploy_to_facet }}
       deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
       tag: ${{ inputs.tag }}
-      deployment_type: 'pydm'
+      playbook: 'pydm_module/pydm_deploy.yml'
 """
         deploy_yml_path = os.path.join(top_level, '.github/workflows/deploy.yml')
         os.makedirs(os.path.dirname(deploy_yml_path), exist_ok=True)

@@ -662,7 +662,8 @@ async def get_deployment_status(task_id: str):
     
     if task.status == "completed":
         response["result"] = {
-            "summary": task.result.get("summary")
+            "summary": task.result.get("summary"),
+            "elog_url": task.result.get("elog_url", "")
         }
     elif task.status == "failed":
         response["error"] = task.error
