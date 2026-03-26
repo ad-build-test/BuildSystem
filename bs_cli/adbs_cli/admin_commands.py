@@ -210,9 +210,9 @@ def onboard_repo(ctx, verbose: bool=False):
     else:
         deployment_type = 'generic'
 
-    # Write deploy.yml for pydm apps
-    if deployment_type == 'pydm':
-        pydm_deploy_content = """\
+    # Write deploy.yml for github actions deployment (No IOC support yet)
+    if deployment_type == 'pydm' or deployment_type == 'generic':
+        deploy_content = f"""\
 on:
   workflow_dispatch:
     inputs:
@@ -255,12 +255,12 @@ jobs:
       deploy_to_facet: ${{ inputs.deploy_to_facet }}
       deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
       tag: ${{ inputs.tag }}
-      playbook: 'pydm_module/pydm_deploy.yml'
+      playbook: '{playbook}'
 """
         deploy_yml_path = os.path.join(top_level, '.github/workflows/deploy.yml')
         os.makedirs(os.path.dirname(deploy_yml_path), exist_ok=True)
         with open(deploy_yml_path, 'w') as f:
-            f.write(pydm_deploy_content)
+            f.write(deploy_content)
         click.echo(f"File '{deploy_yml_path}' has been generated successfully!")
 
     # IOC-specific steps

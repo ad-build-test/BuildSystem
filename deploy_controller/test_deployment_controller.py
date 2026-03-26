@@ -10,6 +10,7 @@ And make the following dirs:
 2) git clone https://github.com/ad-build-test/build-system-playbooks
 3) Alter the paths for 'test' group in build-system-playbooks/global_inventory.ini to your username
 4) Then in mock_paths(), alter the paths to your local ~/test-deployment-controller/ (Anywhere it says pnispero, change to your username)
+5) Look in the dev mongodb and make sure test-ioc and pydm-mps are not already in the deployments collection. If they are, please delete those entries before testing.
 
 
 Usage: pytest test_deployment_controller.py
@@ -58,6 +59,7 @@ import os
 
 os.environ['PYTHON_TESTING'] = 'True'
 os.environ['ELOG_USER_PASSWORD'] = "mock"
+os.environ['ELOG_SW_LOG_ID'] = "mock"
 
 import pytest
 import fakeredis

@@ -1137,7 +1137,8 @@ def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: Depl
             deployment_success = False
         deployment_output += current_output
         if not deploy_request.dry_run:
-            update_db_after_deployment(deployment_success, True, facility, app_type,
+            is_new_component = find_component_in_facility(facility, deploy_request.component_name) is None
+            update_db_after_deployment(deployment_success, is_new_component, facility, app_type,
                                        deploy_request.component_name, deploy_request.tag,
                                        deploy_request.user, current_output)
 
