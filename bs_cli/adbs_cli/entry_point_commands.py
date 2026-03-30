@@ -711,7 +711,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         except Exception:
             pass
 
-    if (deployment_type == 'pydm'): # add github deployment status in progress
+    if (deployment_type == 'pydm' or deployment_type == 'generic'): # add github deployment status in progress for all except ioc for now
         deployment_status_request = Request(Component(component), Api.BACKEND)  
         deployment_status_request.add_to_payload("name", deployment_request.component.name)
         deployment_status_request.add_to_payload("tag", tag)
@@ -735,7 +735,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         generate_deployment_report(file_content, deployment_request.component.name, tag)
 
     click.echo(f"== ADBS == Complete, log for details - {elog_url}")
-    if (deployment_type == 'pydm'): # add github deployment status success
+    if (deployment_type != 'ioc'  or deployment_type == 'generic'): # add github deployment status success for all except ioc for now
         deployment_status_request.add_to_payload("status", "SUCCESS")
         deployment_status_request.add_to_payload("logUrl", elog_url)
         for facility in user_specified_facilities:
