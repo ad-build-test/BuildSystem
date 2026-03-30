@@ -1,0 +1,3 @@
+these build_scripts are not in use by the build containers as of 3/30/2026.
+the core-build-system-backend just directly cd's into scratch directory, then runs the build command which the user provides in the config.yaml.
+Will keep here temporarily.

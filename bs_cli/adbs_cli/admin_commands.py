@@ -180,7 +180,6 @@ def onboard_repo(ctx, verbose: bool=False):
     NOTE: You must create your own config.yaml before running this command.
           See BuildSystem/examples/ for templates."""
     click.confirm("Please create a config.yaml in the top level of your repo (see BuildSystem/examples/ for templates) before running this command. Continue?")
-    click.confirm("Ensure you have created a config.yaml in the top level of your repo (see BuildSystem/examples/ for templates). Continue?")
 
     # Add component to database (reads repo/org/description from config.yaml)
     add_repo(verbose)
@@ -213,6 +212,8 @@ def onboard_repo(ctx, verbose: bool=False):
     # Write deploy.yml for github actions deployment (No IOC support yet)
     if deployment_type == 'pydm' or deployment_type == 'generic':
         deploy_content = f"""\
+name: Deploy
+
 on:
   workflow_dispatch:
     inputs:
@@ -312,8 +313,6 @@ ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
                 file.writelines(filtered_lines)
 
             click.echo(f"Successfully removed RELEASE_SITE from .gitignore")
-
-    add_repo(verbose)
         
     if (deployment_type == 'ioc'):
         if (click.confirm("Is this an existing IOC application?")):

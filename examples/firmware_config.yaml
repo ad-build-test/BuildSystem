@@ -1,18 +1,17 @@
-# Example config.yaml for a firmware application (LLRF)
-# [Required]
+# Example config.yaml for a firmware application (LLRF) Multiple tests and build targets with hardware tests triggered after ALL builds pass
 repo: lcls2_llrf
 organization: ad-build-test
 url: https://github.com/ad-build-test/lcls2_llrf
 description: LCLS-II LLRF firmware
 
-# [Optional] Docker image for build pods
+# Docker image for build pods
 image: ghcr.io/ad-build-test/bookworm-env:latest
 
-# [Optional] Global env vars available to all stages
+# Global env vars available to all stages
 variables:
   XILINX_VIVADO: /non-free/Xilinx/Vivado/2020.2
 
-# [Optional] Software tests — each gets its own pod
+# Software tests — each gets its own pod
 test:
   sel4v_test:
     command: "cd firmware/prc/sel4v && make && make clean"
@@ -53,7 +52,7 @@ build:
     artifacts:
       - "firmware/injector/*.bit"
 
-# [Optional] Hardware tests — triggered after ALL builds pass
+# Hardware tests — triggered after ALL builds pass
 hardwareTest:
   runner: llrf-test-bench
   prc_qf2_v07_run:

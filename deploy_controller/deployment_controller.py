@@ -76,7 +76,7 @@ def get_container_secrets(component_name: str) -> dict:
     }
 # NOTE - ORDER MATTERS (Last item on the list "wins" if there are overlapping files when deploying for multiple OS)
 # Please make sure latest OS is the last item.
-USED_OS_LIST = ["RHEL7", "ROCKY9"] 
+USED_OS_LIST = ["rhel7", "rocky9"] 
 
 FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]
 
