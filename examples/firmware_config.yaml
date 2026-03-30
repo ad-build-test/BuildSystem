@@ -1,0 +1,102 @@
+# Example config.yaml for a firmware application (LLRF) Multiple tests and build targets with hardware tests triggered after ALL builds pass
+repo: lcls2_llrf
+organization: ad-build-test
+url: https://github.com/ad-build-test/lcls2_llrf
+description: LCLS-II LLRF firmware
+
+# Docker image for build pods
+image: ghcr.io/ad-build-test/bookworm-env:latest
+
+# Global env vars available to all stages
+variables:
+  XILINX_VIVADO: /non-free/Xilinx/Vivado/2020.2
+
+# Software tests — each gets its own pod
+test:
+  sel4v_test:
+    command: "cd firmware/prc/sel4v && make && make clean"
+  prc_test:
+    command: "cd firmware/prc && make && make checks && make clean && make Vclm CONFIG=marble_sim"
+  resonance_control_test:
+    command: "cd firmware/resonance_control && make && make checks && make clean"
+  resonance_control_cdc_test:
+    command: "cd firmware/resonance_control && make application_top_cdc.txt"
+  prc_soft_test:
+    command: "cd software/prc && make checks && make clean"
+  injector_test:
+    command: "cd firmware/injector && make && make clean"
+  prc_cdc_test:
+    command: "cd firmware/prc && make application_top_cdc.txt CONFIG=cdc_test"
+  flake8:
+    command: "flake8 firmware/prc/*.py firmware/resonance_control/*.py software/prc/*.py"
+
+# [Required] Build — multi-target with matrix expansion
+# Each target x matrix value gets its own build pod
+build:
+  prc:
+    command: "cd firmware/prc && PATH=$XILINX_VIVADO/bin:$PATH make CONFIG=$TARGET prc.bit"
+    matrix:
+      TARGET: [qf2_v07, cmoc_qf2_v07, fiber_qf2_v07, marble, fiber_marble]
+    artifacts:
+      - "firmware/prc/*.bit"
+  resonance_control:
+    command: "cd firmware/resonance_control && PATH=$XILINX_VIVADO/bin:$PATH make CONFIG=$TARGET resonance_control.bit"
+    matrix:
+      TARGET: [qf2_v07, fiber_qf2_v07, marble, fiber_marble, marblepip]
+    artifacts:
+      - "firmware/resonance_control/*.bit"
+  injector:
+    command: "cd firmware/injector && XILINX_VIVADO=/non-free/Xilinx/Vivado/2018.3 PATH=$XILINX_VIVADO/bin:$PATH make CONFIG=$TARGET injector.bit"
+    matrix:
+      TARGET: [qf2_v07]
+    artifacts:
+      - "firmware/injector/*.bit"
+
+# Hardware tests — triggered after ALL builds pass
+hardwareTest:
+  runner: llrf-test-bench
+  prc_qf2_v07_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh lcls2_ci.sh -b ../../firmware/prc/prc*.bit -s 8350"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  prc_qf2_cmoc_v07_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh cmoc_ci.sh -b ../../firmware/prc/prc*.bit"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  prc_qf2_pip2_v07_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh pip2_ci.sh -b ../../firmware/prc/prc*.bit"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  prc_fiber_qf2_v07_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh lcls2_ci.sh -b ../../firmware/prc/prc*.bit -a 192.168.0.201:803 -k -s 12500 -p"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  injector_qf2_v07_hires_run:
+    needs: [injector]
+    command: "cd software/injector && PYTHON=python3 BIT=../../firmware/injector/injector*.bit IP=192.168.1.30 CONFIG=b46_gun sh injector_ci.sh"
+    artifacts:
+      - "software/injector/injector_rf_*"
+  injector_qf2_v07_lcls2_run:
+    needs: [injector]
+    command: "cd software/injector && PYTHON=python3 BIT=../../firmware/injector/injector*.bit IP=192.168.1.40 CONFIG=lcls2_buncher sh injector_ci.sh"
+    artifacts:
+      - "software/injector/injector_rf_*"
+  prc_marble_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh lcls2_ci.sh -b ../../firmware/prc/prc_marble*.bit -m -ms 39"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  prc_fiber_marble_run:
+    needs: [prc]
+    command: "cd software/prc && PYTHON=python3 sh lcls2_ci.sh -b ../../firmware/prc/prc_fiber_marble*.bit -m -ms 39 -k"
+    artifacts:
+      - "software/prc/rf_controls_*"
+  resonance_control_qf2_v07_run:
+    needs: [resonance_control]
+    command: "cd software/res_ctl && PYTHON=python3 sh lbnl_rack.sh -b ../../firmware/resonance_control/resonance_control*.bit"
+    artifacts:
+      - "software/res_ctl/piezo_chirp_check__*"

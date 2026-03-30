@@ -1,9 +1,20 @@
 #!/bin/bash
-# This is the official script for build containers.
+# This is the official entrypoint script for build pods.
+set -e
 
-# Source the dev environment (This is needed for apps that have dependencies on the dev environment
-# For example, apps that build for linuxRT have dependencies on certain library paths)
+# If ADBS_COMMAND is set, run it directly (new config.yaml flow).
+# The command from config.yaml is what runs — no hidden steps.
+if [ -n "$ADBS_COMMAND" ]; then
+    cd "$ADBS_SOURCE"
+    echo "=== CBS Build ==="
+    echo "Component: $ADBS_COMPONENT"
+    echo "Branch: $ADBS_BRANCH"
+    echo "Command: $ADBS_COMMAND"
+    echo "================="
+    eval "$ADBS_COMMAND"
+    exit $?
+fi
+
+# Legacy fallback: source dev environment and run start_build.py
 source /afs/slac/g/lcls/tools/script/ENVS64.bash
-
-# Call the main python script to do the build
 python3 /build/start_build.py

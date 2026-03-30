@@ -1,0 +1,26 @@
+# Example config.yaml for an IOC application with multiple build configurations (e.g. for different OSes)
+repo: test-ioc
+organization: ad-build-test
+url: https://github.com/ad-build-test/test-ioc
+description: Test IOC application
+
+build:
+  rhel7:
+    image: ghcr.io/ad-build-test/rhel7-env:latest
+    command: |
+      source /afs/slac/g/lcls/tools/script/ENVS64.bash &&
+      make
+  rocky9:
+    image: ghcr.io/ad-build-test/rocky9-env:latest
+    command: |
+      source /afs/slac/g/lcls/tools/script/ENVS64.bash &&
+      make
+
+artifacts:
+  - bin
+  - db
+  - dbd
+  - iocBoot
+
+deploy:
+  playbook: ioc_module/ioc_deploy.yml

@@ -1,0 +1,9 @@
+# Example config.yaml for a TOOLS application
+repo: mc-tools-motion
+organization: slaclab
+url: https://github.com/slaclab/mc-tools-motion
+description: mc-tools
+
+# Deployment playbook
+deploy:
+  playbook: tools_module/tools_deploy.yml

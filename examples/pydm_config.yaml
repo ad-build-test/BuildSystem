@@ -1,0 +1,9 @@
+# Example config.yaml for a PyDM display application
+repo: mc-displays
+organization: slaclab
+url: https://github.com/slaclab/mc-displays
+description: mc-displays
+
+# Deployment playbook
+deploy:
+  playbook: pydm_module/pydm_deploy.yml

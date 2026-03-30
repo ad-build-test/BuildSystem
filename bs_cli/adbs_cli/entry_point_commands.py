@@ -137,9 +137,10 @@ def generate_deployment_report(file_content: str, component_name: str, tag: str)
     click.echo(f"Report downloaded successfully to {file_path}")
 
 def poll_deployment(response, deployment_status_request: Request):
-    """Poll deployment until complete, return final status"""
+    """Poll deployment until complete, return (report_response, elog_url)"""
     data = response.json()
     task_id = data.get("task_id", None)
+    elog_url = ""
     sleep(2) # Wait a bit for deployment status
     for _ in range(30):  # 5 min max
         deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_STATUS,
@@ -153,6 +154,7 @@ def poll_deployment(response, deployment_status_request: Request):
             click.echo(f"\r\033[K{progress['percent']}% - {progress['current_step']}  ", nl=False)
 
         if status_data["status"] == "completed":
+            elog_url = status_data.get("result", {}).get("elog_url", "")
             click.echo("\n== ADBS == Completed deployment. ")
             break
 
@@ -160,7 +162,7 @@ def poll_deployment(response, deployment_status_request: Request):
     # Download report
     deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REPORT,
                                             task_id=task_id)
-    return deployment_status_request.get_request(log=False)
+    return deployment_status_request.get_request(log=False), elog_url
 
 @click.command()
 def configure_user():
@@ -222,6 +224,23 @@ _bs_completion_setup;
     
     click.echo(f"** Successfully added to {conf_file} **")
     click.echo(f"Please source {conf_file} or reload your shell to apply changes.")
+
+    # Ensure ~/.bashrc sources ~/.profile.d/*.conf (required on SLAC S3DF)
+    bashrc_path = os.path.expanduser("~/.bashrc")
+    profile_d_snippet = (
+        '\n# SLAC S3DF - source all files under ~/.profile.d\n'
+        'if [[ -e ~/.profile.d && -n "$(ls -A ~/.profile.d/)" ]]; then\n'
+        '  source <(cat $(find -L  ~/.profile.d -name \'*.conf\' | sort))\n'
+        'fi\n'
+    )
+    bashrc_has_snippet = False
+    if os.path.exists(bashrc_path):
+        with open(bashrc_path, "r") as f:
+            bashrc_has_snippet = "source <(cat $(find -L  ~/.profile.d" in f.read()
+    if not bashrc_has_snippet:
+        with open(bashrc_path, "a") as f:
+            f.write(profile_d_snippet)
+        click.echo(f"** Added ~/.profile.d sourcing block to {bashrc_path} **")
 
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
@@ -466,14 +485,17 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     deployment_request = Request(Component(component), Api.DEPLOYMENT)    
     deployment_request.set_component_name()
 
-    # Get app type
+    # Get app type from deploy.playbook in config.yaml
     user_src_repo = deployment_request.component.git_get_top_dir()
     manifest_filepath = user_src_repo + '/config.yaml'
     manifest_data = deployment_request.component.parse_manifest(manifest_filepath)
-    deployment_type = manifest_data.get('deploymentType', '').lower()
-    if not deployment_type:
-        click.echo("== ADBS == Error: 'deploymentType' not found or empty in manifest")
-        return
+    playbook = manifest_data.get('deploy', {}).get('playbook', '')
+    if 'ioc_module' in playbook:
+        deployment_type = 'ioc'
+    elif 'pydm_module' in playbook:
+        deployment_type = 'pydm'
+    else:
+        deployment_type = 'generic'
 
     # 1.1) Option - test
     if (test):
@@ -523,8 +545,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             return
         deployment_request.add_to_payload("component_name", deployment_request.component.name)
         deployment_request.add_to_payload("user", linux_uname)
-        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT,
-                                        deployment_type=deployment_type)
+        deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT_REVERT)
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
         for facility in user_specified_facilities:
             deployment_request.add_to_payload("facility", facility)
@@ -532,8 +553,8 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
             if (not response.ok):
                 click.echo(f"== ADBS == Error - {response.json()}")
                 return
-            response = poll_deployment(response, deployment_request)
-            file_content = response.content.decode('utf-8')
+            report_response, _ = poll_deployment(response, deployment_request)
+            file_content = report_response.content.decode('utf-8')
             generate_deployment_report(file_content, deployment_request.component.name, "revert")
         return
 
@@ -559,12 +580,9 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         "component_name": deployment_request.component.name,
         "tag": tag,
         "user": linux_uname,
-        "dry_run": dry_run
+        "dry_run": dry_run,
+        "playbook": playbook
     }
-
-    # 7) Figure out what the deployment type is and set the endpoint accordingly
-    user_src_repo = deployment_request.component.git_get_top_dir()
-    manifest_filepath = user_src_repo + '/config.yaml'
 
     # 6) Error check - If user specified iocs - Confirm with database that every ioc found in the source tree is in the database.
     if (deployment_type == 'ioc' and ioc): 
@@ -674,21 +692,17 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
     if (deployment_type == 'pydm'):
         subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
         playbook_args_dict["subsystem"] = subsystem
-        # Error check - For pydm deployments, there can be a pydm subsystem for more than one facility
-        # So user_specified_facilities is required.
-        if (len(user_specified_facilities) < 1):
-            click.echo("== ADBS == ERROR: Please specify the facility(s)")
-        
-        deployment_request.add_to_payload("return_elog", True) # Get elog entry back from deployment playbook to print to user
 
     # 8) Send deployment request to deployment controller
-    deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT,
-                                        deployment_type=deployment_type)
+    deployment_request.set_endpoint(ApiEndpoints.DEPLOYMENT)
     deployment_request.add_dict_to_payload(playbook_args_dict)
     if (len(user_specified_facilities) > 0):
         click.echo("== ADBS == Deploying to " + str(user_specified_facilities) + "...")
+    elif (deployment_type == 'ioc'):
+        click.echo("== ADBS == Deploying to all facilities with active deployments...")
     else:
-        click.echo("== ADBS == Deploying...")
+        click.echo("== ADBS == ERROR: Please specify the facility(s)")
+        return
     deployment_response = deployment_request.put_request(log=verbose)
     if (not deployment_response.ok):
         try:
@@ -697,7 +711,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
         except Exception:
             pass
 
-    if (deployment_type == 'pydm'): # add github deployment status in progress
+    if (deployment_type == 'pydm' or deployment_type == 'generic'): # add github deployment status in progress for all except ioc for now
         deployment_status_request = Request(Component(component), Api.BACKEND)  
         deployment_status_request.add_to_payload("name", deployment_request.component.name)
         deployment_status_request.add_to_payload("tag", tag)
@@ -714,18 +728,16 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
                 except Exception:
                     pass
         
-    if (deployment_type == 'ioc'): # If ioc deployment, then poll status
-        response = poll_deployment(response, deployment_request)
-        # Get the file content from the response
-        file_content = response.content.decode('utf-8')
+    # Poll all deployment types — PUT /deployment always returns 202 async
+    report_response, elog_url = poll_deployment(deployment_response, deployment_request)
+    if (deployment_type == 'ioc'):
+        file_content = report_response.content.decode('utf-8')
         generate_deployment_report(file_content, deployment_request.component.name, tag)
 
-    elog_url = deployment_response.json().get("elog_url", "")
     click.echo(f"== ADBS == Complete, log for details - {elog_url}")
-    if (deployment_type == 'pydm'): # add github deployment status success
+    if (deployment_type != 'ioc'  or deployment_type == 'generic'): # add github deployment status success for all except ioc for now
         deployment_status_request.add_to_payload("status", "SUCCESS")
         deployment_status_request.add_to_payload("logUrl", elog_url)
-        response = deployment_status_request.put_request(log=verbose)
         for facility in user_specified_facilities:
             deployment_status_request.add_to_payload("facility", facility)
             deployment_status_request.set_endpoint(ApiEndpoints.DEPLOYMENT_CREATE_GH_STATUS)

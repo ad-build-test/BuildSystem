@@ -4,7 +4,6 @@ Desc: Deployment controller, handles deployments
 Usage: python3 deployment_controller.py
 note - this would have to run 24/7 as a service
 """
-from contextlib import asynccontextmanager, contextmanager
 import os
 import shutil
 import uuid
@@ -20,10 +19,10 @@ import json
 import time
 import asyncio
 from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
-from typing import Dict, Optional
-from datetime import datetime, timezone, timedelta
+from typing import Optional
+from datetime import datetime
 from dateutil import parser
 
 """
@@ -61,6 +60,7 @@ if (ELOG_SW_LOG_ID == None):
 ELOG_HEADERS = {"x-vouch-idp-accesstoken": ELOG_USER_PASSWORD}
 
 APP_PATH = "/app"
+REQUEST_TIMEOUT = 60  # seconds, for all external HTTP calls
 
 # Container deployment secrets are loaded per-app from environment variables.
 # Naming convention: CONTAINER_{APP_KEY}_{SECRET}
@@ -76,7 +76,7 @@ def get_container_secrets(component_name: str) -> dict:
     }
 # NOTE - ORDER MATTERS (Last item on the list "wins" if there are overlapping files when deploying for multiple OS)
 # Please make sure latest OS is the last item.
-USED_OS_LIST = ["RHEL7", "ROCKY9"] 
+USED_OS_LIST = ["rhel7", "rocky9"] 
 
 FACILITIES_LIST = ["LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]
 
@@ -135,8 +135,8 @@ def save_task(task: DeploymentTask):
         "result": task.result,
         "error": task.error
     }
-    # Auto-expire after 5 mins
-    redis_client.setex(f"task:{task.task_id}", 300, json.dumps(task_dict))
+    # Auto-expire after 10 mins
+    redis_client.setex(f"task:{task.task_id}", 600, json.dumps(task_dict))
 
 def get_task(task_id: str) -> DeploymentTask:
     """Load task from Redis"""
@@ -161,47 +161,34 @@ class RevertDict(Component):
     user: str
     facility: str
     ioc_list: Optional[list] = None
-    reboot_iocs: Optional[bool] = False # Optional
+    reboot_iocs: Optional[bool] = False
 
-class IocDict(Component):
-    facilities: Optional[list] = None  # Optional, defaults to None
+class DeployDict(Component):
+    """Unified deployment request model. The playbook field determines app type and which
+    Ansible playbook runs. Special logic is applied for ioc_module and pydm_module playbooks;
+    everything else uses the generic handler (download release → run playbook)."""
     tag: str
+    user: str
+    playbook: str                          # e.g. "ioc_module/ioc_deploy.yml"
+    facilities: Optional[list] = None
+    dry_run: Optional[bool] = False
+    return_elog: Optional[bool] = False
+    # IOC-specific
     ioc_list: Optional[list] = None
-    user: str
-    dry_run: Optional[bool] = False # Optional
-    reboot_iocs: Optional[bool] = False # Optional
-
-class PydmDict(Component):
-    facilities: Optional[list] = None # Optional
-    tag: str
-    user: str
-    dry_run: Optional[bool] = False # Optional
-    subsystem: Optional[str] = "" # Optional Ex: [mps, mgnt, vac, prof, etc.]
-    return_elog: Optional[bool] = False # Optional
-
-class ContainerDict(Component):
-    facilities: Optional[list] = None # Optional
-    tag: str
-    user: str
-    return_elog: Optional[bool] = False # Optional
-    force_deploy: Optional[bool] = False # Optional
-    # App-specific configuration
-    docker_network: Optional[str] = None # Docker network name for inter-container DNS
-    migration_command: Optional[str] = None # e.g., "alembic upgrade head" — skipped if not set
-    health_check_path: Optional[str] = "/health" # Health check endpoint path
-    # Secrets — passed from GitHub Actions via core-build-system, with env var fallback
+    reboot_iocs: Optional[bool] = False
+    # PyDM-specific
+    subsystem: Optional[str] = ""
+    # Container-specific
+    force_deploy: Optional[bool] = False
+    docker_network: Optional[str] = None
+    migration_command: Optional[str] = None
+    health_check_path: Optional[str] = "/health"
     database_url: Optional[str] = None
     redis_url: Optional[str] = None
     ghcr_token: Optional[str] = None
     ghcr_user: Optional[str] = None
-
-class AppDict(Component):
-    facilities: Optional[list] = None
-    tag: str
-    user: str
-    return_elog: Optional[bool] = False
-    artifact_url: Optional[str] = None   # GitHub release asset URL
-    artifact_type: Optional[str] = 'rpm' # rpm, tar, zip
+    # Generic extra vars forwarded to the playbook as-is
+    extra_vars: Optional[dict] = None
 
 class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
@@ -235,7 +222,7 @@ def add_log_to_component(facility: str, timestamp: str, user: str, component_to_
         "user": user,
     }
     endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}/logs'
-    response = requests.post(endpoint, json=deployment_log)
+    response = requests.post(endpoint, json=deployment_log, timeout=REQUEST_TIMEOUT)
     return True
 
 def add_new_component(facility: str, app_type: str, component_name: str,
@@ -260,7 +247,7 @@ def add_new_component(facility: str, app_type: str, component_name: str,
 
     logging.debug(f"new_component: {new_component}")
     endpoint = BACKEND_URL + 'deployments'
-    response = requests.post(endpoint, json=new_component)
+    response = requests.post(endpoint, json=new_component, timeout=REQUEST_TIMEOUT)
     return True
 
 def update_component_in_facility(facility: str, app_type: str, component_to_update: str,
@@ -294,14 +281,14 @@ def update_component_in_facility(facility: str, app_type: str, component_to_upda
     # 4) Update component in db
     logging.debug(component)
     endpoint = BACKEND_URL + f'deployments/{component_to_update}/{facility}'
-    response = requests.put(endpoint, json=component)
+    response = requests.put(endpoint, json=component, timeout=REQUEST_TIMEOUT)
     logging.debug(f"response.json(): {response.json()}")
     return True
 
 def find_component_in_facility(facility: str, component_to_find: str) -> dict:
     """ Function to return component information """
     endpoint = BACKEND_URL + f'deployments/{component_to_find}/{facility}'
-    response = requests.get(endpoint)
+    response = requests.get(endpoint, timeout=REQUEST_TIMEOUT)
     if (response.ok):
         return response.json()['payload']
     else: 
@@ -312,7 +299,7 @@ def find_recent_deployment_for_component_facility(facility: str, component_to_fi
         deployment_index: 0 is the most recent, 1 is second most recent, etc.
     """
     endpoint = BACKEND_URL + f'deployments/{component_to_find}/{facility}/logs'
-    response = requests.get(endpoint)
+    response = requests.get(endpoint, timeout=REQUEST_TIMEOUT)
     if (response.ok):
         payload = response.json()['payload']
     else: 
@@ -343,29 +330,12 @@ def find_facility_an_ioc_is_in(ioc_to_find: str, component_with_ioc: str) -> lis
 def extract_date(entry) -> datetime:
     return datetime.fromisoformat(entry['date'])
 
-def change_directory(path):
-    try:
-        os.chdir(path)
-        # print(f"Changed directory to {os.getcwd()}")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Directory {path} not found.")
-
-def rename_directory(src_dir, dest_dir):
-    try:
-        if os.path.isdir(src_dir):
-            os.rename(src_dir, dest_dir)
-            print(f"Renamed directory {src_dir} to {dest_dir}")
-        else:
-            raise ValueError(f"Directory {src_dir} not found.")
-    except Exception as e:
-        raise ValueError(f"Error renaming directory: {e}")
-
 def create_tarball(directory, tag):
     tarball_name = f"{tag}.tar.gz"
     try:
         with tarfile.open(tarball_name, "w:gz") as tar:
             tar.add(directory, arcname=os.path.basename(directory))
-        print(f"Created tarball: {tarball_name}")
+        logging.debug(f"Created tarball: {tarball_name}")
         return tarball_name
     except Exception as e:
         raise ValueError(f"Error creating tarball: {e}")
@@ -383,7 +353,7 @@ def parse_shebang(shebang_line: str):
         binary_name = parts[1]    # Second part is the binary name (e.g., myApp)
         return architecture, binary_name
     else:
-        print(f"Warning: Invalid path structure in shebang line: {shebang_line}")
+        logging.warning(f"Invalid path structure in shebang line: {shebang_line}")
         return None, None
 
 def extract_ioc_cpu_shebang_info(app_dir_name: str) -> dict:
@@ -395,7 +365,7 @@ def extract_ioc_cpu_shebang_info(app_dir_name: str) -> dict:
 
     # 3) Check if the iocBoot directory exists
     if not os.path.exists(iocBoot_dir):
-        print(f"Error: The directory {iocBoot_dir} does not exist in the extracted files.")
+        logging.error(f"Directory {iocBoot_dir} does not exist in the extracted files.")
         return []
     
     results = []
@@ -423,7 +393,7 @@ def extract_ioc_cpu_shebang_info(app_dir_name: str) -> dict:
                         'binary': binary_name
                     })
             else:
-                print(f"Warning: No shebang line in {st_cmd_path}")
+                logging.warning(f"No shebang line in {st_cmd_path}")
     
     return results
 
@@ -440,7 +410,7 @@ def cleanup_temp_deployment_dir(directory: str):
         logging.error(f"Error cleaning up directory {directory}: {str(e)}")
 
 def download_release_helper(endpoint: str, download_dir: str, tarball_name: str, extract_tarball: bool):
-    response = requests.get(endpoint)
+    response = requests.get(endpoint, timeout=REQUEST_TIMEOUT)
     # Download file from api, and extract to download_dir
     # Download the .tar.gz file
     tarball_filepath = os.path.join(download_dir, tarball_name)
@@ -519,6 +489,24 @@ def write_file(filepath: str, content: str):
     with open(filepath, 'w') as file:
         file.write(content)
 
+def get_inventory_path() -> str:
+    """Return the Ansible inventory file path based on TEST_INVENTORY flag."""
+    suffix = 'test_inventory.ini' if TEST_INVENTORY else 'global_inventory.ini'
+    return ANSIBLE_PLAYBOOKS_PATH + suffix
+
+def finalize_deployment(component_name: str, tag: str, user: str, facilities: list,
+                        deployment_output: str, status: int, deployment_success: bool,
+                        deployment_report_file: str, dry_run: bool,
+                        facilities_ioc_dict: dict = None) -> dict:
+    """Generate deployment report, write to ELOG, and return the standard result dict."""
+    summary = generate_report(component_name, tag, user, deployment_output, status,
+                              deployment_report_file, facilities_ioc_dict, dry_run)
+    elog_url = ""
+    if not dry_run:
+        elog_url = send_deployment_to_elog(component_name, tag, facilities, summary) or ""
+    return {"summary": summary, "report_file": deployment_report_file,
+            "status": status, "success": deployment_success, "elog_url": elog_url}
+
 def generate_report(component_name: str, tag: str, user: str, deployment_output: str, status: int, deployment_report_file: str, facilities_ioc_dict: dict=None, dry_run: bool=False):
     """ Generate a deployment report """
     summary = \
@@ -530,9 +518,7 @@ f"""#### Deployment report for {component_name} - {tag} ####
         summary += f"\n#### IOCs deployed: {facilities_ioc_dict}"
 
     if (status == 200): # 200 means success
-        # 6.2) Write summary of deployment to report at the top
         summary += "\n#### Overall status: Success\n\n" + deployment_output
-        write_file(deployment_report_file, summary)
     else: # Failure
         status = 400
         summary += "\n#### Overall status: Failure - PLEASE REVIEW\n\n" + deployment_output
@@ -545,7 +531,7 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
     """
     Writes processed data to ELOG backend API based on the message type
     """
-    print(f"Writing to the ELOG (SW_LOG) logbook through backend API for: {component_name} - {tag}")
+    logging.debug(f"Writing to the ELOG (SW_LOG) logbook through backend API for: {component_name} - {tag}")
 
     title = f"Deployment: {component_name} - {tag} {facilities}"
     text = f"<pre>{summary_report}</pre>"
@@ -567,58 +553,57 @@ def send_deployment_to_elog(component_name: str, tag: str, facilities: list, sum
 
     # Send the request
     try:
-        print(f"Sending request to: {ELOG_ENDPOINT}")
-        print(f"Headers: {ELOG_HEADERS}")
-        response = requests.post(ELOG_ENDPOINT, headers=ELOG_HEADERS, json=payload)
+        logging.debug(f"Sending request to: {ELOG_ENDPOINT}")
+        response = requests.post(ELOG_ENDPOINT, headers=ELOG_HEADERS, json=payload, timeout=REQUEST_TIMEOUT)
         
-        print(f"Response status code: {response.status_code}")
-        print(f"Response headers: {response.headers}")
+        logging.debug(f"Response status code: {response.status_code}")
+        logging.debug(f"Response headers: {response.headers}")
         
         # Try to raise for status
         response.raise_for_status()
         
-        print(f"Successfully sent to ELOG API: {response.status_code}")
-        print(f"response: {response}")
-        print(f"response payload: {response.json()['payload']}")
+        logging.debug(f"Successfully sent to ELOG API: {response.status_code}")
+        logging.debug(f"response: {response}")
+        logging.debug(f"response payload: {response.json()['payload']}")
         elog_url = ELOG_URL_PREFIX + response.json()['payload'] + ELOG_URL_POSTFIX
         return elog_url
     except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP Error: {http_err}")
+        logging.error(f"HTTP Error: {http_err}")
         
         # Print detailed response information
-        print(f"Response status code: {response.status_code}")
-        print(f"Response reason: {response.reason}")
+        logging.error(f"Response status code: {response.status_code}")
+        logging.error(f"Response reason: {response.reason}")
         
         # Try to get response text (may contain error details)
         try:
-            print(f"Response text: {response.text}")
+            logging.error(f"Response text: {response.text}")
         except:
-            print("Could not get response text")
+            logging.error("Could not get response text")
         
         # Try to parse JSON response (may contain error details)
         try:
-            print(f"Response JSON: {response.json()}")
+            logging.debug(f"Response JSON: {response.json()}")
         except:
-            print("Response is not valid JSON")
+            logging.error("Response is not valid JSON")
         
-        print(f"Request URL: {response.request.url}")
-        print(f"Request method: {response.request.method}")
-        print(f"Request headers: {response.request.headers}")
-        print(f"Request body: {response.request.body}")
+        logging.debug(f"Request URL: {response.request.url}")
+        logging.debug(f"Request method: {response.request.method}")
+        logging.debug(f"Request headers: {response.request.headers}")
+        logging.debug(f"Request body: {response.request.body}")
         
         return False
     except requests.exceptions.ConnectionError as conn_err:
-        print(f"Connection Error: {conn_err}")
+        logging.error(f"Connection Error: {conn_err}")
         return False
     except requests.exceptions.Timeout as timeout_err:
-        print(f"Timeout Error: {timeout_err}")
+        logging.error(f"Timeout Error: {timeout_err}")
         return False
     except requests.exceptions.RequestException as req_err:
-        print(f"Request Error: {req_err}")
+        logging.error(f"Request Error: {req_err}")
         return False
     except Exception as e:
-        print(f"General Error: {e}")
-        print(f"Failed payload: {payload}")
+        logging.error(f"General Error: {e}")
+        logging.error(f"Failed payload: {payload}")
         return False
 
 # Begin API functions =================================================================================
@@ -677,7 +662,8 @@ async def get_deployment_status(task_id: str):
     
     if task.status == "completed":
         response["result"] = {
-            "summary": task.result.get("summary")
+            "summary": task.result.get("summary"),
+            "elog_url": task.result.get("elog_url", "")
         }
     elif task.status == "failed":
         response["error"] = task.error
@@ -706,32 +692,6 @@ async def download_deployment_report(task_id: str):
         media_type='text/plain'
     )
 
-@app.post("/tag")
-async def post_tag_creation(tag_request: TagDict):
-    """
-    Function to create a tag and push it to artifact storage
-    """
-    return NotImplementedError
-    results_dir_top = os.path.join(SCRATCH_FILEPATH, tag_request.results, tag_request.component_name)
-
-    # 1) Change to the 'build_results' directory
-    build_results_dir = os.path.join(results_dir_top, "build_results")
-    build_results = f"{tag_request.component_name}-{tag_request.branch}"
-    change_directory(build_results_dir)
-
-    # 2) Rename the specified directory to the tag
-    build_results_full_path = os.path.join(build_results_dir, build_results)
-    tagged_dir_path = os.path.join(build_results_dir, tag_request.tag)
-    rename_directory(build_results_full_path, tagged_dir_path)
-
-    # 3) Create a tarball of the renamed directory
-    tarball_name = create_tarball(tagged_dir_path, tag_request.tag)
-    full_tarball_path = os.path.join(build_results_dir, tarball_name)
-    # 4) Push to artifact storage
-    return_code = artifact_api.put_component_to_registry(tag_request.component_name, full_tarball_path, tag_request.tag)
-    return JSONResponse(content={"payload": "Success"}, status_code=return_code)
-
-
 @app.put("/ioc/deployment/revert")
 async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: BackgroundTasks):
     """
@@ -759,116 +719,74 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
         
         revert_tag = previous_deployment.get("tag")
 
-    # 2) Deploy the reverted deployment for this facility 
-    revert_deployment = IocDict(component_name=ioc_to_deploy.component_name,
+    # 2) Deploy the reverted deployment for this facility
+    if not revert_tag:
+        return JSONResponse(status_code=400, content={"payload": "No previous deployment found to revert to"})
+    revert_deployment = DeployDict(component_name=ioc_to_deploy.component_name,
                             facilities=[ioc_to_deploy.facility],
                             tag=revert_tag,
                             ioc_list=iocs_that_changed,
-                            user=ioc_to_deploy.user)
+                            user=ioc_to_deploy.user,
+                            playbook='ioc_module/ioc_deploy.yml')
 
-    task_id = await deploy_ioc(revert_deployment, background_tasks, True)
+    return await deploy(revert_deployment, background_tasks)
 
-    return JSONResponse(
-        status_code=202,
-        content={
-            "task_id": task_id,
-            "status": "pending"
-        }
-    )
-
-@app.put("/ioc/deployment")
-async def deploy_ioc(ioc_to_deploy: IocDict, background_tasks: BackgroundTasks, return_id_only: bool=False):
-    """Main entry point for IOC deployment API (async 202 pattern)"""
+@app.put("/deployment")
+async def deploy(deploy_request: DeployDict, background_tasks: BackgroundTasks):
+    """Unified deployment endpoint. Routes to IOC, PyDM, container, or generic handler
+    based on the playbook field (e.g. 'ioc_module/...', 'pydm_module/...', 'container_module/...')."""
     task_id = str(uuid.uuid4())
-    
-    # Create task
     task = DeploymentTask(task_id, save_callback=save_task)
     save_task(task)
-    
-    # Start deployment in background
-    background_tasks.add_task(
-        deploy_ioc_async,
-        task_id,
-        ioc_to_deploy
-    )
-    logging.debug(f"Returning TASK_ID: {task_id}")
-    if (return_id_only):
-        return task_id
+    background_tasks.add_task(deploy_async, task_id, deploy_request)
+    return JSONResponse(status_code=202, content={"task_id": task_id, "status": "pending"})
 
-    return JSONResponse(
-        status_code=202,
-        content={
-            "task_id": task_id,
-            "status": "pending"
-        }
-    )
-
-async def deploy_ioc_async(task_id: str, ioc_to_deploy: IocDict):
-    """
-    Runs the deployment logic asynchronously and updates task status
-
-    Main entry point for IOC deployment API.
-    Handles these deployment scenarios:
-    1. Deploy tag to select existing IOCs 
-        (IOCs specified, facility not required)
-        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 R1.3.4
-    2. Deploy tag to all existing IOCs 
-        (IOCs specified, facility not required)
-        2.1. Deploy tag to all existing IOCs but user specified which facilities they want to update. 
-        This would end up being case 2, but the cli would need logic 
-        to figure out which IOCs in the facilities to deploy
-        ex: bs deploy -i ALL -f LCLS, FACET R1.3.4
-    3. Deploy tag to new IOCs 
-        (IOCs specified, facility required)
-        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 -f LCLS R1.3.4
-    4. Deploy tag to component 
-        (no IOCs, facility required) - works for both new and existing components
-        ex: bs deploy -f LCLS R1.3.4
-    5. Deploy tag to new component AND new IOCs 
-        (IOCs specified, facility required)
-        ex: bs deploy -i sioc-sys0-bs01, sioc-sys0-bs02 -f LCLS R1.3.4
-    """
-    await asyncio.sleep(0.1)  # Force yield
+async def deploy_async(task_id: str, deploy_request: DeployDict):
+    """Dispatch to the right deployment handler based on playbook path."""
+    await asyncio.sleep(0.1)
     task = get_task(task_id)
-    temp_download_dir = f"{APP_PATH}/tmp/{task_id}"
-    task.temp_dir = temp_download_dir
-    
+    temp_dir = f"{APP_PATH}/tmp/{task_id}"
+    os.makedirs(temp_dir, exist_ok=True)
+    task.temp_dir = temp_dir
     try:
-        os.makedirs(temp_download_dir, exist_ok=True)
-        logging.info(f"New deployment request data: {ioc_to_deploy}")
-        
-        task.update_progress("Determining deployment type", 5)
-        
-        # Handle component-only deployment
-        if not ioc_to_deploy.ioc_list:
-            logging.info("Component-only deployment")
-            task.update_progress("Component-only deployment", 10)
-            result = deploy_component(ioc_to_deploy, temp_download_dir, task)
-        
-        # Handle IOC deployments
-        elif ioc_to_deploy.facilities:
-            logging.info("Deploy tag to new IOCs")
-            # Case 3: Deploy tag to new IOCs (IOCs specified, facility required)
-            # Case 5: Deploy new component AND new IOCs (IOCs specified, facility required)
-            task.update_progress("Deploying to new IOCs", 10)
-            result = deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, task)
+        if 'ioc_module' in deploy_request.playbook:
+            result = await asyncio.get_running_loop().run_in_executor(None, deploy_ioc_sync, deploy_request, temp_dir, task)
+        elif 'container_module' in deploy_request.playbook:
+            result = await asyncio.get_running_loop().run_in_executor(None, deploy_container_sync, deploy_request, temp_dir, task)
         else:
-            logging.info("Deploy tag to existing IOCs")
-            # Cases 1 & 2: Deploy tag to existing IOCs (facility not required)
-            task.update_progress("Deploying to existing IOCs", 10)
-            result = deploy_existing_iocs(ioc_to_deploy, temp_download_dir, task)
-        
-        # Store result (summary and report file path)
+            result = await asyncio.get_running_loop().run_in_executor(None, run_generic_deployment, deploy_request, temp_dir, task)
         task.complete(result)
-        
     except Exception as e:
         logging.exception(f"Deployment {task_id} failed")
         task.fail(str(e))
-        # Cleanup on failure
-        if os.path.exists(temp_download_dir):
-            cleanup_temp_deployment_dir(temp_download_dir)
+        cleanup_temp_deployment_dir(temp_dir)
 
-def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
+def deploy_ioc_sync(ioc_to_deploy: DeployDict, temp_download_dir: str, task: DeploymentTask):
+    """
+    IOC deployment logic. Handles these scenarios:
+    1. Deploy tag to select existing IOCs (IOCs specified, facility not required)
+    2. Deploy tag to all existing IOCs
+    3. Deploy tag to new IOCs (IOCs specified, facility required)
+    4. Deploy tag to component only (no IOCs, facility required)
+    5. Deploy new component AND new IOCs
+    """
+    logging.info(f"New IOC deployment request: {ioc_to_deploy}")
+    # Handle component-only deployment
+    if not ioc_to_deploy.ioc_list:
+        logging.info("Component-only deployment")
+        task.update_progress("Component-only deployment", 10)
+        return deploy_component(ioc_to_deploy, temp_download_dir, task)
+    # IOC deployments with facility specified (new IOCs or new component)
+    elif ioc_to_deploy.facilities:
+        logging.info("Deploy tag to new IOCs")
+        task.update_progress("Deploying to new IOCs", 10)
+        return deploy_iocs_with_facility(ioc_to_deploy, temp_download_dir, task)
+    else:
+        logging.info("Deploy tag to existing IOCs")
+        task.update_progress("Deploying to existing IOCs", 10)
+        return deploy_existing_iocs(ioc_to_deploy, temp_download_dir, task)
+
+def deploy_component(ioc_to_deploy: DeployDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle component-only deployment
     - Deploy tag to component (either new or existing) with facility specified
@@ -898,7 +816,7 @@ def deploy_component(ioc_to_deploy: IocDict, temp_download_dir: str, task: Deplo
         facilities_ioc_dict, new_component, task
     )
 
-def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
+def deploy_existing_iocs(ioc_to_deploy: DeployDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle deployments to existing IOCs
     - Case 1: Deploy tag to select existing IOCs 
@@ -929,7 +847,7 @@ def deploy_existing_iocs(ioc_to_deploy: IocDict, temp_download_dir: str, task: D
         facilities_ioc_dict, False, task # No new components
     )
 
-def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, task: DeploymentTask):
+def deploy_iocs_with_facility(ioc_to_deploy: DeployDict, temp_download_dir: str, task: DeploymentTask):
     """
     Handle deployment of IOCs with facility specified
     - Case 3: Deploy tag to new IOCs (facility required)
@@ -961,7 +879,7 @@ def deploy_iocs_with_facility(ioc_to_deploy: IocDict, temp_download_dir: str, ta
     )
 
 
-def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str, 
+def execute_ioc_deployment(ioc_to_deploy: DeployDict, temp_download_dir: str, 
                       facilities_ioc_dict: dict, new_component: bool, task: DeploymentTask):
     """
     Called by the specific deployment functions after they determine what to deploy.
@@ -990,9 +908,7 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
         ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
         playbook_args_dict['playbook_path'] = ioc_playbooks_path
         local_ioc_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'ioc_module'
-        inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
-        if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
-        else: inventory_file_path += 'global_inventory.ini'
+        inventory_file_path = get_inventory_path()
 
         # Skip facilities with empty IOC lists for component-only deployments
         is_component_only = len(facilities_ioc_dict[facility]) == 0
@@ -1074,144 +990,22 @@ def execute_ioc_deployment(ioc_to_deploy: IocDict, temp_download_dir: str,
                 facilities_ioc_dict[facility]
             )
         
-    # Error check - If deployment output is empty, then nothing was deployed
-    if (deployment_output == ""):
-        return JSONResponse(content={"payload": {"Error": "No deployments performed. This may be due to empty IOC lists or invalid component/facility combinations."}}, status_code=400)
+    if deployment_output == "":
+        raise ValueError("No deployments performed. This may be due to empty IOC lists or invalid component/facility combinations.")
 
-    # Generate summary for report
     task.update_progress("Generating deployment report", 90)
-    summary = generate_report(ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user, 
-                            deployment_output, status, deployment_report_file, facilities_ioc_dict, ioc_to_deploy.dry_run)
-
-    # Send summary to elog
-    if (not ioc_to_deploy.dry_run):
+    if not ioc_to_deploy.dry_run:
         task.update_progress("Writing to ELOG", 95)
-        send_deployment_to_elog(ioc_to_deploy.component_name, ioc_to_deploy.tag, list(facilities_ioc_dict.keys()), summary)
+    return finalize_deployment(
+        ioc_to_deploy.component_name, ioc_to_deploy.tag, ioc_to_deploy.user,
+        list(facilities_ioc_dict.keys()), deployment_output, status, deployment_success,
+        deployment_report_file, ioc_to_deploy.dry_run, facilities_ioc_dict
+    )
 
-    task.complete(summary)
-
-    # Return ansible playbook output to user
-    return {
-        "summary": summary,
-        "report_file": deployment_report_file,
-        "status": status
-    }
-    
-@app.put("/pydm/deployment")
-async def deploy_pydm(pydm_to_deploy: PydmDict, background_tasks: BackgroundTasks):
-    """
-    Function to deploy a pydm "screen/display" component
-    """
-    # 1) Setup temporary directory for deployment contents
-    request_id = str(uuid.uuid4())
-    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
-    os.makedirs(temp_download_dir, exist_ok=True)
-    logging.info(f"New deployment request data: {pydm_to_deploy}")
-    # 2) Call to backend to get component/tag from github releases
-    if (not download_release(pydm_to_deploy.component_name, pydm_to_deploy.tag, temp_download_dir, all_os=False)):
-        return JSONResponse(content={"payload": {"Error": "Deployment tag may not exist or software factory backend is broken"}}, status_code=400)
-
-    # 3) Logic for special cases
-    facilities = pydm_to_deploy.facilities
-
-    # If subsystem not passed, then use component name
-    pydm_to_deploy.subsystem = pydm_to_deploy.component_name.replace("pydm-", "").replace("-displays", "")
-
-    # Special case - if adding new deployment
-    deploy_new_component = False
-    # If adding to multiple facilities, loop through them
-    for facility in facilities:
-        # Check if deployment already exists
-        component = find_component_in_facility(facility, pydm_to_deploy.component_name)
-        logging.debug(f"component: {component}")
-        if (component):
-            deploy_new_component = False
-        else:
-            # Otherwise create a new entry to deployment database
-            deploy_new_component = True
-    logging.debug(f"deploy_new_component: {deploy_new_component}")
-
-    local_pydm_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'pydm_module'
-    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
-    if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
-    else: inventory_file_path += 'global_inventory.ini'
-
-    tarball = f'{pydm_to_deploy.tag}.tar.gz'
-    tarball_filepath = os.path.join(temp_download_dir, tarball)
-    
-    # in the loop below copy the ioc_dict, but only get the iocs within that facility (facilities_ioc_dict[facility])
-    # 4) Call the appropriate ansible playbook for each applicable facility 
-    playbook_args_dict = pydm_to_deploy.model_dump()
-    playbook_args_dict['tarball'] = tarball_filepath
-    status = 200
-    deployment_report_file = temp_download_dir + '/deployment-report-' + pydm_to_deploy.component_name + '-' + pydm_to_deploy.tag + '.log'
-    deployment_output = ""
-    for facility in facilities:
-        logging.info(f"facility: {facility}")
-        # 5) If component doesn't exist in facility and not a new component, then skip.
-        if (not deploy_new_component and find_component_in_facility(facility, pydm_to_deploy.component_name) is None):
-            continue
-
-        playbook_args_dict['facility'] = facility
-    # TODO: - may want to do a dry run first to see if there would be any fails.
-        playbook_args = json.dumps(playbook_args_dict) # Convert dictionary to JSON string
-        stdout, stderr, return_code = ansible_api.run_ansible_playbook(inventory_file_path, local_pydm_playbooks_path + '/pydm_deploy.yml',
-                                        facility, playbook_args, return_output=True, no_color=True, check_mode=pydm_to_deploy.dry_run)
-        # 5.1) Combine output
-        current_output = ""
-        current_output += "== Deployment output for " + facility + ' ==\n\n' + stdout
-        deployment_success = True
-        if (return_code != 0):
-            status = 400 # Deployment failed
-            if (stderr != ''):
-                current_output += "\n== Errors ==\n\n" + stderr
-                deployment_success = False
-        deployment_output += current_output
-
-
-        if (not pydm_to_deploy.dry_run):
-            # 6) Write new configuration to deployment db for each facility
-            update_db_after_deployment(deployment_success, deploy_new_component, facility, 'pydm', pydm_to_deploy.component_name,
-                                        pydm_to_deploy.tag, pydm_to_deploy.user, current_output)
-    
-    # Error check - If deployment output is empty, then the component can't be found in deployment database
-    if (deployment_output == ""):
-        return JSONResponse(content={"payload": {"No deployments performed. This may be due to invalid component/facility combinations"}}, status_code=400)
-    
-    # 6) Generate summary for report
-    summary = generate_report(pydm_to_deploy.component_name, pydm_to_deploy.tag, pydm_to_deploy.user,
-                            deployment_output, status, deployment_report_file, dry_run=pydm_to_deploy.dry_run)
-    
-    # Send summary to elog
-    if (not pydm_to_deploy.dry_run):
-        elog_url = send_deployment_to_elog(pydm_to_deploy.component_name, pydm_to_deploy.tag, facilities, summary)
-
-    # Add cleanup
-    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
-
-    # 7) Return ansible playbook output to user
-    if os.getenv('PYTHON_TESTING') == 'True':
-        content = summary
-        return Response(content=content, media_type="text/plain", status_code=status)
-    elif (pydm_to_deploy.return_elog):
-        return JSONResponse(content={
-                "success": deployment_success,
-                "elog_url": elog_url
-        })
-    else:
-        return FileResponse(path=deployment_report_file, status_code=status)
-
-
-@app.put("/container/deployment")
-async def deploy_container(container_to_deploy: ContainerDict, background_tasks: BackgroundTasks):
-    """
-    Deploy a containerized application via Docker Compose.
-    Runs the container_module Ansible playbook to pull images and deploy services.
-    Secrets can be passed in the request body (from GitHub Actions) or loaded from environment variables as fallback.
-    """
+def deploy_container_sync(container_to_deploy: DeployDict, temp_dir: str, task: DeploymentTask):
+    """Container deployment logic. No source tarball needed — just runs the container playbook."""
     logging.info(f"New container deployment request: {container_to_deploy}")
 
-    # Use request body secrets if provided, otherwise fall back to per-app env vars
     env_secrets = get_container_secrets(container_to_deploy.component_name)
     secrets = {
         'database_url': container_to_deploy.database_url or env_secrets['database_url'],
@@ -1221,13 +1015,9 @@ async def deploy_container(container_to_deploy: ContainerDict, background_tasks:
     }
     if not secrets['database_url']:
         app_key = container_to_deploy.component_name.upper().replace("-", "_")
-        return JSONResponse(content={"payload": {"Error": f"database_url not provided in request and CONTAINER_{app_key}_DATABASE_URL environment variable not set"}}, status_code=500)
+        raise ValueError(f"database_url not provided and CONTAINER_{app_key}_DATABASE_URL env var not set")
 
-    # Setup paths
-    local_container_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'container_module'
-    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
-    if (TEST_INVENTORY): inventory_file_path += 'test_inventory.ini'
-    else: inventory_file_path += 'global_inventory.ini'
+    inventory_file_path = get_inventory_path()
 
     # Build extra-vars for Ansible (app_name comes from component_name)
     # Only include optional fields that are configured
@@ -1253,17 +1043,15 @@ async def deploy_container(container_to_deploy: ContainerDict, background_tasks:
     status = 200
     deployment_output = ""
     deployment_success = True
-    request_id = str(uuid.uuid4())
-    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
-    os.makedirs(temp_download_dir, exist_ok=True)
-    deployment_report_file = temp_download_dir + '/deployment-report-' + container_to_deploy.component_name + '-' + container_to_deploy.tag + '.log'
+    deployment_report_file = os.path.join(temp_dir, f'deployment-report-{container_to_deploy.component_name}-{container_to_deploy.tag}.log')
+    full_playbook_path = os.path.join(ANSIBLE_PLAYBOOKS_PATH, container_to_deploy.playbook)
 
     for facility in facilities:
         logging.info(f"Deploying container to facility: {facility}")
         playbook_args = json.dumps(playbook_args_dict)
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(
             inventory_file_path,
-            local_container_playbooks_path + '/container_deploy.yml',
+            full_playbook_path,
             facility,
             playbook_args,
             return_output=True,
@@ -1278,147 +1066,93 @@ async def deploy_container(container_to_deploy: ContainerDict, background_tasks:
             deployment_success = False
         deployment_output += current_output
 
-        # Update deployment database
         update_db_after_deployment(deployment_success, True, facility, 'container',
                                   container_to_deploy.component_name, container_to_deploy.tag,
                                   container_to_deploy.user, current_output)
 
-    if (deployment_output == ""):
-        return JSONResponse(content={"payload": {"Error": "No deployments performed"}}, status_code=400)
+    if deployment_output == "":
+        raise ValueError("No deployments performed")
 
-    # Generate report
-    summary = generate_report(container_to_deploy.component_name, container_to_deploy.tag,
-                              container_to_deploy.user, deployment_output, status, deployment_report_file)
+    return finalize_deployment(
+        container_to_deploy.component_name, container_to_deploy.tag, container_to_deploy.user,
+        facilities, deployment_output, status, deployment_success,
+        deployment_report_file, container_to_deploy.dry_run
+    )
 
-    # Send to elog
-    elog_url = send_deployment_to_elog(container_to_deploy.component_name, container_to_deploy.tag, facilities, summary)
 
-    # Cleanup
-    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
+def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: DeploymentTask):
+    """Generic deployment: download tagged release tarball, then run the specified playbook.
+    Handles pydm, HLA, TOOLS, and any other app type without IOC or container-specific logic."""
+    logging.info(f"Generic deployment request: {deploy_request}")
 
-    if os.getenv('PYTHON_TESTING') == 'True':
-        return Response(content=summary, media_type="text/plain", status_code=status)
-    elif (container_to_deploy.return_elog):
-        return JSONResponse(content={
-            "success": deployment_success,
-            "elog_url": elog_url
-        })
+    # Default subsystem for pydm apps if not provided
+    if 'pydm_module' in deploy_request.playbook and not deploy_request.subsystem:
+        deploy_request.subsystem = deploy_request.component_name.replace("pydm-", "").replace("-displays", "")
+
+    # Derive app_type for the deployment DB from the playbook path
+    if 'pydm_module' in deploy_request.playbook:
+        app_type = 'pydm'
     else:
-        return FileResponse(path=deployment_report_file, status_code=status)
+        app_type = deploy_request.playbook.split('/')[0]  # e.g. 'hla_module' -> 'hla_module'
 
+    task.update_progress("Downloading release", 20)
+    if not download_release(deploy_request.component_name, deploy_request.tag, temp_dir, all_os=False, extract_tarball=True):
+        raise ValueError(f"Failed to download release for {deploy_request.component_name} tag {deploy_request.tag}")
 
-@app.put("/app/deployment")
-async def deploy_app(app_to_deploy: AppDict, background_tasks: BackgroundTasks):
-    """
-    Deploy an application artifact (RPM, tarball, zip) to target servers.
-    Downloads the artifact from a GitHub release asset URL, then runs the
-    artifact_module Ansible playbook to extract and symlink on each facility.
-    """
-    logging.info(f"New app deployment request: {app_to_deploy}")
+    full_playbook_path = os.path.join(ANSIBLE_PLAYBOOKS_PATH, deploy_request.playbook)
+    inventory_file_path = get_inventory_path()
 
-    # Validate artifact_url
-    if not app_to_deploy.artifact_url:
-        return JSONResponse(content={"payload": {"Error": "artifact_url is required for app deployments"}}, status_code=400)
-
-    # Setup paths
-    request_id = str(uuid.uuid4())
-    temp_download_dir = f"{APP_PATH}/tmp/{request_id}"
-    os.makedirs(temp_download_dir, exist_ok=True)
-
-    # Determine file extension from artifact_type
-    ext_map = {'rpm': 'rpm', 'tar': 'tar.gz', 'tar.gz': 'tar.gz', 'tgz': 'tar.gz', 'zip': 'zip'}
-    ext = ext_map.get(app_to_deploy.artifact_type, app_to_deploy.artifact_type)
-    artifact_filename = f"{app_to_deploy.component_name}-{app_to_deploy.tag}.{ext}"
-    artifact_filepath = os.path.join(temp_download_dir, artifact_filename)
-
-    # Download artifact from GitHub release asset URL
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    headers = {"Accept": "application/octet-stream"}
-    if github_token:
-        headers["Authorization"] = f"token {github_token}"
-
-    try:
-        response = requests.get(app_to_deploy.artifact_url, headers=headers, stream=True, allow_redirects=True)
-        if response.status_code != 200:
-            logging.error(f"Failed to download artifact: HTTP {response.status_code}")
-            return JSONResponse(content={"payload": {"Error": f"Failed to download artifact from {app_to_deploy.artifact_url}: HTTP {response.status_code}"}}, status_code=400)
-
-        with open(artifact_filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024*1024):
-                if chunk:
-                    f.write(chunk)
-        logging.info(f"Artifact downloaded to {artifact_filepath}")
-    except Exception as e:
-        logging.error(f"Error downloading artifact: {e}")
-        return JSONResponse(content={"payload": {"Error": f"Failed to download artifact: {str(e)}"}}, status_code=500)
-
-    # Ansible setup
-    local_artifact_playbooks_path = ANSIBLE_PLAYBOOKS_PATH + 'artifact_module'
-    inventory_file_path = ANSIBLE_PLAYBOOKS_PATH
-    if TEST_INVENTORY:
-        inventory_file_path += 'test_inventory.ini'
-    else:
-        inventory_file_path += 'global_inventory.ini'
+    facilities = deploy_request.facilities or []
+    tarball_filepath = os.path.join(temp_dir, f"{deploy_request.tag}.tar.gz")
+    deployment_report_file = os.path.join(temp_dir, f'deployment-report-{deploy_request.component_name}-{deploy_request.tag}.log')
 
     playbook_args_dict = {
-        'component_name': app_to_deploy.component_name,
-        'tag': app_to_deploy.tag,
-        'artifact_path': artifact_filepath,
-        'artifact_type': app_to_deploy.artifact_type,
+        'component_name': deploy_request.component_name,
+        'tag': deploy_request.tag,
+        'user': deploy_request.user,
+        'tarball': tarball_filepath,
     }
+    if deploy_request.subsystem:
+        playbook_args_dict['subsystem'] = deploy_request.subsystem
+    if deploy_request.extra_vars:
+        playbook_args_dict.update(deploy_request.extra_vars)
 
-    facilities = app_to_deploy.facilities
     status = 200
     deployment_output = ""
     deployment_success = True
-    deployment_report_file = os.path.join(temp_download_dir, f'deployment-report-{app_to_deploy.component_name}-{app_to_deploy.tag}.log')
-
-    for facility in facilities:
-        logging.info(f"Deploying app artifact to facility: {facility}")
+    elog_url = ""
+    for i, facility in enumerate(facilities):
+        task.update_progress(f"Deploying to {facility}", 30 + int(60 * i / max(len(facilities), 1)))
+        playbook_args_dict['facility'] = facility
         playbook_args = json.dumps(playbook_args_dict)
         stdout, stderr, return_code = ansible_api.run_ansible_playbook(
-            inventory_file_path,
-            local_artifact_playbooks_path + '/artifact_deploy.yml',
-            facility,
-            playbook_args,
-            return_output=True,
-            no_color=True
-        )
-
-        current_output = "== App deployment output for " + facility + ' ==\n\n' + stdout
+            inventory_file_path, full_playbook_path, facility, playbook_args,
+            return_output=True, no_color=True, check_mode=deploy_request.dry_run)
+        current_output = f"== Deployment output for {facility} ==\n\n{stdout}"
+        deployment_success = True
         if return_code != 0:
             status = 400
-            if stderr != '':
-                current_output += "\n== Errors ==\n\n" + stderr
+            if stderr:
+                current_output += f"\n== Errors ==\n\n{stderr}"
             deployment_success = False
         deployment_output += current_output
-
-        update_db_after_deployment(deployment_success, True, facility, 'app',
-                                  app_to_deploy.component_name, app_to_deploy.tag,
-                                  app_to_deploy.user, current_output)
+        if not deploy_request.dry_run:
+            is_new_component = find_component_in_facility(facility, deploy_request.component_name) is None
+            update_db_after_deployment(deployment_success, is_new_component, facility, app_type,
+                                       deploy_request.component_name, deploy_request.tag,
+                                       deploy_request.user, current_output)
 
     if deployment_output == "":
-        return JSONResponse(content={"payload": {"Error": "No deployments performed"}}, status_code=400)
+        raise ValueError("No deployments performed — check facilities list and component name")
 
-    # Generate report
-    summary = generate_report(app_to_deploy.component_name, app_to_deploy.tag,
-                              app_to_deploy.user, deployment_output, status, deployment_report_file)
-
-    # Send to elog
-    elog_url = send_deployment_to_elog(app_to_deploy.component_name, app_to_deploy.tag, facilities, summary)
-
-    # Cleanup
-    background_tasks.add_task(cleanup_temp_deployment_dir, temp_download_dir)
-
-    if os.getenv('PYTHON_TESTING') == 'True':
-        return Response(content=summary, media_type="text/plain", status_code=status)
-    elif app_to_deploy.return_elog:
-        return JSONResponse(content={
-            "success": deployment_success,
-            "elog_url": elog_url
-        })
-    else:
-        return FileResponse(path=deployment_report_file, status_code=status)
+    task.update_progress("Generating report", 92)
+    if not deploy_request.dry_run:
+        task.update_progress("Writing to ELOG", 96)
+    return finalize_deployment(
+        deploy_request.component_name, deploy_request.tag, deploy_request.user,
+        facilities, deployment_output, status, deployment_success,
+        deployment_report_file, deploy_request.dry_run
+    )
 
 
 @app.put("/initial/deployment")
@@ -1441,7 +1175,7 @@ async def initial_deployment(initial_deployment: InitialDeploymentDict):
     new_component['dependsOn'] = initial_deployment.ioc_list
     logging.debug(f"new_component: {new_component}")
     endpoint = BACKEND_URL + 'deployments'
-    response = requests.post(endpoint, json=new_component)
+    response = requests.post(endpoint, json=new_component, timeout=REQUEST_TIMEOUT)
     add_log_to_component(initial_deployment.facility, timestamp, initial_deployment.user,
                           initial_deployment.component_name, "Initial deployment entry added by software factory admins")
     return JSONResponse(content={"payload": {"Success": "Deployment added to database"}}, status_code=200)

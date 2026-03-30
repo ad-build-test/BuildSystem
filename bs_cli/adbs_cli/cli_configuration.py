@@ -20,8 +20,8 @@ class ApiEndpoints(str, Enum):
     DEPLOYMENT_CREATE_GH_STATUS = "deployments/status"
 
     # From deployment controller api
-    DEPLOYMENT = "{deployment_type}/deployment"
-    DEPLOYMENT_REVERT = "{deployment_type}/deployment/revert" 
+    DEPLOYMENT = "deployment"
+    DEPLOYMENT_REVERT = "ioc/deployment/revert"
     DEPLOYMENT_STATUS = "deployment/{task_id}/status"
     DEPLOYMENT_REPORT = "deployment/{task_id}/report"
     DEPLOYMENT_INFO = "deployment/info"

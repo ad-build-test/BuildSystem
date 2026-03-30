@@ -1,0 +1,25 @@
+# Example config.yaml for an IOC application
+repo: test-ioc
+organization: ad-build-test
+url: https://github.com/ad-build-test/test-ioc
+description: Test IOC application
+
+# Docker image for build pods
+image: ghcr.io/ad-build-test/rocky9-env:latest
+
+# Build command
+build:
+  command: |
+    source /afs/slac/g/lcls/tools/script/ENVS64.bash &&
+    make
+
+# Files/directories to package for deployment
+artifacts:
+  - bin
+  - db
+  - dbd
+  - iocBoot
+
+# Deployment playbook
+deploy:
+  playbook: ioc_module/ioc_deploy.yml

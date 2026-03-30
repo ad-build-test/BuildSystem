@@ -82,6 +82,7 @@ def add_initial_deployment(component: str, verbose: bool = False):
     # so if api ever changes, you don't need to update this function. 
 
     # Grab deployment info from cram ls
+    click.confirm("Ensure you did a 'kinit' before continuing. Continue?")
     click.echo("== ADBS == Adding initial deployment configuration")
     click.echo("== ADBS == Running 'cram ls'...")
 
@@ -108,24 +109,16 @@ def add_initial_deployment(component: str, verbose: bool = False):
         print(json.dumps(facility_data, indent=2))
         print("\n" + "-"*50 + "\n")
     if (click.confirm("Does the above deployment info look correct")):
-        question = [
-        inquirer.List(
-            "deploymentType",
-            message="What type of deployment will this app use?",
-            choices=["ioc", "hla", "tools", "matlab", "pydm", "container"]
-            ),
-        ]
-        deployment_type = inquirer.prompt(question)['deploymentType']
         for facility, facility_data in result.items():
             data_to_write = {
                 "facility": facility,
                 "component_name": component,
                 "tag": facility_data['tag'],
                 "user": cli_configuration['github_uname'],
-                "type": deployment_type
+                "type": "ioc",
+                "ioc_list": facility_data['dependsOn']
             }
-            if (deployment_type == 'ioc'):
-                data_to_write["ioc_list"] = facility_data['dependsOn']
+            data_to_write["ioc_list"] = facility_data['dependsOn']
             request = Request(Component(component), Api.DEPLOYMENT)
             request.set_endpoint(ApiEndpoints.DEPLOYMENT_INITIAL)
             request.add_dict_to_payload(data_to_write)
@@ -147,34 +140,20 @@ def add_repo(verbose: bool=False):
     manifest_filepath = user_src_repo + '/config.yaml'
     manifest_data = request.component.parse_manifest(manifest_filepath)
 
-    # 3) Populate the payload
+    # 3) Populate the payload from config.yaml
     request.add_to_payload("name", manifest_data["repo"])
     request.add_to_payload("description", manifest_data["description"])
-    request.add_to_payload("testingCriteria", manifest_data["testingCriteria"])
-    request.add_to_payload("approvalRule", manifest_data["approvalRule"])
     organization = manifest_data["organization"]
     request.add_to_payload("organization", organization)
-    issue_tracker = manifest_data["issueTracker"]
-    request.add_to_payload("issueTracker", issue_tracker)
-    if (issue_tracker != 'jira' and issue_tracker != 'github'): 
-        click.echo("== ADBS == issue tracker must be jira or github.")
-        return
-    if (issue_tracker == 'jira'):
-        request.add_to_payload("jiraProjectKey", manifest_data["jiraProjectKey"])
-
-    build_os = {"buildOs": manifest_data.get("environments")}
-    request.add_dict_to_payload(build_os)
     request.add_to_payload("url", f"https://github.com/{organization}/{request.component.name}")
     request.add_to_payload("ssh", f"git@github.com:{organization}/{request.component.name}.git")
-    if (not click.confirm("Do you want to add automated build and tests?")):
-        request.add_to_payload("skipBuildAndTests", True)
-    
+
     request.set_endpoint(ApiEndpoints.COMPONENT)
     request.post_request(verbose, msg="Add component to component database")
 
-    # Create another put request but to enable permissions for backend to receive events
+    # Enable permissions for backend to receive events
     request = Request(request.component)
-    request.set_endpoint(ApiEndpoints.COMPONENT_EVENT, 
+    request.set_endpoint(ApiEndpoints.COMPONENT_EVENT,
                          component_name=request.component.name,
                          enable="true")
     request.put_request(log=verbose, msg="Enable events for component")
@@ -197,10 +176,14 @@ def add_repo(verbose: bool=False):
 @click.option("-v", "--verbose", is_flag=True, required=False, help="More detailed output")
 def onboard_repo(ctx, verbose: bool=False):
     """Command to onboard a repo to software factory.
-    Creates config.yaml, adds component to database, adds initial deployment configuration (if existing IOC application)"""
-    click.confirm("Ensure you did a 'kinit' before continuing.")
+    Adds component to database and adds initial deployment configuration (if existing IOC application).
+    NOTE: You must create your own config.yaml before running this command.
+          See BuildSystem/examples/ for templates."""
+    click.confirm("Please create a config.yaml in the top level of your repo (see BuildSystem/examples/ for templates) before running this command. Continue?")
 
-    # Create the config.yaml =====================================================
+    # Add component to database (reads repo/org/description from config.yaml)
+    add_repo(verbose)
+
     # Get user input
     at_top = click.confirm("Are you at the TOP level of your repo?")
     if (at_top):
@@ -213,110 +196,23 @@ def onboard_repo(ctx, verbose: bool=False):
         else:
             click.echo(f"Error: The specified path '{top_level}' does not exist.")
             return
-
-    org_name = input(INPUT_PREFIX + "Specify name of GitHub organization: ")
-    description = input(INPUT_PREFIX + "Specify repo description: ")
-    build_command = input(INPUT_PREFIX + "Specify how to build (if applicable, can be as simple as 'make'): ")
-    question = [
-    inquirer.List(
-        "issueTracker",
-        message="What issue tracking system does this app use?",
-        choices=["github", "jira"]
-        ),
-    ]
-    issue_tracker = inquirer.prompt(question)['issueTracker']
-    jira_project_key = 'n/a'
-    if (issue_tracker == 'jira'):
-        jira_project_key = input(INPUT_PREFIX + "Specify jira project key: ")
-    question = [
-    inquirer.Checkbox(
-        "buildOs",
-        message="What are the operating systems this app runs on?",
-        choices=["ROCKY9", "RHEL7", "RHEL6", "RHEL5"],
-        default=[],
-        ),
-    ]
-    build_os_list = inquirer.prompt(question)['buildOs']
-    question = [
-    inquirer.List(
-        "deploymentType",
-        message="What type of deployment will this app use?",
-        choices=["ioc", "hla", "tools", "matlab", "pydm", "container"]
-        ),
-    ]
-    deployment_type = inquirer.prompt(question)['deploymentType']
-
-    # Create the content
-    content = f"""# [Required]
-# Basic component information
-repo: {repo_name}
-organization: {org_name}
-url: https://github.com/{org_name}/{repo_name}
-description: {description}
-
-# [Required]
-# Continous integration
-approvalRule: all
-testingCriteria: all
-issueTracker: {issue_tracker}
-jiraProjectKey: {jira_project_key}
-
-# [Required]
-# Type of deployment
-# Types: [ioc, hla, tools, matlab, pydm, container]
-deploymentType: {deployment_type}
-
-# [Optional] 
-# Build method for building the component
-# Can be a simple command like 'make'
-"""
-    if (build_command == ""):
-        content += "# build: \n"
+    
+    # Parse manifest to determine deployment type and get repo info
+    manifest_data = Component().parse_manifest(os.path.join(top_level, 'config.yaml'))
+    repo_name = manifest_data["repo"]
+    org_name = manifest_data["organization"]
+    playbook = manifest_data.get('deploy', {}).get('playbook', '')
+    if 'ioc_module' in playbook:
+        deployment_type = 'ioc'
+    elif 'pydm_module' in playbook:
+        deployment_type = 'pydm'
     else:
-        content += f"build: {build_command}\n"
+        deployment_type = 'generic'
 
-    if (build_os_list == []):
-        content += """
-# [Optional]
-# Environments this app runs on
-# environments:
-"""
-    else:
-        content += f"""
-# [Optional]
-# Environments this app runs on
-environments:
-{chr(10).join('   - ' + env for env in build_os_list)}
-"""
-    runtime_dependencies = click.confirm("Are there any runtime dependencies?")
-    if (runtime_dependencies):
-        deps_input = click.prompt("Enter dependencies (comma-separated)")
-        dependencies = [d.strip() for d in deps_input.split(',')]
-        content += f"""
-# [Optional]
-# Directories and files needed to run application
-runtimeDependencies:
-{chr(10).join('   - ' + dependency for dependency in dependencies)}
-"""
-    else:
-        content += f"""
-# [Optional]
-# Directories and files needed to run application
-# runtimeDependencies:
-"""
-
-    # Generate full filepath
-    filepath = os.path.join(top_level, 'config.yaml')
-
-    # Write to file
-    with open(filepath, 'w') as f:
-        f.write(content)
-
-    click.echo(f"File '{filepath}' has been generated successfully!")
-
-    # Create the github actions deployment workflow file
-    if (deployment_type == "pydm"):
-        content = """name: Request Deployment - PyDM Display
+    # Write deploy.yml for github actions deployment (No IOC support yet)
+    if deployment_type == 'pydm' or deployment_type == 'generic':
+        deploy_content = f"""\
+name: Deploy
 
 on:
   workflow_dispatch:
@@ -345,12 +241,12 @@ on:
         description: 'Tag to deploy'
         required: true
         type: string
-        
+
 permissions:
   deployments: write
   contents: read
   actions: read
-  
+
 jobs:
   deploy:
     uses: ad-build-test/build-system-playbooks/.github/workflows/request-deployment.yml@main
@@ -360,24 +256,16 @@ jobs:
       deploy_to_facet: ${{ inputs.deploy_to_facet }}
       deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
       tag: ${{ inputs.tag }}
-      deployment_type: 'pydm'
+      playbook: '{playbook}'
 """
+        deploy_yml_path = os.path.join(top_level, '.github/workflows/deploy.yml')
+        os.makedirs(os.path.dirname(deploy_yml_path), exist_ok=True)
+        with open(deploy_yml_path, 'w') as f:
+            f.write(deploy_content)
+        click.echo(f"File '{deploy_yml_path}' has been generated successfully!")
 
-    # Generate full filepath
-    filepath = os.path.join(top_level, '.github/workflows/deploy.yml')
-
-    # Create the directory if it doesn't exist
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
-    # Write to file
-    with open(filepath, 'w') as f:
-        f.write(content)
-
-    click.echo(f"File '{filepath}' has been generated successfully!")
-
-    # If deployment type is IOC, then generate RELEASE_SITE, and remove .cram, and remove RELEASE_SITE from .gitignore
-    if (deployment_type == 'ioc'):
-
+    # IOC-specific steps
+    if deployment_type == 'ioc':
         # Generate RELEASE_SITE
         release_site_contents = f"""
 #==============================================================================
@@ -399,21 +287,17 @@ TOOLS_SITE_TOP=/afs/slac/g/lcls/tools
 ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
 #==============================================================================
 """
-        # Generate full filepath
         filepath = os.path.join(top_level, 'RELEASE_SITE')
-
-        # Write to file
         with open(filepath, 'w') as f:
             f.write(release_site_contents)
-
         click.echo(f"File '{filepath}' has been generated successfully!")
 
         # Remove .cram directory
         try:
             shutil.rmtree(".cram")
-            click.echo(f"Successfully removed .cram directory")
+            click.echo("Successfully removed .cram directory")
         except FileNotFoundError:
-            pass  # Already doesn't exist
+            pass
 
         # Remove RELEASE_SITE from .gitignore
         # Read all lines
@@ -429,8 +313,6 @@ ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
                 file.writelines(filtered_lines)
 
             click.echo(f"Successfully removed RELEASE_SITE from .gitignore")
-
-    add_repo(verbose)
         
     if (deployment_type == 'ioc'):
         if (click.confirm("Is this an existing IOC application?")):

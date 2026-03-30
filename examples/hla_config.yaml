@@ -1,0 +1,9 @@
+# Example config.yaml for a HLA application
+repo: slac-devices
+organization: slaclab
+url: https://github.com/slaclab/slac-devices
+description: Repository for accelerator devices used in high level applications (HLA).
+
+# Deployment playbook
+deploy:
+  playbook: hla_module/hla_deploy.yml

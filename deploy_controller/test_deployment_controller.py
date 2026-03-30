@@ -10,6 +10,7 @@ And make the following dirs:
 2) git clone https://github.com/ad-build-test/build-system-playbooks
 3) Alter the paths for 'test' group in build-system-playbooks/global_inventory.ini to your username
 4) Then in mock_paths(), alter the paths to your local ~/test-deployment-controller/ (Anywhere it says pnispero, change to your username)
+5) Look in the dev mongodb and make sure test-ioc and pydm-mps are not already in the deployments collection. If they are, please delete those entries before testing.
 
 
 Usage: pytest test_deployment_controller.py
@@ -58,12 +59,13 @@ import os
 
 os.environ['PYTHON_TESTING'] = 'True'
 os.environ['ELOG_USER_PASSWORD'] = "mock"
+os.environ['ELOG_SW_LOG_ID'] = "mock"
 
 import pytest
 import fakeredis
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, mock_open
-from deployment_controller import app, IocDict, PydmDict, RevertDict
+from deployment_controller import app, DeployDict, RevertDict
 
 from httpx import AsyncClient, ASGITransport
 import asyncio
@@ -85,7 +87,8 @@ def mock_paths():
          patch('deployment_controller.TEST_INVENTORY', True), \
          patch('deployment_controller.BACKEND_URL', 'https://ad-build-dev.slac.stanford.edu/api/cbs/v1/'), \
          patch('deployment_controller.FACILITIES_LIST', ["test", "test2", "LCLS", "FACET", "TESTFAC", "DEV", "SANDBOX"]), \
-         patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'):
+         patch('deployment_controller.ANSIBLE_PLAYBOOKS_PATH', '/home/pnispero/test-deployment-controller/build-system-playbooks/'), \
+         patch('deployment_controller.send_deployment_to_elog', return_value='http://mock-elog-url'):
         yield
 
 ####### Tests for get_deployment_component_info
@@ -127,16 +130,17 @@ async def test_deploy_ioc_new_component_success(mock_paths):
     test_tag = "1.0.65"
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         facilities=[test_facility],
         component_name=test_component,
         tag=test_tag,
         user=test_user,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
     
     assert "Deployment report" in summary
@@ -167,17 +171,18 @@ async def test_deploy_ioc_new_component_and_ioc_success(mock_paths):
     test_ioc_list = "sioc-b34-gtest01"
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         facilities=[test_facility],
         component_name=test_component,
         tag=test_tag,
         ioc_list=[test_ioc_list],
-        user=test_user
+        user=test_user,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
     
     assert "Deployment report" in summary
@@ -206,17 +211,18 @@ async def test_deploy_ioc_new_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_ioc_success - add a new ioc to an existing component\n \
           bs deploy --facility test -i sioc-b34-gtest02 1.0.65")
     
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         facilities=["test"],
         component_name="test-ioc",
         tag="1.0.65",
         ioc_list=["sioc-b34-gtest02"],
-        user="test_user"
+        user="test_user",
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
     
     assert "Deployment report" in summary
@@ -234,18 +240,19 @@ async def test_deploy_ioc_new_tag_all_success_dry_run(mock_paths):
     test_ioc_list = ["sioc-b34-gtest01", "sioc-b34-gtest02"]
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         component_name=test_component,
         tag=test_tag,
         ioc_list=test_ioc_list,
         user=test_user,
-        dry_run=True
+        dry_run=True,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
     
     assert "Deployment report" in summary
@@ -277,17 +284,18 @@ async def test_deploy_ioc_new_tag_all_success(mock_paths):
     test_ioc_list = ["sioc-b34-gtest01", "sioc-b34-gtest02"]
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         component_name=test_component,
         tag=test_tag,
         ioc_list=test_ioc_list,
-        user=test_user
+        user=test_user,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
     
     assert "Deployment report" in summary
@@ -337,17 +345,18 @@ async def test_deploy_ioc_new_tag_specific_ioc_success(mock_paths):
     print("Starting test_deploy_ioc_new_tag_specific_ioc_success - deploy a new tag to an existing ioc in an existing component\n \
           bs deploy -i sioc-b34-gtest02 1.0.67")
     
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         component_name="test-ioc",
         tag="1.0.67",
         ioc_list=["sioc-b34-gtest02"],
-        user="test_user"
+        user="test_user",
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
 
     assert "Deployment report" in summary
@@ -365,17 +374,18 @@ async def test_deploy_same_component_and_iocs_in_another_test_facility_success(m
     test_ioc_list = ["sioc-b34-gtest01", "sioc-b34-gtest02"]
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         facilities=[test_facility],
         component_name=test_component,
         tag=test_tag,
         ioc_list=test_ioc_list,
         user=test_user,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
 
     assert "Deployment report" in summary
@@ -405,17 +415,18 @@ async def test_deploy_ioc_new_tag_specific_ioc_multiple_facilities_success(mock_
           - deploy a new tag to an existing ioc in an existing component, in multiple facilities\n \
           bs deploy -i sioc-b34-gtest01 1.0.67")
     
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         component_name="test-ioc",
         tag="1.0.67",
         ioc_list=["sioc-b34-gtest01"],
-        user="test_user"
+        user="test_user",
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
         
     assert "Deployment report" in summary
@@ -434,18 +445,19 @@ async def test_deploy_ioc_new_tag_specific_ioc_specific_facility_success(mock_pa
     test_ioc_list = ["sioc-b34-gtest02"]
     test_user = "test_user"
 
-    ioc_request = IocDict(
+    ioc_request = DeployDict(
         facilities=[test_facility],
         component_name=test_component,
         tag=test_tag,
         ioc_list=test_ioc_list,
         user=test_user,
+        playbook='ioc_module/ioc_deploy.yml',
     )
     
-    print("Sending request to /ioc/deployment")
+    print("Sending request to /deployment")
     print(ioc_request.model_dump())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/ioc/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
         summary = await wait_for_deployment(ac, response)
 
     assert "Deployment report" in summary
@@ -484,21 +496,22 @@ async def test_deploy_pydm_new_component_success(mock_paths):
     print("Starting test_deploy_pydm_new_component_success - add a new component entirely\n \
           bs deploy --facility test 1.0.0")
     
-    pydm_request = PydmDict(
+    pydm_request = DeployDict(
         facilities=["test"],
         component_name="pydm-mps",
         tag="R1.0.0",
         user="test_user",
-        subsystem="mps"
+        subsystem="mps",
+        playbook='pydm_module/pydm_deploy.yml',
     )
     
-    print("Sending request to /pydm/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/pydm/deployment", json=pydm_request.model_dump())
+        response = await ac.put("/deployment", json=pydm_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
 @pytest.mark.asyncio
 async def test_deploy_pydm_new_tag_success(mock_paths):
@@ -511,23 +524,24 @@ async def test_deploy_pydm_new_tag_success(mock_paths):
     test_user = "test_user"
     test_subsystem="mps"
 
-    ioc_request = PydmDict(
+    ioc_request = DeployDict(
         facilities=[test_facility],
         component_name=test_component,
         tag=test_tag,
         user=test_user,
-        subsystem=test_subsystem
+        subsystem=test_subsystem,
+        playbook='pydm_module/pydm_deploy.yml',
     )
     
-    print("Sending request to /pydm/deployment")
+    print("Sending request to /deployment")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.put("/pydm/deployment", json=ioc_request.model_dump())
+        response = await ac.put("/deployment", json=ioc_request.model_dump())
+        summary = await wait_for_deployment(ac, response)
     
-    print(f"Received response with status code: {response.status_code}")
+    print(f"Received response with completed summary")
     
-    assert response.status_code == 200
-    assert "Deployment report" in response.text
-    assert "Success" in response.text
+    assert "Deployment report" in summary
+    assert "Success" in summary
 
     print("Confirm deployment database contents are correct...")
     response = client.request("GET", "/deployment/info", json={"component_name": "pydm-mps"})
