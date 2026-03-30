@@ -225,6 +225,23 @@ _bs_completion_setup;
     click.echo(f"** Successfully added to {conf_file} **")
     click.echo(f"Please source {conf_file} or reload your shell to apply changes.")
 
+    # Ensure ~/.bashrc sources ~/.profile.d/*.conf (required on SLAC S3DF)
+    bashrc_path = os.path.expanduser("~/.bashrc")
+    profile_d_snippet = (
+        '\n# SLAC S3DF - source all files under ~/.profile.d\n'
+        'if [[ -e ~/.profile.d && -n "$(ls -A ~/.profile.d/)" ]]; then\n'
+        '  source <(cat $(find -L  ~/.profile.d -name \'*.conf\' | sort))\n'
+        'fi\n'
+    )
+    bashrc_has_snippet = False
+    if os.path.exists(bashrc_path):
+        with open(bashrc_path, "r") as f:
+            bashrc_has_snippet = "source <(cat $(find -L  ~/.profile.d" in f.read()
+    if not bashrc_has_snippet:
+        with open(bashrc_path, "a") as f:
+            f.write(profile_d_snippet)
+        click.echo(f"** Added ~/.profile.d sourcing block to {bashrc_path} **")
+
 @click.command()
 @click.option("-c", "--component", required=False, help="Component Name")
 @click.option("-b", "--branch", required=False, help="Branch Name")
