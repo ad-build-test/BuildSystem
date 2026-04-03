@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: runner-sdf-group-ad
+  namespace: github-runner-test
+spec:
+  storageClassName: sdf-group-ad
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi

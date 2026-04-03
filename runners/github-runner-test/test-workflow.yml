@@ -1,0 +1,56 @@
+# Save this file in your GitHub repo under:
+#   .github/workflows/test-k8s-runner.yml
+#
+# This workflow tests three things:
+#   1. The runner pod picks up a job (basic connectivity)
+#   2. The PVC is mounted and writable
+#   3. The runner pod can reach an internal host via SSH
+#
+# To use the SSH test:
+#   - Add your private key as a repo secret named SSH_PRIVATE_KEY
+#   - Replace <internal-host> and <user> with your actual target host
+
+name: Test K8s Self-Hosted Runner
+
+on:
+  workflow_dispatch:  # manual trigger only — run from GitHub UI Actions tab
+
+jobs:
+  test-runner:
+    runs-on: [self-hosted, linux, k8s]
+    steps:
+      # ── Test 1: Basic runner info ──────────────────────────────────────────
+      - name: Print runner environment
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "User: $(whoami)"
+          echo "OS: $(uname -a)"
+          echo "Working dir: $(pwd)"
+
+      # ── Test 2: PVC is mounted and writable ───────────────────────────────
+      - name: Write and read from PVC workspace
+        run: |
+          echo "Testing PVC write at /workspace..."
+          echo "runner-test-$(date +%s)" > /workspace/test-file.txt
+          cat /workspace/test-file.txt
+          echo "PVC mount: OK"
+
+      # ── Test 3: Network egress — reach GitHub API ─────────────────────────
+      - name: Check outbound access to GitHub
+        run: |
+          curl -sf https://api.github.com | grep -q '"current_user_url"'
+          echo "GitHub API reachable: OK"
+
+      # ── Test 4: SSH to an internal host ───────────────────────────────────
+      # Uncomment this step once you've added the SSH_PRIVATE_KEY secret
+      # Replace <user> and <internal-host> with your actual values
+      
+      - name: SSH to internal host
+        env:
+          SSH_KEY: ${{ secrets.ADBUILD_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh -o StrictHostKeyChecking=no adbuild@devlogin.slac.stanford.edu "hostname && echo SSH OK"
+          rm ~/.ssh/id_rsa

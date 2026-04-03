@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - runner-pvc.yaml
+  - runner-sdf-pvc.yaml
+  - runner-deployment.yaml
+  # NOTE: runner-token-secret.yaml is applied separately before this kustomization
+  # because it contains a short-lived token. Do not include it here.

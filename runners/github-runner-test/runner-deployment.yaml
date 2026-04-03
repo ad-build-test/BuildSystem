@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actions-runner
+  namespace: github-runner-test
+  labels:
+    app: actions-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: actions-runner
+  template:
+    metadata:
+      labels:
+        app: actions-runner
+    spec:
+      # Allow graceful job completion before pod is killed
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        # Run as the built-in runner user (uid 1001) — required for /actions-runner write access.
+        # Supplemental groups give the runner read access to sdf-group-ad filesystem,
+        # which is group-permission controlled on the shared S3DF storage.
+        runAsUser: 1001
+        runAsGroup: 121
+        fsGroup: 4653
+        supplementalGroups: [1006, 4653]
+      containers:
+        - name: runner
+          image: myoung34/github-runner:latest
+          env:
+            # --- GitHub registration (uses PAT to auto-acquire registration token) ---
+            - name: ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: actions-runner
+                  key: ACCESS_TOKEN
+            - name: RUNNER_SCOPE
+              value: "org"
+            - name: ORG_NAME
+              value: "ad-build-test"
+            # Pod name becomes the runner name — unique per replica
+            - name: RUNNER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: RUNNER_NAME_PREFIX
+              value: "k8s"
+            - name: RUNNER_GROUP
+              value: "ad-build-test-runner"
+            - name: LABELS
+              value: "self-hosted,linux,x64,k8s"
+            # --- Runner behavior ---
+            - name: RUNNER_WORKDIR
+              value: "/workspace"
+            - name: DISABLE_AUTO_UPDATE
+              value: "1"
+            - name: EPHEMERAL
+              value: "0"         # keep alive across multiple jobs (set to 1 for ARC later)
+            - name: RUN_AS_ROOT
+              value: "false"
+            # Required for workflow jobs that use 'container:' (e.g. rocky9-env builds)
+            - name: START_DOCKER_SERVICE
+              value: "true"
+          securityContext:
+            privileged: true     # required for Docker daemon (START_DOCKER_SERVICE)
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: runner-workspace
+              mountPath: /workspace
+            - name: containerdsock
+              mountPath: /run/containerd/containerd.sock
+            - name: runner-sdf-group-ad
+              mountPath: /sdf/group/ad
+              readOnly: true
+            # Mirrors the symlink /afs -> /sdf/group/ad/transition/afs on dev servers
+            # so that source /afs/slac/g/lcls/... resolves correctly inside the runner
+            - name: runner-sdf-group-ad
+              mountPath: /afs
+              subPath: transition/afs
+              readOnly: true
+      volumes:
+      - name: runner-workspace
+        persistentVolumeClaim:
+          claimName: runner-workspace
+      - name: containerdsock
+        hostPath:
+          path: /run/containerd/containerd.sock
+      - name: runner-sdf-group-ad
+        persistentVolumeClaim:
+          claimName: runner-sdf-group-ad
+          readOnly: true
