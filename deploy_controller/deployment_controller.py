@@ -1085,15 +1085,18 @@ def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: Depl
     Handles pydm, HLA, TOOLS, and any other app type without IOC or container-specific logic."""
     logging.info(f"Generic deployment request: {deploy_request}")
 
-    # Default subsystem for pydm apps if not provided
-    if 'pydm_module' in deploy_request.playbook and not deploy_request.subsystem:
-        deploy_request.subsystem = deploy_request.component_name.replace("pydm-", "").replace("-displays", "")
-
     # Derive app_type for the deployment DB from the playbook path
     if 'pydm_module' in deploy_request.playbook:
         app_type = 'pydm'
     else:
         app_type = deploy_request.playbook.split('/')[0]  # e.g. 'hla_module' -> 'hla_module'
+
+    # Default subsystem for pydm apps if not provided
+    if app_type == 'pydm':
+        if not deploy_request.subsystem:
+            deploy_request.subsystem = deploy_request.component_name.replace("pydm-", "").replace("-displays", "")
+        else:
+            deploy_request.subsystem = deploy_request.subsystem.replace("pydm-", "").replace("-displays", "")
 
     task.update_progress("Downloading release", 20)
     if not download_release(deploy_request.component_name, deploy_request.tag, temp_dir, all_os=False, extract_tarball=True):
