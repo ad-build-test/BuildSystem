@@ -1,0 +1,30 @@
+# Grants the runner pod's ServiceAccount read-only access to pods cluster-wide.
+# Required for runner-prechecks.yml K8s checks:
+#   - Reading own pod metadata to determine which node it's on
+#   - Listing Falcon sensor pods in falcon-system namespace
+#   - Listing Splunk OTel collector pods in splunk-system namespace
+#
+# NOTE: The falcon-system and splunk-system namespaces must be visible from this
+# vcluster. If they are not (check with S3DF cluster admins), the precheck will
+# fail at the Falcon/Splunk query step even with correct RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runner-security-precheck
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runner-security-precheck
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: runner-security-precheck
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: github-runner-test

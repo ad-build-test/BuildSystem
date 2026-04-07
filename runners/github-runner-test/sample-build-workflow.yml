@@ -1,0 +1,81 @@
+# Example build workflow using the runner in github-runner-test namespace.
+# Copy this into your repo's .github/workflows/ and adjust as needed.
+#
+# Prerequisites before running:
+#   1. runner-rbac.yaml applied (ClusterRole for pod reads)
+#   2. Confirm Splunk/Falcon namespaces with S3DF admins and update the
+#      commented-out overrides in the prechecks job below
+
+name: Build IOC (Example)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  SCRATCH_BASE: /sdf/group/ad/eed/ad-build/scratch/adbuild/<your-repo>
+  BUILD_SERVER: adbuild@devlogin.slac.stanford.edu
+  BUILD_ENV: rocky9-env
+
+jobs:
+  # ── Security gate: verify CrowdStrike + Splunk are running on the runner node ──
+  prechecks:
+    uses: slac-it/slac-templates/.github/workflows/runner-prechecks.yml@develop
+    with:
+      runner: '["self-hosted", "linux", "x64", "k8s"]'
+      # Uncomment and update once S3DF admins confirm the actual namespaces/labels:
+      # falcon_namespace: 'falcon-system'
+      # falcon_label_selector: 'app.kubernetes.io/name=falcon-node-sensor'
+      # splunk_namespace: 'splunk-system'
+      # splunk_label_selector: 'app=splunk-otel-collector,component=otel-collector-agent'
+
+  # ── Build: only runs if prechecks pass ────────────────────────────────────────
+  build-rocky9:
+    needs: prechecks
+    if: needs.prechecks.outputs.healthy == 'true'
+    runs-on: [self-hosted, linux, x64, k8s]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ADBUILD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan devlogin.slac.stanford.edu >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+
+      - name: Sync source to scratch space
+        run: |
+          BUILD_PATH=${{ env.SCRATCH_BASE }}/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}
+          ssh ${{ env.BUILD_SERVER }} "mkdir -p ${BUILD_PATH}"
+          rsync -az --delete $GITHUB_WORKSPACE/ ${{ env.BUILD_SERVER }}:${BUILD_PATH}/
+
+      - name: Build on devlogin
+        run: |
+          BUILD_PATH=${{ env.SCRATCH_BASE }}/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}
+          ssh ${{ env.BUILD_SERVER }} "
+            set -e
+            cd ${BUILD_PATH}
+            source /afs/slac/g/lcls/tools/script/ENVS64.bash
+            make
+          "
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ioc-build-rocky9-${{ github.sha }}
+          # Read artifacts directly from sdf mount — no rsync needed
+          path: |
+            /sdf/group/ad/eed/ad-build/scratch/adbuild/<your-repo>/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}/bin/
+            /sdf/group/ad/eed/ad-build/scratch/adbuild/<your-repo>/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}/db/
+            /sdf/group/ad/eed/ad-build/scratch/adbuild/<your-repo>/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}/dbd/
+            /sdf/group/ad/eed/ad-build/scratch/adbuild/<your-repo>/${{ github.ref_name }}/${{ env.BUILD_ENV }}/${{ github.sha }}/iocBoot/
+          if-no-files-found: warn
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa

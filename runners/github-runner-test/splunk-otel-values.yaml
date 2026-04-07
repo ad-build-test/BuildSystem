@@ -1,0 +1,45 @@
+# Splunk OpenTelemetry Collector - Helm values reference
+#
+# STATUS: The S3DF cluster admins have already deployed Splunk OTel on the
+# physical cluster nodes. YOU DO NOT NEED TO INSTALL THIS YOURSELF.
+#
+# What you DO need (ask S3DF admins):
+#   1. What namespace is the Splunk OTel collector deployed in?
+#      (default: splunk-system — confirm this)
+#   2. What labels are on the collector pods?
+#      (default: app=splunk-otel-collector,component=otel-collector-agent — confirm)
+#   3. What Splunk instance/index are logs forwarded to?
+#      (so you can search your runner logs)
+#
+# Once confirmed, update the commented-out overrides in sample-build-workflow.yml:
+#   splunk_namespace: '<confirmed-namespace>'
+#   splunk_label_selector: '<confirmed-label-selector>'
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# REFERENCE ONLY: If you ever need to deploy your own Splunk OTel instance
+# (e.g., in a separate test cluster), use this values file as a starting point.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Install:
+#   helm repo add splunk-otel-collector-chart https://signalfx.github.io/splunk-otel-collector-chart
+#   helm repo update
+#   kubectl create namespace splunk-system
+#   helm install splunk-otel-collector -n splunk-system -f splunk-otel-values.yaml \
+#     splunk-otel-collector-chart/splunk-otel-collector
+
+clusterName: "ad-build-dev"   # identifies this cluster in Splunk searches
+
+splunkPlatform:
+  endpoint: "https://YOUR_HEC_ENDPOINT:8088/services/collector"
+  token: "YOUR_HEC_TOKEN"     # store this in a K8s Secret in production, not here
+  index: "main"               # confirm with your Splunk admin
+  logsEnabled: true
+  metricsEnabled: false       # enable if you want K8s node/pod metrics in Splunk
+
+# Only collect logs — no traces or metrics needed for runner observability
+agent:
+  enabled: true   # DaemonSet mode: one pod per node, reads /var/log/pods/
+
+# Disable cluster receiver (metrics/events) if you only need logs
+clusterReceiver:
+  enabled: false

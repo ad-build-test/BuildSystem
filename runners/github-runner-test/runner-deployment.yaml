@@ -59,11 +59,14 @@ spec:
               value: "0"         # keep alive across multiple jobs (set to 1 for ARC later)
             - name: RUN_AS_ROOT
               value: "false"
-            # Required for workflow jobs that use 'container:' (e.g. rocky9-env builds)
-            - name: START_DOCKER_SERVICE
-              value: "true"
+            # Required by runner-prechecks.yml to identify the pod's namespace
+            # when querying the K8s API for Falcon/Splunk DaemonSet verification
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           securityContext:
-            privileged: true     # required for Docker daemon (START_DOCKER_SERVICE)
+            privileged: false    # runner itself does not need privileged
           resources:
             requests:
               cpu: "500m"
@@ -74,8 +77,6 @@ spec:
           volumeMounts:
             - name: runner-workspace
               mountPath: /workspace
-            - name: containerdsock
-              mountPath: /run/containerd/containerd.sock
             - name: runner-sdf-group-ad
               mountPath: /sdf/group/ad
               readOnly: true
@@ -89,9 +90,6 @@ spec:
       - name: runner-workspace
         persistentVolumeClaim:
           claimName: runner-workspace
-      - name: containerdsock
-        hostPath:
-          path: /run/containerd/containerd.sock
       - name: runner-sdf-group-ad
         persistentVolumeClaim:
           claimName: runner-sdf-group-ad
