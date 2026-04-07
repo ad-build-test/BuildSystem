@@ -690,7 +690,7 @@ def deploy(component: str, facility: str, test: bool, ioc: str, tag: str, list: 
 
     # Set subsystem for pydm
     if (deployment_type == 'pydm'):
-        subsystem = deployment_request.component.name.replace("pydm-", "") # Remove "pydm-"
+        subsystem = deployment_request.component.name.replace("pydm-", "").replace("-displays", "") # Remove "pydm-" and "-displays" 
         playbook_args_dict["subsystem"] = subsystem
 
     # 8) Send deployment request to deployment controller

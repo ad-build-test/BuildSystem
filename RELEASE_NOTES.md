@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.2.1 7-Apr-2026 P. Nisperos (pnispero)
+  * Fix pydm subsystem name bug
+
 * tag:1.2.0 30-Mar-2026 P. Nisperos (pnispero)
   * Refactor configuration for more transparency. And refactored deployment controller to a more simpler generic deployment that most types of apps can follow. Fixed bugs with deployment controller
   * Removed deploymentType, added in playbook to pass to deployment, every deployment through CLI is now polled as well like IOCs for easier to track progress, and should work for other types of deployments
