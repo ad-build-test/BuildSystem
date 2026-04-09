@@ -1,0 +1,9 @@
+# Example config.yaml for a HLA Python application
+repo: sc_long_feedback
+organization: slaclab
+url: https://github.com/slaclab/sc_long_feedback
+description: Superconducting Linac Longitudinal Feedback Code
+
+# Deployment playbook
+deploy:
+  playbook: python_module/python_deploy.yml
