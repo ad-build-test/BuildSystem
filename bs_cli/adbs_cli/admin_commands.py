@@ -327,9 +327,10 @@ ALARM_CONFIGS_TOP=/afs/slac/g/lcls/tools/AlarmConfigsTop
     )
 
     click.echo(f"**** Post Steps ****\n \
-1. Please add repo to github app in {org_name}.\n \
-2. Update RELEASE_NOTES.md file with new tag then commit changes and push\n \
-3. Create new pull request and merge changes")
+1. Update RELEASE_NOTES.md file with new tag\n \
+2. [Optional] Create CODEOWNERS file and add branch rules\n \
+3. Commit changes and push\n \
+4. Create new pull request and merge changes")
 
 @admin.command()
 @click.option("-c", "--component", required=False, help="Component Name", prompt=INPUT_PREFIX + "Specify component name")

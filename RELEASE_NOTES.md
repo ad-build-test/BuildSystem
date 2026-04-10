@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.2.2 10-Apr-2026 P. Nisperos (pnispero)
+  * Fix admin onboard post steps
+
 * tag:1.2.1 7-Apr-2026 P. Nisperos (pnispero)
   * Fix pydm subsystem name bug
 
