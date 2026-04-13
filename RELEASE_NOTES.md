@@ -3,6 +3,9 @@
 Release notes for the AD Build System (Software Factory)
 
 ## Releases:
+* tag:1.2.3 13-Apr-2026 P. Nisperos (pnispero)
+  * Fix admin onboard git workflow file with brackets missing
+
 * tag:1.2.2 10-Apr-2026 P. Nisperos (pnispero)
   * Fix admin onboard post steps
 

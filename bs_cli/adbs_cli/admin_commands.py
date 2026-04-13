@@ -251,12 +251,12 @@ jobs:
   deploy:
     uses: ad-build-test/build-system-playbooks/.github/workflows/request-deployment.yml@main
     with:
-      deploy_to_dev: ${{ inputs.deploy_to_dev }}
-      deploy_to_lcls: ${{ inputs.deploy_to_lcls }}
-      deploy_to_facet: ${{ inputs.deploy_to_facet }}
-      deploy_to_testfac: ${{ inputs.deploy_to_testfac }}
-      tag: ${{ inputs.tag }}
-      playbook: '{playbook}'
+        deploy_to_dev: ${{{{ inputs.deploy_to_dev }}}}
+        deploy_to_lcls: ${{{{ inputs.deploy_to_lcls }}}}
+        deploy_to_facet: ${{{{ inputs.deploy_to_facet }}}}
+        deploy_to_testfac: ${{{{ inputs.deploy_to_testfac }}}}
+        tag: ${{{{ inputs.tag }}}}
+        playbook: '{playbook}'
 """
         deploy_yml_path = os.path.join(top_level, '.github/workflows/deploy.yml')
         os.makedirs(os.path.dirname(deploy_yml_path), exist_ok=True)

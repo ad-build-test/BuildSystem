@@ -192,6 +192,8 @@ class DeployDict(Component):
     artifact_type: Optional[str] = None    # rpm, tar, zip
     # Generic extra vars forwarded to the playbook as-is
     extra_vars: Optional[dict] = None
+    # When True, blocks until deployment completes and returns full result (used by CBS webhook)
+    sync: Optional[bool] = False
 
 class InitialDeploymentDict(Component):
 # Used for the initial deployment endpoint
@@ -737,10 +739,20 @@ async def revert_ioc_deployment(ioc_to_deploy: RevertDict, background_tasks: Bac
 @app.put("/deployment")
 async def deploy(deploy_request: DeployDict, background_tasks: BackgroundTasks):
     """Unified deployment endpoint. Routes to IOC, PyDM, container, or generic handler
-    based on the playbook field (e.g. 'ioc_module/...', 'pydm_module/...', 'container_module/...')."""
+    based on the playbook field (e.g. 'ioc_module/...', 'pydm_module/...', 'container_module/...').
+    When deploy_request.sync=True, blocks until deployment completes and returns the full result (success, elog_url).
+    When deploy_request.sync=False (default), returns immediately with a task_id for status polling."""
     task_id = str(uuid.uuid4())
     task = DeploymentTask(task_id, save_callback=save_task)
     save_task(task)
+    if deploy_request.sync:
+        await deploy_async(task_id, deploy_request)
+        final_task = get_task(task_id)
+        if final_task and final_task.status == "completed":
+            return JSONResponse(status_code=200, content=final_task.result)
+        else:
+            error = final_task.error if final_task else "Unknown error"
+            return JSONResponse(status_code=500, content={"success": False, "elog_url": "", "error": error})
     background_tasks.add_task(deploy_async, task_id, deploy_request)
     return JSONResponse(status_code=202, content={"task_id": task_id, "status": "pending"})
 
