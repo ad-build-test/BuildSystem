@@ -187,6 +187,9 @@ class DeployDict(Component):
     redis_url: Optional[str] = None
     ghcr_token: Optional[str] = None
     ghcr_user: Optional[str] = None
+    # Artifact-based deployments (e.g. Tauri desktop apps)
+    artifact_url: Optional[str] = None     # GitHub release asset URL
+    artifact_type: Optional[str] = None    # rpm, tar, zip
     # Generic extra vars forwarded to the playbook as-is
     extra_vars: Optional[dict] = None
 
@@ -1099,8 +1102,32 @@ def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: Depl
             deploy_request.subsystem = deploy_request.subsystem.replace("pydm-", "").replace("-displays", "")
 
     task.update_progress("Downloading release", 20)
-    if not download_release(deploy_request.component_name, deploy_request.tag, temp_dir, all_os=False, extract_tarball=True):
-        raise ValueError(f"Failed to download release for {deploy_request.component_name} tag {deploy_request.tag}")
+
+    # Artifact-based deployment (e.g. Tauri desktop apps with RPM from GitHub releases)
+    if deploy_request.artifact_url:
+        logging.info(f"Artifact-based deployment: downloading from {deploy_request.artifact_url}")
+        artifact_filename = f"{deploy_request.component_name}-{deploy_request.tag}.artifact"
+        artifact_filepath = os.path.join(temp_dir, artifact_filename)
+
+        github_token = os.environ.get("GITHUB_TOKEN", "")
+        headers = {"Accept": "application/octet-stream"}
+        if github_token:
+            headers["Authorization"] = f"token {github_token}"
+
+        try:
+            response = requests.get(deploy_request.artifact_url, headers=headers, stream=True, allow_redirects=True)
+            if response.status_code != 200:
+                raise ValueError(f"Failed to download artifact from {deploy_request.artifact_url}: HTTP {response.status_code}")
+            with open(artifact_filepath, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        f.write(chunk)
+            logging.info(f"Artifact downloaded to {artifact_filepath}")
+        except requests.RequestException as e:
+            raise ValueError(f"Failed to download artifact: {str(e)}")
+    else:
+        if not download_release(deploy_request.component_name, deploy_request.tag, temp_dir, all_os=False, extract_tarball=True):
+            raise ValueError(f"Failed to download release for {deploy_request.component_name} tag {deploy_request.tag}")
 
     full_playbook_path = os.path.join(ANSIBLE_PLAYBOOKS_PATH, deploy_request.playbook)
     inventory_file_path = get_inventory_path()
@@ -1113,8 +1140,12 @@ def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: Depl
         'component_name': deploy_request.component_name,
         'tag': deploy_request.tag,
         'user': deploy_request.user,
-        'tarball': tarball_filepath,
     }
+    if deploy_request.artifact_url:
+        playbook_args_dict['artifact_path'] = artifact_filepath
+        playbook_args_dict['artifact_type'] = deploy_request.artifact_type or 'rpm'
+    else:
+        playbook_args_dict['tarball'] = tarball_filepath
     if deploy_request.subsystem:
         playbook_args_dict['subsystem'] = deploy_request.subsystem
     if deploy_request.extra_vars:
