@@ -1121,10 +1121,7 @@ def run_generic_deployment(deploy_request: DeployDict, temp_dir: str, task: Depl
         artifact_filename = f"{deploy_request.component_name}-{deploy_request.tag}.artifact"
         artifact_filepath = os.path.join(temp_dir, artifact_filename)
 
-        github_token = os.environ.get("GITHUB_TOKEN", "")
         headers = {"Accept": "application/octet-stream"}
-        if github_token:
-            headers["Authorization"] = f"token {github_token}"
 
         try:
             response = requests.get(deploy_request.artifact_url, headers=headers, stream=True, allow_redirects=True)
